@@ -48,7 +48,7 @@ def search_web(query, max_results=5):
             
             content_to_use = raw_content if raw_content else snippet
             
-            clean_content = content_to_use.strip()[:3000]
+            clean_content = content_to_use.strip()[:20000]
             
             xml_output += f'    <source id="{i}">\n'
             xml_output += f'      <title>{title}</title>\n'
