@@ -11,7 +11,7 @@ Data/jarvis_memory/
 Data/Jarvis_Workspace/
 Data/RAG/
 Proactive/
-Bin
+Bin/
 
 core/UiSrc/InputPopup/debug/
 core/UiSrc/InputPopup/release/
