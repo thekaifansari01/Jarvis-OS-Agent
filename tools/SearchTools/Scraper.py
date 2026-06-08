@@ -1,61 +1,55 @@
 import os
-import json
-import requests
 import logging
 from dotenv import load_dotenv
+from tavily import TavilyClient
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-JINA_API_KEY = os.getenv("JINA_API_KEY")
-
 def scrape_webpage(url: str) -> str:
     """
-    Advanced Jina Reader API Integration.
-    Fetches clean Markdown, uses API Key for VIP priority, and handles JSON parsing.
+    Advanced Webpage Scraper using Tavily's Extract API.
+    Handles dynamic content (JavaScript), bypasses basic bot protections, 
+    and returns ultra-clean Markdown optimized for LLMs.
     """
-    logger.info(f"🌐 Fetching webpage via Advanced Jina API: {url}")
+    logger.info(f"🌐 Fetching webpage via Tavily Extract API: {url}")
     
-    headers = {
-        "Accept": "application/json",
-        "X-Return-Format": "markdown"
-    }
-    
-    if JINA_API_KEY:
-        headers["Authorization"] = f"Bearer {JINA_API_KEY}"
-        logger.info("🔑 Jina API Key injected for Priority Access.")
-    else:
-        logger.warning("⚠️ JINA_API_KEY not found in .env. Running in free limited mode.")
+    tavily_api_key = os.getenv("TAVILY_API_KEY")
+    if not tavily_api_key:
+        logger.warning("⚠️ TAVILY_API_KEY not found in .env.")
+        return "Observation: Error -> TAVILY_API_KEY missing in environment variables."
         
-    jina_url = f"https://r.jina.ai/{url}"
-    
     try:
-        response = requests.get(jina_url, headers=headers, timeout=20)
+        client = TavilyClient(api_key=tavily_api_key)
         
-        if response.status_code == 200:
-            data = response.json()
-            page_title = data.get("data", {}).get("title", "No Title Found")
-            clean_markdown = data.get("data", {}).get("content", "")
+        response = client.extract(urls=[url])
+        
+        failed_results = response.get("failed_results", [])
+        if failed_results and any(f.get("url") == url for f in failed_results):
+            error_msg = next((f.get("error") for f in failed_results if f.get("url") == url), "Unknown error")
+            return f"Observation: Error -> Tavily couldn't extract content from this URL. Reason: {error_msg}. Website might have strict anti-bot security."
             
-            if not clean_markdown:
-                return f"Observation: Webpage load ho gayi par koi text nahi mila. Title tha: {page_title}"
+        results = response.get("results", [])
+        if not results:
+            return "Observation: Webpage load ho gayi par koi valid text/content nahi mila."
             
-            if len(clean_markdown) > 15000:
-                logger.warning("✂️ Content truncated to fit LLM Context Window.")
-                clean_markdown = clean_markdown[:15000] + "\n\n... [🔴 Content Truncated due to length]"
-                
-            return f"Observation: Successfully fetched webpage content.\n\n📄 **Title**: {page_title}\n\n**Content**:\n{clean_markdown}\n\n💡 Hint: Now analyze or summarize this text to answer the user's query."
+        data = results[0]
+        clean_markdown = data.get("raw_content", "")
+        
+        if not clean_markdown:
+            return f"Observation: URL se connect ho gaya par content empty return hua."
+        
+        if len(clean_markdown) > 15000:
+            logger.warning("✂️ Content truncated to fit LLM Context Window.")
+            clean_markdown = clean_markdown[:15000] + "\n\n... [🔴 Content Truncated due to length]"
             
-        elif response.status_code == 429:
-            return "Observation: Error [429] -> Rate limit hit. Traffic zyada hai."
-            
-        elif response.status_code == 403:
-            return "Observation: Error [403] -> Is website par strict anti-bot security hai. Main isko nahi padh sakta."
-            
-        else:
-            return f"Observation: Error -> Website padhne mein dikkat aayi (Status: {response.status_code})."
-            
-    except requests.exceptions.Timeout:
-        return "Observation: Error -> Website ne respond karne mein bohot zyada time laga diya (Timeout)."
+        return f"Observation: Successfully fetched webpage content.\n\n📄 **Target URL**: {url}\n\n**Content**:\n{clean_markdown}\n\n💡 Hint: Now analyze or summarize this text to answer the user's query."
+        
     except Exception as e:
-        return f"Observation: Webpage reading tool error -> {e}"    
+        logger.error(f"Webpage reading tool error: {e}")
+        return f"Observation: Webpage reading tool error -> {e}"
+
+if __name__ == "__main__":
+    test_url = input("🤖 Enter URL to scrape: ")
+    print("Fetching...")
+    print(scrape_webpage(test_url))

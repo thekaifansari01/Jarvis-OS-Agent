@@ -335,7 +335,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                                             file_entry["content"] = content
                                     metadata_tracker["files_touched"].append(file_entry)
                             
-                            elif action_key in ["email_action", "whatsapp_action", "image_command", "calendar_action", "deep_research"]:
+                            else:
                                 metadata_tracker["system_events"].append(f"Executed {action_key}: {action_detail}")
                                 
                         except Exception as meta_err:
