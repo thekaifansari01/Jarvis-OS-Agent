@@ -1,0 +1,36 @@
+# ==========================================
+# JARVIS PREMIUM REQUIREMENTS
+# ==========================================
+# Core AI & API Clients
+groq
+#google-genai
+together
+tavily-python
+#chromadb
+edge-tts
+cartesia
+# Google Gmail Integration
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+# Voice & Audio
+speechrecognition
+pvporcupine
+pvrecorder
+pyaudio
+pygame
+# GUI & System Tray
+PyQt5
+pystray
+Pillow
+rich
+# Utilities
+python-dotenv
+requests
+psutil
+pywhatkit
+markdown2
+arxiv
+twilio
+# ==========================================
+
