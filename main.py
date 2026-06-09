@@ -22,7 +22,7 @@ from core.terminal.jarvis_terminal import init_terminal
 init_terminal()
 from core.brain.Processor.Processor import process_command
 from core.brain.executor import execute_actions
-from core.brain.memory import ContextMemory
+from core.brain.Memory.Memory import ContextMemory
 from core.voice import stt, tts
 from tools.OpenCloseApps.open_any import start_background_cache_builder
 from core.terminal.tray_manager import start_tray_icon
