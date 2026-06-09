@@ -97,14 +97,20 @@ def get_native_tools():
                     )
                 ),
                 types.FunctionDeclaration(
-                    name="fetch_chat_history",
-                    description="Call this tool ONLY when you need to look back at past conversations, check instructions from previous sessions, or retrieve facts/links mentioned days ago.",
+                    name="memory_actions",
+                    description="Retrieve past context. MANDATORY: Pass exactly ONE key-value pair based on the target timeline.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "reason": types.Schema(type=types.Type.STRING, description="Reason for checking history (e.g., 'To find user's friend name mentioned yesterday')")
-                        },
-                        required=["reason"]
+                            "recent_logs": types.Schema(
+                                type=types.Type.STRING, 
+                                description="[Target: Short-term 15-Day Memory] Use to read exact raw chat history from recent days. Pass the reason (e.g., 'check previous instructions')."
+                            ),
+                            "lifetime_recall": types.Schema(
+                                type=types.Type.STRING, 
+                                description="[Target: Long-term Episodic Memory] Use to search for facts, ideas, or events discussed months or years ago. Pass the search topic (e.g., 'startup idea')."
+                            )
+                        }
                     )
                 ),
                 types.FunctionDeclaration(

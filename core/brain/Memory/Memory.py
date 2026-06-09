@@ -170,22 +170,34 @@ class ContextMemory:
             logger.error(f"AI Insights extraction failed: {e}")
 
     def _prune_old_messages(self):
-        """Removes messages older than 15 days from the master history."""
+        """Removes messages older than 15 days from the master history and archives them to LTM."""
         now = datetime.now()
         fifteen_days_ago = now - timedelta(days=15)
         
         filtered_history = []
+        messages_to_archive = []
+        
         for msg in self.master_history:
             try:
                 msg_time = datetime.fromisoformat(msg['timestamp'])
                 if msg_time >= fifteen_days_ago:
                     filtered_history.append(msg)
+                else:
+                    messages_to_archive.append(msg)
             except Exception:
                 pass 
                 
+        if messages_to_archive:
+            try:
+                from core.brain.Memory.LifetimeMemory import ltm_engine
+                logger.info(f"📦 Found {len(messages_to_archive)} old messages. Sending to Lifetime Memory for summarization...")
+                ltm_engine.archive_old_chats(messages_to_archive)
+            except Exception as e:
+                logger.error(f"⚠️ Failed to trigger LTM archive: {e}")
+                
         if len(filtered_history) < len(self.master_history):
             self.master_history = filtered_history
-            logger.info("🧹 Cleaned up messages older than 15 days.")
+            logger.info("🧹 Cleaned up and archived messages older than 15 days.")
 
     def add_message(self, role, message, metadata=None):
         if not message or not message.strip(): return

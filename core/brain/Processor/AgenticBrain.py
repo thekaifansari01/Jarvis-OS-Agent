@@ -217,8 +217,11 @@ If the <Mission> is fully complete, call 'complete_task'.
                 for key, value in ai_response.items():
                     if key not in ignore_keys:
                         action_key = key
-                        if key == "fetch_chat_history": 
-                             action_detail = "Fetching 15-Day Memory Logs"
+                        if key == "memory_actions" and isinstance(value, dict):
+                            if value.get("recent_logs"):
+                                action_detail = "Fetching 15-Day Recent Logs"
+                            elif value.get("lifetime_recall"):
+                                action_detail = f"Recalling LTM: {value.get('lifetime_recall')}"
                         elif key == "search_actions" and isinstance(value, dict):
                              action_detail = value.get("web", "") or value.get("youtube", "") or value.get("arxiv", "") or value.get("vault", "") or value.get("read_webpage", "")
                         elif key == "workspace_action" and isinstance(value, dict):
@@ -269,18 +272,28 @@ If the <Mission> is fully complete, call 'complete_task'.
             observation = None
             for attempt in range(retry_limit):
                 try:
-                    if action_key == "fetch_chat_history":
-                        if memory_instance:
-                            logger.info("🧠 Agent requested full 15-day Chat History log natively.")
-                            history_data = memory_instance.get_chat_history_for_tool()
-                            observation = f"Observation: Successfully retrieved full 15-day history logs:\n\n{history_data}"
+                    if action_key == "memory_actions":
+                        mem_data = ai_response.get("memory_actions", {})
+                        
+                        if mem_data.get("recent_logs"):
+                            if memory_instance:
+                                logger.info("🧠 Agent requested full 15-day Chat History log natively.")
+                                history_data = memory_instance.get_chat_history_for_tool()
+                                observation = f"Observation: Successfully retrieved full 15-day history logs:\n\n{history_data}"
+                            else:
+                                observation = "Observation: Error -> Memory system instance is offline."
+                                
+                        elif mem_data.get("lifetime_recall"):
+                            query = mem_data.get("lifetime_recall")
+                            logger.info(f"🧠 Agent requesting LTM Recall for: {query}")
+                            try:
+                                from core.brain.Memory.LifetimeMemory import ltm_engine
+                                observation = ltm_engine.search_lifetime_memory(query)
+                            except Exception as e:
+                                logger.error(f"❌ LTM Recall tool crashed: {e}")
+                                observation = f"Observation: LTM Recall error -> {e}"
                         else:
-                            observation = "Observation: Error -> Memory system instance is offline."
-                    else:
-                        if action_key:
-                            observation = execute_single_tool_sync(ai_response)
-                        else:
-                            observation = "Observation: No valid action executed. You must call a Native Tool API."
+                            observation = "Observation: No valid memory target provided. Use 'recent_logs' or 'lifetime_recall'."
                     
                     if observation:
                         if action_key in ["email_action", "whatsapp_action"]:
