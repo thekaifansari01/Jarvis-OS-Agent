@@ -1,0 +1,37 @@
+# core
+groq
+google-generativeai
+chromadb
+pypdf
+pillow
+python-dotenv
+
+# voice
+edge-tts
+pyaudio
+pvporcupine
+deepgram-sdk
+
+# tools
+tavily-python
+arxiv
+youtube-transcript-api
+together
+pywhatkit
+twilio
+pyperclip
+screen-brightness-control
+pycaw
+psutil
+
+# ui
+PyQt5
+markdown2
+pygments
+rich
+
+# other
+requests
+beautifulsoup4
+numpy
+pyzmq
