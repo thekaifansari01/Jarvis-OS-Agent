@@ -7,15 +7,15 @@ from core.brain.config import GROQ_API_KEY
 from core.voice.tts import speak
 from Proactive.event_queue import get_proactive_event
 from Proactive.prompts import PROACTIVE_SCOUT_PROMPT
-from Proactive.Email.EmailProactive import listen_for_emails 
+from Proactive.Email.EmailProactive import listen_for_emails
 
 SCOUT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-def evaluate_event(source: str, data: str) -> str:
+def evaluate_event(source: str, data: str, priority: str) -> str:
     if not groq_client: return "IGNORE"
     try:
-        prompt = PROACTIVE_SCOUT_PROMPT.format(source=source, data=data)
+        prompt = PROACTIVE_SCOUT_PROMPT.format(source=source, data=data, priority=priority)
         completion = groq_client.chat.completions.create(
             model=SCOUT_MODEL,
             messages=[
@@ -36,22 +36,22 @@ def proactive_loop(memory_instance):
         try:
             event = get_proactive_event()
             if event:
-                source = event.get("source", "Unknown")
-                data = event.get("data", "")
+                source = event.source
+                data = event.data
+                priority = getattr(event, 'priority', 'normal') 
                 
-                decision = evaluate_event(source, data)
+                decision = evaluate_event(source, data, priority)
 
                 if decision.upper() != "IGNORE" and "IGNORE" not in decision.upper():
-                    logger.info(f"📢 Proactive Announcement: {decision}")
+                    logger.info(f"📢 Proactive Announcement ({source}): {decision}")
                     threading.Thread(target=speak, args=(decision,), daemon=True).start()
 
                     if memory_instance:
                         try:
-                            # 🐛 FIX: Removed the 'text=' keyword. Passing as standard positional args.
                             memory_instance.add_message(
                                 "PROACTIVE", 
                                 decision, 
-                                metadata={"ephemeral_only": True}
+                                metadata={"ephemeral_only": True, "source": source}
                             )
                             logger.info("🧠 Proactive event injected into 15-days Memory (JSON only).")
                         except Exception as mem_err:
@@ -61,14 +61,23 @@ def proactive_loop(memory_instance):
         time.sleep(2)
 
 def start_proactive_agent(memory_instance):
-    """Ye function call hote hi 2 threads start karega: Ek AI Brain, aur ek Email Listener"""
-    
-    # 1. Start the Proactive AI loop
+    """
+    main.py isko directly call karega bina kisi change ke.
+    Ye function khud saare background listeners manage karega.
+    """
     brain_thread = threading.Thread(target=proactive_loop, args=(memory_instance,), daemon=True)
     brain_thread.start()
     
-    # 2. Start the Background Email Listener
-    email_thread = threading.Thread(target=listen_for_emails, daemon=True)
-    email_thread.start()
+    active_listeners = [
+        listen_for_emails,
+    ]
     
+    for listener_func in active_listeners:
+        try:
+            listener_thread = threading.Thread(target=listener_func, daemon=True)
+            listener_thread.start()
+            logger.info(f"✅ Started Proactive Listener: {listener_func.__name__}")
+        except Exception as e:
+            logger.error(f"❌ Failed to start listener {listener_func.__name__}: {e}")
+            
     return brain_thread
