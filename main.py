@@ -31,6 +31,10 @@ from core.voice.stt_status import hide_stt_popup, exit_stt_popup
 from core.voice import interrupt
 from core.utils.ProcessManager import proc_manager
 
+# --- PROACTIVE IMPORT (Bas ek import) ---
+from Proactive.proactive_agent import start_proactive_agent
+# ----------------------------------------
+
 _is_running = True
 _panel_process = None
 _stt_popup_process = None
@@ -132,7 +136,6 @@ def start_baileys_server():
                 stderr_target = None
             else:
                 creation_flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
-                # 🔥 THE FIX: Node.js errors ko hide karna band kar diya!
                 stdout_target = None 
                 stderr_target = None
                 logging.info("⏳ Existing WhatsApp session mila. Background service started (Logs Visible)...")
@@ -299,10 +302,18 @@ def main() -> None:
         logging.error(f"Memory init failed: {e}")
         class FakeMemory:
             def get_relevant_context(self, text): return ""
-            def add_message(self, role, text): pass
+            def add_message(self, role, text, metadata=None): pass
             preferences = {"likes": []}
             ephemeral = {}
         memory = FakeMemory()
+
+    # --- PROACTIVE AGENT START (Ekdum Clean) ---
+    logging.info("🧠 Booting Proactive Brain (Events & Emails)...")
+    try:
+        start_proactive_agent(memory)
+    except Exception as e:
+        logging.error(f"⚠️ Failed to start Proactive Agent: {e}")
+    # -------------------------------------------
 
     mode = "TEXT" if is_dev_mode else "VOICE"
     if mode == "VOICE":

@@ -133,58 +133,6 @@ def delete_email(query):
         print(f"⚠️ Error deleting email: {e}")
         return False
 
-def check_new_emails(event_queue=None):
-    """
-    Background poller: Checks for new emails and pushes RAW data 
-    to the Proactive Queue only if they arrived AFTER the script started.
-    """
-    try:
-        service = authenticate_gmail()
-        if not service:
-            return
-            
-        days_ago = (datetime.now() - timedelta(days=7)).strftime('%Y/%m/%d')
-        query = f"is:unread after:{days_ago}"
-        
-        results = service.users().messages().list(userId='me', q=query, labelIds=['INBOX']).execute()
-        messages = results.get('messages', [])
-
-        if not messages:
-            return
-
-        for msg in messages:
-            msg_data = service.users().messages().get(userId='me', id=msg['id']).execute()
-            
-            msg_timestamp = int(msg_data.get('internalDate', 0)) / 1000
-            
-            if msg_timestamp <= START_TIMESTAMP:
-                continue
-
-            headers = msg_data['payload']['headers']
-            subject = "No Subject"
-            sender = "Unknown"
-            for header in headers:
-                if header['name'] == 'Subject':
-                    subject = header['value']
-                if header['name'] == 'From':
-                    sender = header['value']
-            
-            snippet = msg_data.get('snippet', '')
-            clean_sender = sender.split('<')[0].strip()
-            
-            alert_text = f"[SYSTEM ALERT]: Ek naya email aaya hai. From: {clean_sender}, Subject: {subject}, Body: {snippet}. Isko padh kar user ko naturally short mein batao."
-            
-            print(f"📧 [{datetime.now().strftime('%I:%M %p')}] New live mail detected from {clean_sender}!")
-            print(f"📥 Queuing Proactive Alert: Mail from {clean_sender}")
-            
-            if event_queue is not None:
-                event_queue.put(alert_text)
-
-            service.users().messages().modify(userId='me', id=msg['id'], body={'removeLabelIds': ['UNREAD']}).execute()
-            time.sleep(1)
-            
-    except Exception as e:
-        print(f"⚠️ Gmail Error: {e}")
 
 if __name__ == "__main__":
     print("Testing Gmail Authentication path configurations...")
