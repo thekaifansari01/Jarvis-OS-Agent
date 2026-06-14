@@ -23,5 +23,10 @@ core/UiSrc/InputPopup/release/
 core/UiSrc/InputPopup/.qtcreator/
 core/UiSrc/InputPopup/.qmake.stash
 core/UiSrc/InputPopup/Makefile*
+core/UiSrc/SttPopup/debug/
+core/UiSrc/SttPopup/release/
+core/UiSrc/SttPopup/.qtcreator/
+core/UiSrc/SttPopup/.qmake.stash
+core/UiSrc/SttPopup/Makefile*
 .DS_Store
 Thumbs.db

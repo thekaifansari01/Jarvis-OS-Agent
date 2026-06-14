@@ -30,10 +30,7 @@ from core.terminal.tray_manager import start_tray_icon
 from core.voice.stt_status import hide_stt_popup, exit_stt_popup
 from core.voice import interrupt
 from core.utils.ProcessManager import proc_manager
-
-# --- PROACTIVE IMPORT (Bas ek import) ---
 from Proactive.proactive_agent import start_proactive_agent
-# ----------------------------------------
 
 _is_running = True
 _panel_process = None
@@ -84,19 +81,19 @@ def start_stt_popup():
     global _stt_popup_process
     try:
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        popup_script = os.path.join(base_dir, "core", "ui", "stt_popup.py")
+        popup_exe = os.path.join(base_dir, "Bin", "SttPopup.exe")
         
-        if os.path.exists(popup_script):
+        if os.path.exists(popup_exe):
             creation_flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
             _stt_popup_process = proc_manager.spawn(
-                [sys.executable, popup_script],
+                [popup_exe],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=creation_flags
             )
-            logging.info(f"🎙️ STT Popup UI started from {popup_script}")
+            logging.info(f"🎙️ C++ STT Popup UI started from {popup_exe}")
         else:
-            logging.warning(f"STT popup script not found at {popup_script}")
+            logging.warning(f"STT popup exe not found at {popup_exe}")
     except Exception as e:
         logging.warning(f"Could not start STT popup: {e}")
 
@@ -307,13 +304,11 @@ def main() -> None:
             ephemeral = {}
         memory = FakeMemory()
 
-    # --- PROACTIVE AGENT START (Ekdum Clean) ---
     logging.info("🧠 Booting Proactive Brain (Events & Emails)...")
     try:
         start_proactive_agent(memory)
     except Exception as e:
         logging.error(f"⚠️ Failed to start Proactive Agent: {e}")
-    # -------------------------------------------
 
     mode = "TEXT" if is_dev_mode else "VOICE"
     if mode == "VOICE":
