@@ -3,6 +3,7 @@ import json
 import base64
 import re
 import html
+import time
 from google.cloud import pubsub_v1
 
 import tools.Messanger.email_manager as email_manager
@@ -32,7 +33,7 @@ PROJECT_ID = "jarvisemailmanager"
 TOPIC_NAME = f"projects/{PROJECT_ID}/topics/jarvis-email-topic"
 SUBSCRIPTION_NAME = f"projects/{PROJECT_ID}/subscriptions/jarvis-email-sub"
 
-def get_latest_unread_email(service):
+def get_latest_unread_email(service, start_time_ms):
     try:
         results = service.users().messages().list(userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=1).execute()
         messages = results.get('messages', [])
@@ -41,6 +42,10 @@ def get_latest_unread_email(service):
         
         msg_id = messages[0]['id']
         msg = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
+        
+        if int(msg.get('internalDate', 0)) < start_time_ms:
+            return None, None, None, None
+
         payload = msg.get('payload', {})
         headers = payload.get('headers', [])
         
@@ -56,7 +61,6 @@ def get_latest_unread_email(service):
             if header['name'] == 'Subject':
                 subject = header['value']
                 
-        # 🛡️ UNIVERSAL TEXT EXTRACTOR
         def decode_base64(data_str):
             try:
                 data_str += "=" * ((4 - len(data_str) % 4) % 4)
@@ -67,7 +71,6 @@ def get_latest_unread_email(service):
         plain_text = ""
         html_text = ""
 
-        # Recursively search everywhere in the email
         def traverse_parts(parts):
             nonlocal plain_text, html_text
             for part in parts:
@@ -81,7 +84,6 @@ def get_latest_unread_email(service):
                 elif 'parts' in part:
                     traverse_parts(part['parts'])
 
-        # Top level check
         top_mime_type = payload.get('mimeType', '')
         top_data = payload.get('body', {}).get('data', '')
 
@@ -92,24 +94,17 @@ def get_latest_unread_email(service):
         elif 'parts' in payload:
             traverse_parts(payload['parts'])
 
-        # Priority 1: Use Plain Text if available
         final_body = plain_text.strip()
 
-        # Priority 2: If no plain text, deeply clean the HTML text
         if not final_body and html_text:
-            # Remove <style> and <script> blocks completely
             clean = re.sub(r'<style.*?>.*?</style>', '', html_text, flags=re.IGNORECASE|re.DOTALL)
             clean = re.sub(r'<script.*?>.*?</script>', '', clean, flags=re.IGNORECASE|re.DOTALL)
-            # Remove remaining HTML tags
             clean = re.sub(r'<[^>]+>', ' ', clean)
-            # Fix HTML entities like &nbsp;, &amp;
             clean = html.unescape(clean)
-            # Remove extra spaces and newlines
             clean = re.sub(r' {2,}', ' ', clean)
             clean = re.sub(r'\n\s*\n', '\n', clean)
             final_body = clean.strip()
 
-        # Priority 3: Ultimate Fallback to Gmail's built-in snippet
         if not final_body:
             final_body = msg.get('snippet', 'No readable text found in this email.')
 
@@ -136,12 +131,13 @@ def listen_for_emails():
     if not service: 
         return
 
+    start_time_ms = int(time.time() * 1000)
     print("🎧 Jarvis Universal Email Listener connected to Proactive Queue...")
 
     def process_notification(message):
         try:
             message.ack() 
-            name, email, sub, body = get_latest_unread_email(service)
+            name, email, sub, body = get_latest_unread_email(service, start_time_ms)
             if name:
                 print("\n" + "="*80)
                 print(f"👤 Name    : {name}")
