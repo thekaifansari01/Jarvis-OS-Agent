@@ -256,6 +256,11 @@ class ContextMemory:
             return
         
         try:
+            if metadata and isinstance(metadata, dict):
+                for key, value in metadata.items():
+                    if isinstance(value, str) and len(value) > 2000:
+                        metadata[key] = value[:2000] + "\n\n[...Data Truncated to save Memory]"
+
             new_entry = {
                 "role": role, 
                 "message": message, 

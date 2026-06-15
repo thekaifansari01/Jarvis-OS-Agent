@@ -1,6 +1,6 @@
 import time
 import threading
-from groq import Groq
+from groq import Groq, GroqError
 
 from core.logger.logger import logger
 from core.brain.config import GROQ_API_KEY
@@ -9,29 +9,39 @@ from Proactive.event_queue import get_proactive_event
 from Proactive.prompts import PROACTIVE_SCOUT_PROMPT
 from Proactive.Email.EmailProactive import listen_for_emails
 from Proactive.Whatsapp.WhatsappProactive import listen_for_whatsapp
+from core.brain.config import AGENT_PROACTIVE
 
-SCOUT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
+PROACTIVE_AGENT = AGENT_PROACTIVE
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 def evaluate_event(source: str, data: str, priority: str) -> str:
     if not groq_client: return "IGNORE"
-    try:
-        prompt = PROACTIVE_SCOUT_PROMPT.format(source=source, data=data, priority=priority)
-        completion = groq_client.chat.completions.create(
-            model=SCOUT_MODEL,
-            messages=[
-                {"role": "system", "content": "You are Jarvis's proactive intelligence. Strictly follow the prompt's formatting and personality rules."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,
-            max_tokens=60
-        )
-        return completion.choices[0].message.content.strip()
-    except Exception as e:
-        logger.error(f"❌ Proactive evaluation error: {e}")
-        return "IGNORE"
+    
+    backoff = 2
+    for attempt in range(3):
+        try:
+            prompt = PROACTIVE_SCOUT_PROMPT.format(source=source, data=data, priority=priority)
+            completion = groq_client.chat.completions.create(
+                model=PROACTIVE_AGENT,
+                messages=[
+                    {"role": "system", "content": "You are Jarvis's proactive intelligence. Strictly follow the prompt's formatting and personality rules."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=60
+            )
+            return completion.choices[0].message.content.strip()
+        except GroqError as ge:
+            logger.warning(f"Groq API Error in Proactive Scout (Attempt {attempt+1}): {ge}")
+            time.sleep(backoff)
+            backoff *= 2
+        except Exception as e:
+            logger.error(f"❌ Proactive evaluation error: {e}")
+            return "IGNORE"
+            
+    return "IGNORE"
 
-def proactive_loop(memory_instance):
+def proactive_loop(memory_instance, is_jarvis_busy_callback):
     logger.info("🛡️ Proactive Scout Agent initialized and listening...")
     while True:
         try:
@@ -44,29 +54,39 @@ def proactive_loop(memory_instance):
                 decision = evaluate_event(source, data, priority)
 
                 if decision.upper() != "IGNORE" and "IGNORE" not in decision.upper():
+                    
+                    if is_jarvis_busy_callback:
+                        was_busy = False
+                        while is_jarvis_busy_callback():
+                            was_busy = True
+                            time.sleep(1)
+                        if was_busy:
+                            time.sleep(5)
+
                     logger.info(f"📢 Proactive Announcement ({source}): {decision}")
                     threading.Thread(target=speak, args=(decision,), daemon=True).start()
 
                     if memory_instance:
                         try:
+                            truncated_data = data if len(data) <= 2000 else data[:2000] + "\n\n[...Message Truncated]"
+                            
                             memory_instance.add_message(
                                 "PROACTIVE", 
                                 decision, 
-                                metadata={"ephemeral_only": True, "source": source}
+                                metadata={
+                                    "source": source,
+                                    "original_data": truncated_data
+                                }
                             )
-                            logger.info("🧠 Proactive event injected into 15-days Memory (JSON only).")
+                            logger.info("🧠 Proactive event injected into Memory with raw data.")
                         except Exception as mem_err:
                             logger.warning(f"Failed to add proactive message to memory: {mem_err}")
         except Exception as e:
             logger.error(f"❌ Error in Proactive Loop: {e}")
         time.sleep(2)
 
-def start_proactive_agent(memory_instance):
-    """
-    main.py isko directly call karega bina kisi change ke.
-    Ye function khud saare background listeners manage karega.
-    """
-    brain_thread = threading.Thread(target=proactive_loop, args=(memory_instance,), daemon=True)
+def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
+    brain_thread = threading.Thread(target=proactive_loop, args=(memory_instance, is_jarvis_busy_callback), daemon=True)
     brain_thread.start()
     
     active_listeners = [

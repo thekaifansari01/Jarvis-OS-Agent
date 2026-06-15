@@ -5,12 +5,9 @@ load_dotenv()
 GROQ_ROUTER_MODEL = "llama-3.1-8b-instant"
 GROQ_FAST_MODEL = "llama-3.3-70b-versatile"
 GROQ_SUMMARY_MODEL = "openai/gpt-oss-120b"
-GROQ_WHISPER_MODEL = "whisper-large-v3"
-GROQ_EMAIL_SUMMARY_MODEL = "llama-3.1-8b-instant"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 GEMINI_AGENT_MODEL = "gemma-4-31b-it"
-GEMINI_DEEP_RESEARCH_MODEL = "gemma-4-31b-it"
 GEMINI_EMBEDDING_MODEL = "gemini-embedding-2"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -18,6 +15,8 @@ FLUX_IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell"
 TOGETHER_API_KEY = os.getenv("TOGETHER_AI")
 
 AI_HORDE_IMAGE_MODEL = "AlbedoBase XL (SDXL)"
+
+AGENT_PROACTIVE="meta-llama/llama-4-scout-17b-16e-instruct"
 
 EDGE_TTS_VOICE = "hi-IN-MadhurNeural"
 

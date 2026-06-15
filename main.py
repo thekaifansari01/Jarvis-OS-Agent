@@ -39,6 +39,10 @@ _stt_popup_process = None
 _is_busy = False
 _is_popup_open = False  
 
+def is_jarvis_busy():
+    global _is_busy
+    return _is_busy  
+
 def signal_handler(signum, frame):
     logging.info(f"Received signal {signum}, cleaning up...")
     proc_manager.cleanup()
@@ -306,7 +310,7 @@ def main() -> None:
 
     logging.info("🧠 Booting Proactive Brain (Events & Emails)...")
     try:
-        start_proactive_agent(memory)
+        start_proactive_agent(memory, is_jarvis_busy)
     except Exception as e:
         logging.error(f"⚠️ Failed to start Proactive Agent: {e}")
 
