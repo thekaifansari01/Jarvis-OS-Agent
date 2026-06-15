@@ -17,25 +17,27 @@ module.exports = async (req, res, db) => {
         `;
 
         db.all(query, [targetJid, start_timestamp, end_timestamp], (err, rows) => {
-            if (err) return res.status(500).json({ error: "Database error" });
+            if (err) {
+                console.error("❌ [DB FETCH ERROR]:", err.message);
+                return res.status(500).json({ error: "Database error" });
+            }
 
             if (!rows || rows.length === 0) return res.json({ success: true, messages: [] });
 
             const formattedChats = rows.map(row => {
-                let text = row.text;
-                if (row.is_deleted === 1) text += " 🚫 [This message was deleted by the user]";
-                
                 return {
                     fromMe: row.from_me === 1,
-                    text: text,
+                    text: row.text,
                     timestamp: row.timestamp
                 };
             });
 
+            console.log(`📥 Fetched ${formattedChats.length} messages for ${cleanNumber} from database.`);
             res.json({ success: true, messages: formattedChats });
         });
 
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("❌ [API FETCH ERROR]:", error.message);
+        if (!res.headersSent) res.status(500).json({ error: error.message });
     }
 };

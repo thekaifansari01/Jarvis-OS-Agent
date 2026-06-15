@@ -12,87 +12,130 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const pino = require('pino');
 const path = require('path');
+const sqlite3 = require('sqlite3').verbose(); 
+
+const sendMessageController = require('./Controllers/sendMessage');
+const fetchChatsController = require('./Controllers/fetchChats');
 
 process.on('uncaughtException', (err) => {
-    console.error('🚨 [CRITICAL ERROR] Uncaught Exception:', err.message);
+    console.error('🚨 [CRITICAL ERROR] Uncaught Exception. Engine is still running:', err.message);
 });
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('🚨 [CRITICAL ERROR] Unhandled Rejection:', reason);
+    console.error('🚨 [CRITICAL ERROR] Unhandled Promise Rejection:', reason);
 });
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 const PORT = 3000;
 
 let sock; 
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
-if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
+try {
+    if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+    }
+} catch (fsErr) {
+    console.error("🚨 [FS ERROR] Cannot create session directory:", fsErr.message);
+}
+
+const dbPath = path.join(sessionDir, 'chats.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) console.error("🚨 [DB INIT ERROR] Failed to connect to SQLite:", err.message);
+});
+
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS Messages (
+        id TEXT PRIMARY KEY,
+        phone_number TEXT,
+        text TEXT,
+        timestamp INTEGER,
+        from_me INTEGER
+    )`, (err) => {
+        if (err) console.error("🚨 [DB TABLE ERROR] Failed to create table:", err.message);
+    });
+});
+
+function keepTop20ChatsOnly() {
+    const cleanupQuery = `
+        DELETE FROM Messages
+        WHERE phone_number NOT IN (
+            SELECT phone_number FROM Messages
+            GROUP BY phone_number
+            ORDER BY MAX(timestamp) DESC
+            LIMIT 20
+        )
+    `;
+    db.run(cleanupQuery, (err) => {
+        if (err) console.error("❌ [DB CLEANUP ERROR]:", err.message);
+    });
 }
 
 const store = {
-    messages: {},
-    readFromFile: (filePath) => {
-        if (fs.existsSync(filePath)) {
-            try {
-                const data = fs.readFileSync(filePath, 'utf-8');
-                if (data.trim() === "") throw new Error("Empty file");
-                store.messages = JSON.parse(data);
-            } catch (err) {
-                console.error('⚠️ [STORE] Corrupted or empty store file detected. Starting fresh.');
-                store.messages = {};
-            }
-        }
-    },
-    writeToFile: (filePath) => {
-        try {
-            fs.writeFileSync(filePath, JSON.stringify(store.messages), 'utf-8');
-        } catch (err) {}
-    },
     bind: (ev) => {
-        const processMessages = (messages) => {
-            if (!messages || !Array.isArray(messages)) return;
-            
+        const processMessages = (messages, isBulkSync = false) => {
             try {
-                for (const msg of messages) {
-                    if (!msg || !msg.key || !msg.key.remoteJid || msg.key.remoteJid === 'status@broadcast') continue;
-                    
-                    const jid = msg.key.remoteJid;
-                    if (!store.messages[jid]) {
-                        store.messages[jid] = { array: [] };
-                    }
-                    
-                    const exists = store.messages[jid].array.find(m => m.key && m.key.id === msg.key.id);
-                    if (!exists) {
-                        store.messages[jid].array.push(msg);
-                    }
-                }
+                if (!messages || !Array.isArray(messages) || messages.length === 0) return;
                 
-                for (const jid in store.messages) {
-                    if (store.messages[jid] && Array.isArray(store.messages[jid].array)) {
-                        store.messages[jid].array.sort((a, b) => (Number(a.messageTimestamp) || 0) - (Number(b.messageTimestamp) || 0));
-                        if (store.messages[jid].array.length > 1000) { 
-                            store.messages[jid].array = store.messages[jid].array.slice(-1000);
+                let validMessageCount = 0;
+                let uniqueChats = new Set();
+
+                messages.forEach(msg => {
+                    try {
+                        if (!msg || !msg.key || !msg.key.remoteJid) return;
+                        
+                        const jid = msg.key.remoteJid;
+
+                        if (jid.endsWith('@g.us') || jid === 'status@broadcast') {
+                            return; 
+                        }
+                        
+                        const id = msg.key.id;
+                        const timestamp = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
+                        const fromMe = msg.key.fromMe ? 1 : 0;
+                        let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "[Media/Non-text message]";
+
+                        validMessageCount++;
+                        uniqueChats.add(jid.split('@')[0]); 
+
+                        const insertQuery = `INSERT OR IGNORE INTO Messages (id, phone_number, text, timestamp, from_me) VALUES (?, ?, ?, ?, ?)`;
+                        
+                        db.run(insertQuery, [id, jid, text, timestamp, fromMe], (err) => {
+                            if (!err) {
+                                keepTop20ChatsOnly();
+                            } else {
+                                console.error("❌ [DB INSERT ERROR]:", err.message);
+                            }
+                        });
+                    } catch (msgErr) {
+                        console.error("⚠️ [MESSAGE PARSING ERROR] Skipped a malformed message:", msgErr.message);
+                    }
+                });
+
+                if (validMessageCount > 0) {
+                    if (isBulkSync) {
+                        console.log(`🔄 [OFFLINE/INITIAL SYNC] Loaded ${validMessageCount} personal messages across ${uniqueChats.size} chats (Groups Ignored).`);
+                    } else {
+                        if (validMessageCount === 1) {
+                            console.log(`💬 [LIVE MESSAGE] Received a new personal message from ${Array.from(uniqueChats)[0]}`);
+                        } else {
+                            console.log(`⚡ [QUICK SYNC] Processed ${validMessageCount} recent personal messages from ${uniqueChats.size} chats.`);
                         }
                     }
                 }
-            } catch (err) {
-                console.error("⚠️ [SYNC ERROR] Skipped malformed metadata packet.");
+            } catch (mainErr) {
+                console.error("🚨 [PROCESS MESSAGES FATAL ERROR]:", mainErr.message);
             }
         };
 
-        ev.on('messages.upsert', ({ messages }) => processMessages(messages));
-        ev.on('messaging-history.set', ({ messages }) => processMessages(messages));
+        ev.on('messages.upsert', ({ messages }) => processMessages(messages, false));
+        
+        ev.on('messaging-history.set', ({ messages }) => {
+            console.log(`\n⏳ [SYSTEM WAKING UP] Fetching pending history from WhatsApp servers...`);
+            processMessages(messages, true);
+        });
     }
 };
-
-const storePath = path.join(sessionDir, 'baileys_store.json'); 
-store.readFromFile(storePath);
-
-setInterval(() => {
-    store.writeToFile(storePath);
-}, 10000);
 
 async function connectToWhatsApp() {
     try {
@@ -108,35 +151,40 @@ async function connectToWhatsApp() {
         store.bind(sock.ev);
 
         sock.ev.on('connection.update', (update) => {
-            const { connection, lastDisconnect, qr } = update;
-            
-            if (qr) {
-                console.log('\n📱 Please scan this QR Code from your WhatsApp device:\n');
-                qrcode.generate(qr, { small: true }); 
-            }
-            
-            if (connection === 'close') {
-                const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            try {
+                const { connection, lastDisconnect, qr } = update;
                 
-                if (statusCode === DisconnectReason.loggedOut) {
-                    console.log('❌ [LOGGED OUT] Device has been logged out from WhatsApp Web.');
-                } else if (statusCode === 440) {
-                   
-                    console.log('⚠️ [CONFLICT - 440] WhatsApp Web is open elsewhere. Jarvis is waiting 10s to avoid spam...');
-                    setTimeout(connectToWhatsApp, 10000); 
-                    return; 
-                } else if (statusCode === DisconnectReason.timedOut) {
-                    console.log('⚠️ [TIMEOUT] Connection is slow, attempting to reconnect...');
-                } else {
-                    console.log(`⚠️ [DISCONNECTED] Reason Code: ${statusCode}. Reconnecting...`);
+                if (qr) {
+                    console.log('\n📱 Please scan this QR Code from your WhatsApp device:\n');
+                    qrcode.generate(qr, { small: true }); 
                 }
+                
+                if (connection === 'close') {
+                    const statusCode = lastDisconnect?.error?.output?.statusCode;
+                    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                    
+                    if (statusCode === DisconnectReason.loggedOut) {
+                        console.log('❌ [LOGGED OUT] Device has been logged out from WhatsApp Web. Please delete session folder and rescan.');
+                    } else if (statusCode === 440) {
+                        console.log('⚠️ [CONFLICT - 440] WhatsApp Web is open elsewhere. Jarvis is waiting 10s to avoid spam...');
+                        setTimeout(connectToWhatsApp, 10000); 
+                        return; 
+                    } else if (statusCode === DisconnectReason.timedOut) {
+                        console.log('⚠️ [TIMEOUT] Connection is slow, attempting to reconnect in 5s...');
+                        setTimeout(connectToWhatsApp, 5000);
+                        return;
+                    } else {
+                        console.log(`⚠️ [DISCONNECTED] Reason Code: ${statusCode || 'Unknown'}. Reconnecting...`);
+                    }
 
-                if (shouldReconnect) {
-                    setTimeout(connectToWhatsApp, 3000); 
+                    if (shouldReconnect) {
+                        setTimeout(connectToWhatsApp, 3000); 
+                    }
+                } else if (connection === 'open') {
+                    console.log('\n✅ JARVIS WHATSAPP ENGINE IS ONLINE (MODULAR & SQLITE MODE)!\n');
                 }
-            } else if (connection === 'open') {
-                console.log('\n✅ JARVIS WHATSAPP ENGINE IS ONLINE (SEND & FETCH MODE)!\n');
+            } catch (connErr) {
+                console.error("🚨 [CONNECTION EVENT ERROR]:", connErr.message);
             }
         });
 
@@ -144,112 +192,30 @@ async function connectToWhatsApp() {
 
     } catch (err) {
         console.error('❌ [ENGINE START ERROR] Failed to connect to WhatsApp:', err.message);
+        setTimeout(connectToWhatsApp, 10000);
     }
 }
 
-app.post('/send', async (req, res) => {
+app.post('/send', (req, res) => {
     try {
-        if (!req.body || Object.keys(req.body).length === 0) {
-            return res.status(400).json({ error: "Empty request payload" });
-        }
-
-        const { number, message, file_path } = req.body;
-
-        if (!number) {
-            return res.status(400).json({ error: "Number is required" });
-        }
-
-        const cleanNumber = number.toString().replace(/[^0-9]/g, '');
-        if (cleanNumber.length < 10) {
-            return res.status(400).json({ error: "Invalid phone number format" });
-        }
-        let targetJid = `${cleanNumber}@s.whatsapp.net`;
-
-        if (!sock || !sock.user) {
-            return res.status(503).json({ error: "WhatsApp Engine is currently offline or reconnecting." });
-        }
-
-        if (file_path && fs.existsSync(file_path)) {
-            console.log(`📤 Preparing to send File: ${file_path} to ${cleanNumber}`);
-            
-            let buffer;
-            try {
-                buffer = fs.readFileSync(file_path);
-            } catch (fsError) {
-                console.error(`❌ [FILE READ ERROR] ${fsError.message}`);
-                return res.status(500).json({ error: `Cannot read file at ${file_path}. Permission denied or file locked.` });
-            }
-            
-            let messageContent = {};
-            if (file_path.match(/\.(jpeg|jpg|png|webp)$/i)) {
-                messageContent = { image: buffer, caption: message || "" };
-            } else if (file_path.match(/\.(mp4|mkv)$/i)) {
-                messageContent = { video: buffer, caption: message || "" };
-            } else if (file_path.match(/\.(mp3|ogg|wav)$/i)) {
-                messageContent = { audio: buffer, mimetype: 'audio/mp4' };
-            } else {
-                messageContent = { document: buffer, mimetype: 'application/octet-stream', fileName: file_path.split(/(\\|\/)/g).pop(), caption: message || "" };
-            }
-
-            await sock.sendMessage(targetJid, messageContent);
-            console.log(`✅ File Sent Successfully!`);
-
-        } else {
-            console.log(`💬 Sending Text to ${cleanNumber}: ${message}`);
-            if (message) {
-                await sock.sendMessage(targetJid, { text: message });
-                console.log(`✅ Text Sent Successfully!`);
-            } else {
-                return res.status(400).json({ error: "Both message and file_path cannot be empty." });
-            }
-        }
-
-        res.json({ success: true, status: "Message sent!" });
-
-    } catch (error) {
-        console.error("❌ [API SEND ERROR]:", error.message);
-        res.status(500).json({ error: error.message });
+        sendMessageController(req, res, () => sock); 
+    } catch (err) {
+        console.error("🚨 [ROUTE ERROR - /send]:", err.message);
+        if (!res.headersSent) res.status(500).json({ error: "Internal Server Error in /send route" });
     }
 });
 
-app.post('/fetch-chats', async (req, res) => {
+app.post('/fetch-chats', (req, res) => {
     try {
-        const { number, start_timestamp, end_timestamp } = req.body;
-
-        if (!number || !start_timestamp || !end_timestamp) {
-            return res.status(400).json({ error: "Missing required parameters: number, start_timestamp, or end_timestamp." });
-        }
-
-        const cleanNumber = number.toString().replace(/[^0-9]/g, '');
-        const targetJid = `${cleanNumber}@s.whatsapp.net`;
-
-        if (!store.messages[targetJid]) {
-            return res.json({ success: true, messages: [] });
-        }
-
-        const allMessages = store.messages[targetJid].array;
-        
-        const filteredMessages = allMessages.filter(msg => {
-            const msgTime = Number(msg.messageTimestamp);
-            return msgTime >= start_timestamp && msgTime <= end_timestamp;
-        });
-
-        const formattedChats = filteredMessages.map(msg => {
-            let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "[Media/Non-text message]";
-            return {
-                fromMe: msg.key.fromMe,
-                text: text,
-                timestamp: Number(msg.messageTimestamp)
-            };
-        });
-
-        console.log(`📥 Fetched ${formattedChats.length} messages for ${cleanNumber} within the requested timeframe.`);
-        res.json({ success: true, messages: formattedChats });
-
-    } catch (error) {
-        console.error("❌ [API FETCH ERROR]:", error.message);
-        res.status(500).json({ error: error.message });
+        fetchChatsController(req, res, db); 
+    } catch (err) {
+        console.error("🚨 [ROUTE ERROR - /fetch-chats]:", err.message);
+        if (!res.headersSent) res.status(500).json({ error: "Internal Server Error in /fetch-chats route" });
     }
+});
+
+app.use((req, res) => {
+    res.status(404).json({ error: "Route not found" });
 });
 
 app.listen(PORT, () => {

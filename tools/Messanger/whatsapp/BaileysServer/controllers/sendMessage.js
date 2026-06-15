@@ -2,7 +2,7 @@ const fs = require('fs');
 
 module.exports = async (req, res, getSock) => {
     try {
-        const sock = getSock();
+        const sock = getSock(); 
         
         if (!req.body || Object.keys(req.body).length === 0) {
             return res.status(400).json({ error: "Empty request payload" });
@@ -17,13 +17,17 @@ module.exports = async (req, res, getSock) => {
         
         let targetJid = `${cleanNumber}@s.whatsapp.net`;
 
-        if (!sock || !sock.user) return res.status(503).json({ error: "Engine offline" });
+        if (!sock || !sock.user) {
+            return res.status(503).json({ error: "WhatsApp Engine is currently offline or reconnecting." });
+        }
 
         if (file_path && fs.existsSync(file_path)) {
+            console.log(`📤 Preparing to send File: ${file_path} to ${cleanNumber}`);
             let buffer;
             try {
                 buffer = fs.readFileSync(file_path);
             } catch (fsError) {
+                console.error(`❌ [FILE READ ERROR] ${fsError.message}`);
                 return res.status(500).json({ error: "Cannot read file" });
             }
             
@@ -39,9 +43,12 @@ module.exports = async (req, res, getSock) => {
             }
 
             await sock.sendMessage(targetJid, messageContent);
+            console.log(`✅ File Sent Successfully!`);
         } else {
             if (message) {
+                console.log(`💬 Sending Text to ${cleanNumber}: ${message}`);
                 await sock.sendMessage(targetJid, { text: message });
+                console.log(`✅ Text Sent Successfully!`);
             } else {
                 return res.status(400).json({ error: "Empty message" });
             }
@@ -50,6 +57,7 @@ module.exports = async (req, res, getSock) => {
         res.json({ success: true, status: "Message sent!" });
 
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("❌ [API SEND ERROR]:", error.message);
+        if (!res.headersSent) res.status(500).json({ error: error.message });
     }
 };
