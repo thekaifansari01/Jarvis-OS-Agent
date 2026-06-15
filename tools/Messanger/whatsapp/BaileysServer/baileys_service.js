@@ -29,6 +29,7 @@ app.use(express.json({ limit: '50mb' }));
 const PORT = 3000;
 
 let sock; 
+let unreadAlerts = [];
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
 try {
@@ -94,6 +95,11 @@ const store = {
                         const timestamp = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
                         const fromMe = msg.key.fromMe ? 1 : 0;
                         let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "[Media/Non-text message]";
+
+                        if (!fromMe && !isBulkSync) {
+                            let senderName = msg.pushName || `Unknown ${jid.split('@')[0]}`;
+                            unreadAlerts.push(`${senderName}: ${text}`);
+                        }
 
                         validMessageCount++;
                         uniqueChats.add(jid.split('@')[0]); 
@@ -211,6 +217,16 @@ app.post('/fetch-chats', (req, res) => {
     } catch (err) {
         console.error("🚨 [ROUTE ERROR - /fetch-chats]:", err.message);
         if (!res.headersSent) res.status(500).json({ error: "Internal Server Error in /fetch-chats route" });
+    }
+});
+
+app.get('/get-alerts', (req, res) => {
+    if (unreadAlerts.length > 0) {
+        const alertsToSend = [...unreadAlerts];
+        unreadAlerts = []; 
+        res.json({ success: true, alerts: alertsToSend });
+    } else {
+        res.json({ success: true, alerts: [] });
     }
 });
 

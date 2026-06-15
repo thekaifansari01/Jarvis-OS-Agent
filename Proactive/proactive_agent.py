@@ -8,6 +8,7 @@ from core.voice.tts import speak
 from Proactive.event_queue import get_proactive_event
 from Proactive.prompts import PROACTIVE_SCOUT_PROMPT
 from Proactive.Email.EmailProactive import listen_for_emails
+from Proactive.Whatsapp.WhatsappProactive import listen_for_whatsapp
 
 SCOUT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" 
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -70,6 +71,7 @@ def start_proactive_agent(memory_instance):
     
     active_listeners = [
         listen_for_emails,
+        listen_for_whatsapp,
     ]
     
     for listener_func in active_listeners:
