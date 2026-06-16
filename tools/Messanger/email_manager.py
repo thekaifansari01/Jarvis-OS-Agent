@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.exceptions import RefreshError
 
-from core.brain.config import GROQ_EMAIL_SUMMARY_MODEL, EMAIL_SUMMARY_MAX_TOKENS, GROQ_API_KEY
+from core.brain.config import GROQ_API_KEY
 
 try:
     from core.voice.tts import speak
