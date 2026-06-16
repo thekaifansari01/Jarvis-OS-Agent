@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 from tavily import TavilyClient
 
-from core.brain.config import GEMINI_DEEP_RESEARCH_MODEL, DEEP_RESEARCH_TIMEOUT, GEMINI_API_KEY
+from core.brain.config import DEEP_RESEARCH_TIMEOUT, GEMINI_API_KEY
 from core.ui.agent_status import update_agent_status
 from tools.workspace.workspace import workspace
 
