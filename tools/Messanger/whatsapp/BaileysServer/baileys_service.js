@@ -30,6 +30,7 @@ const PORT = 3000;
 
 let sock; 
 let unreadAlerts = [];
+const SCRIPT_START_TIME = Math.floor(Date.now() / 1000);
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
 try {
@@ -96,7 +97,7 @@ const store = {
                         const fromMe = msg.key.fromMe ? 1 : 0;
                         let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "[Media/Non-text message]";
 
-                        if (!fromMe && !isBulkSync) {
+                        if (!fromMe && !isBulkSync && timestamp >= SCRIPT_START_TIME) {
                             let senderName = msg.pushName || `Unknown ${jid.split('@')[0]}`;
                             unreadAlerts.push(`${senderName}: ${text}`);
                         }
