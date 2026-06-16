@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 from tavily import TavilyClient
 
-from core.brain.config import DEEP_RESEARCH_TIMEOUT, GEMINI_API_KEY
+from core.brain.config import AGENT_MODEL_GEMINI, DEEP_RESEARCH_TIMEOUT, GEMINI_API_KEY
 from core.ui.agent_status import update_agent_status
 from tools.workspace.workspace import workspace
 
@@ -147,7 +147,7 @@ def deep_research(topic, max_steps=None):
         print(final_report[:500] + "\n...[Report Truncated for CLI View]...")
 
         client = genai.Client(api_key=GEMINI_API_KEY)
-        ai_filename = generate_filename_from_ai(topic, final_report, client, GEMINI_DEEP_RESEARCH_MODEL)
+        ai_filename = generate_filename_from_ai(topic, final_report, client, AGENT_MODEL_GEMINI)
         
         if not ai_filename:
             safe_topic = re.sub(r'[^a-zA-Z0-9]', '_', topic.lower())[:40]
