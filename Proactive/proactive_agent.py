@@ -9,26 +9,33 @@ from Proactive.event_queue import get_proactive_event
 from Proactive.prompts import PROACTIVE_SCOUT_PROMPT
 from Proactive.Email.EmailProactive import listen_for_emails
 from Proactive.Whatsapp.WhatsappProactive import listen_for_whatsapp
+from Proactive.Reminder.ReminderProactive import listen_for_reminders
 from core.brain.config import AGENT_PROACTIVE
 
 PROACTIVE_AGENT = AGENT_PROACTIVE
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-def evaluate_event(source: str, data: str, priority: str) -> str:
+def evaluate_event(source: str, data: str, priority: str, recent_history: str, current_mood: str) -> str:
     if not groq_client: return "IGNORE"
     
     backoff = 2
     for attempt in range(3):
         try:
-            prompt = PROACTIVE_SCOUT_PROMPT.format(source=source, data=data, priority=priority)
+            prompt = PROACTIVE_SCOUT_PROMPT.format(
+                source=source, 
+                data=data, 
+                priority=priority,
+                history=recent_history,
+                mood=current_mood
+            )
             completion = groq_client.chat.completions.create(
                 model=PROACTIVE_AGENT,
                 messages=[
                     {"role": "system", "content": "You are Jarvis's proactive intelligence. Strictly follow the prompt's formatting and personality rules."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_tokens=60
+                temperature=0.2,
+                max_tokens=150
             )
             return completion.choices[0].message.content.strip()
         except GroqError as ge:
@@ -51,10 +58,21 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                 data = event.data
                 priority = getattr(event, 'priority', 'normal') 
                 
-                decision = evaluate_event(source, data, priority)
+                recent_history = "No recent history."
+                current_mood = "Neutral"
+
+                if memory_instance:
+                    try:
+                        recent_history = memory_instance.get_fast_history_context()
+                        mood_history = memory_instance.user_mood.get("mood_history", [])
+                        if mood_history:
+                            current_mood = mood_history[-1].get("mood", "Neutral")
+                    except Exception as mem_err:
+                        logger.warning(f"Failed to fetch memory context: {mem_err}")
+                
+                decision = evaluate_event(source, data, priority, recent_history, current_mood)
 
                 if decision.upper() != "IGNORE" and "IGNORE" not in decision.upper():
-                    
                     if is_jarvis_busy_callback:
                         was_busy = False
                         while is_jarvis_busy_callback():
@@ -69,7 +87,6 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                     if memory_instance:
                         try:
                             truncated_data = data if len(data) <= 2000 else data[:2000] + "\n\n[...Message Truncated]"
-                            
                             memory_instance.add_message(
                                 "PROACTIVE", 
                                 decision, 
@@ -92,6 +109,7 @@ def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
     active_listeners = [
         listen_for_emails,
         listen_for_whatsapp,
+        listen_for_reminders,
     ]
     
     for listener_func in active_listeners:
