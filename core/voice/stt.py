@@ -13,6 +13,7 @@ from core.logger.logger import logger
 from core.voice.stt_status import update_stt_status
 from core.voice import interrupt
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
+from core.voice.EagelAuth import VoiceAuthenticator
 
 load_dotenv()
 
@@ -20,7 +21,7 @@ PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "oLxGUCx6LY/f8Ru4pUzZIa
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 if not DEEPGRAM_API_KEY:
-    logger.error("❌ DEEPGRAM_API_KEY nahi mili! Please check your .env file.")
+    logger.error("DEEPGRAM_API_KEY nahi mili! Please check your .env file.")
 
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
@@ -57,9 +58,15 @@ class UnifiedVoiceAssistant:
         self.current_transcript = ""
         self.live_text = ""
         self.command_done = threading.Event()
+        
+        self.eagle_auth = VoiceAuthenticator()
+        self.AUTH_THRESHOLD = 0.65  
+        self.is_authorized = not bool(self.eagle_auth.speaker_profile) 
+        self.auth_in_progress = False
+        self.auth_buffer = []
 
     def start(self):
-        logger.info("🎙️ Unified Voice Engine Started (Waiting for 'Jarvis')...")
+        logger.info("Unified Voice Engine Started (Waiting for 'Jarvis')...")
         self.listen_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.listen_thread.start()
 
@@ -90,7 +97,7 @@ class UnifiedVoiceAssistant:
                     update_stt_status("listening", assistant.live_text)
                     
                     if getattr(result, 'speech_final', False):
-                        logger.info("⚡ Speech Final triggered by Deepgram.")
+                        logger.info("Speech Final triggered by Deepgram.")
                         assistant.command_done.set()
                 else:
                     if sentence:
@@ -98,7 +105,7 @@ class UnifiedVoiceAssistant:
                         update_stt_status("listening", assistant.live_text)
 
             def on_utterance_end(dg_self, utterance_end, **kwargs):
-                logger.info("🛑 Utterance End (Silence) detected by Deepgram.")
+                logger.info("Utterance End (Silence) detected by Deepgram.")
                 if assistant.live_text.strip():
                     assistant.command_done.set()
 
@@ -125,7 +132,7 @@ class UnifiedVoiceAssistant:
             )
 
             if not self.dg_connection.start(options):
-                logger.error("❌ Failed to connect to Deepgram API")
+                logger.error("Failed to connect to Deepgram API")
                 return False
             return True
 
@@ -144,10 +151,26 @@ class UnifiedVoiceAssistant:
                     keyword_index = self.porcupine.process(pcm_unpacked)
                     
                     if keyword_index >= 0:
-                        logger.info("🟢 WAKE WORD DETECTED!")
+                        logger.info("WAKE WORD DETECTED!")
                         tts.stop_speaking()
                         interrupt.set_interrupt()
                         self.play_wake_sound()
+                        
+                        if self.eagle_auth.speaker_profile:
+                            try:
+                                if hasattr(self.eagle_auth.recognizer, 'reset'):
+                                    self.eagle_auth.recognizer.reset()
+                            except Exception as e:
+                                logger.debug(f"Eagle reset failed: {e}")
+                            
+                            self.auth_buffer = []
+                            self.auth_buffer.extend(pcm_unpacked)
+                            self.is_authorized = False
+                            self.auth_in_progress = True
+                            logger.info("Recording voice for Biometric verification...")
+                        else:
+                            self.is_authorized = True
+                            self.auth_in_progress = False
                         
                         if self._setup_deepgram():
                             self.is_awake = True
@@ -156,6 +179,13 @@ class UnifiedVoiceAssistant:
                     if self.dg_connection:
                         self.dg_connection.send(pcm_data)
                         
+                    if self.auth_in_progress and not self.is_authorized:
+                        try:
+                            pcm_unpacked = struct.unpack_from("h" * self.porcupine.frame_length, pcm_data)
+                            self.auth_buffer.extend(pcm_unpacked)
+                        except Exception as e:
+                            logger.error(f"Error buffering audio data: {e}")
+                            
                     if self.command_done.is_set():
                         self.process_final_command()
 
@@ -167,25 +197,60 @@ class UnifiedVoiceAssistant:
         global last_valid_command_time
         
         if self.dg_connection:
-            self.dg_connection.finish()
-            self.dg_connection = None
+            try:
+                self.dg_connection.finish()
+            except Exception as e:
+                logger.error(f"Error closing Deepgram connection: {e}")
+            finally:
+                self.dg_connection = None
             
         full_command = self.live_text.lower().strip()
-        
         ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you", "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
 
+        if self.auth_in_progress and not self.is_authorized and len(self.auth_buffer) > 0:
+            try:
+                score = self.eagle_auth.process_audio(self.auth_buffer)
+                if score >= self.AUTH_THRESHOLD:
+                    logger.info(f"Voice Verified! (Score: {score:.4f})")
+                    self.is_authorized = True
+                else:
+                    logger.warning(f"Voice Verification Failed! (Score: {score:.4f})")
+                    self.is_authorized = False
+            except Exception as e:
+                logger.error(f"Authentication processing error: {e}")
+                self.is_authorized = False
+            finally:
+                self.auth_in_progress = False
+
+        if not self.is_authorized and full_command not in ignore_words and len(full_command) > 3:
+            from core.voice import tts
+            logger.warning(f"Voice Auth Failed! Command blocked: '{full_command}'")
+            update_stt_status("idle")
+            tts.speak("Access denied. Unauthorized voice detected.")
+            self.command_queue.put("")
+            
+            self.is_awake = False
+            interrupt.clear_interrupt()
+            self.is_authorized = False
+            self.auth_in_progress = False
+            self.auth_buffer = []
+            return
+
         if full_command and full_command not in ignore_words and len(full_command) > 3:
-            logger.info(f"🗣️ You said: {full_command}")
+            logger.info(f"You said: {full_command}")
             update_stt_status("understanding")
             last_valid_command_time = time.time()
             self.command_queue.put(full_command)
         else:
-            logger.info("🤫 Silence or garbage noise detected.")
+            logger.info("Silence or garbage noise detected.")
             update_stt_status("idle")
             self.command_queue.put("")
 
         self.is_awake = False
         interrupt.clear_interrupt()
+        self.is_authorized = False
+        self.auth_in_progress = False
+        self.auth_buffer = []
 
     def get_command(self, is_retry=False):
         global last_valid_command_time
@@ -207,9 +272,23 @@ class UnifiedVoiceAssistant:
             
             if last_valid_command_time > 0 and time_since_last_cmd < ACTIVE_CONTEXT_WINDOW and not is_retry:
                 from core.voice.tts import speak
-                logger.info("🧠 Active Context Detected: Prompting user...")
+                logger.info("Active Context Detected: Prompting user...")
                 speak("[thinking] Ji sir? Main sun raha hu.") 
                 time.sleep(0.5)
+                
+                if self.eagle_auth.speaker_profile:
+                    try:
+                        if hasattr(self.eagle_auth.recognizer, 'reset'):
+                            self.eagle_auth.recognizer.reset()
+                    except Exception as e:
+                        logger.debug(f"Eagle reset failed: {e}")
+                    
+                    self.auth_buffer = []  
+                    self.is_authorized = False
+                    self.auth_in_progress = True
+                else:
+                    self.is_authorized = True
+                    self.auth_in_progress = False
                 
                 if self._setup_deepgram():
                     self.is_awake = True
@@ -221,10 +300,14 @@ class UnifiedVoiceAssistant:
 
     def stop(self):
         self.running = False
-        self.stream.stop_stream()
-        self.stream.close()
-        self.audio.terminate()
-        self.porcupine.delete()
+        try:
+            self.stream.stop_stream()
+            self.stream.close()
+            self.audio.terminate()
+            self.porcupine.delete()
+            self.eagle_auth.cleanup()
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
 
 engine = UnifiedVoiceAssistant()
 
@@ -236,7 +319,7 @@ def listen():
 
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("🚀 JARVIS STT - NOISE-OPTIMIZED UNIFIED ENGINE 🚀")
+    print(" JARVIS STT - BIOMETRIC PARALLEL AUTH ENGINE ")
     print("="*60)
     
     try:
@@ -245,10 +328,10 @@ if __name__ == "__main__":
         while True:
             command = listen()
             if command:
-                print(f"\n✅ FINAL COMMAND CAUGHT: '{command}'\n")
+                print(f"\n FINAL COMMAND CAUGHT: '{command}'\n")
             else:
-                print("\n❌ Koi command capture nahi hui (Silence ya Noise ignored).\n")
+                print("\n Koi command capture nahi hui (Silence/Noise/Unauthorized).\n")
                 
     except KeyboardInterrupt:
-        print("\n\n🛑 Test mode band kiya jaa raha hai... Goodbye!")
+        print("\n\n Test mode band kiya jaa raha hai... Goodbye!")
         engine.stop()
