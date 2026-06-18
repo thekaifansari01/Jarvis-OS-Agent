@@ -10,6 +10,7 @@ Data/jarvis_memory/
 Data/Jarvis_Workspace/
 Data/tavily_search.log
 Data/typing_status.json
+Data/UserProfile/
 Data/RAG/
 Bin/
 **/node_modules/
@@ -30,3 +31,7 @@ core/UiSrc/SttPopup/.qmake.stash
 core/UiSrc/SttPopup/Makefile*
 .DS_Store
 Thumbs.db
+
+#for temp
+.txt
+test_eagle.py
