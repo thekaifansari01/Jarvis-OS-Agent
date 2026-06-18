@@ -61,7 +61,7 @@ class UnifiedVoiceAssistant:
         
         self.eagle_auth = VoiceAuthenticator()
         self.AUTH_THRESHOLD = 0.65  
-        self.is_authorized = not bool(self.eagle_auth.speaker_profile) 
+        self.is_authorized = False 
         self.auth_in_progress = False
         self.auth_buffer = []
 
@@ -169,7 +169,8 @@ class UnifiedVoiceAssistant:
                             self.auth_in_progress = True
                             logger.info("Recording voice for Biometric verification...")
                         else:
-                            self.is_authorized = True
+                            logger.error("🔴 Voice profile missing or deleted! Access Denied by default.")
+                            self.is_authorized = False
                             self.auth_in_progress = False
                         
                         if self._setup_deepgram():
@@ -287,7 +288,7 @@ class UnifiedVoiceAssistant:
                     self.is_authorized = False
                     self.auth_in_progress = True
                 else:
-                    self.is_authorized = True
+                    self.is_authorized = False
                     self.auth_in_progress = False
                 
                 if self._setup_deepgram():
