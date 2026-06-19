@@ -23,6 +23,7 @@ def start_agent_panel():
                 stderr=subprocess.DEVNULL,
                 creationflags=creation_flags
             )
+            logging.info("Agent panel started successfully.")
     except Exception as e:
         logging.error(f"Agent panel start failed: {e}")
 
@@ -32,8 +33,9 @@ def stop_agent_panel():
         try:
             proc_manager.kill_process_tree(_panel_process.pid)
             _panel_process.wait(timeout=2)
-        except Exception:
-            pass
+            logging.info("Agent panel stopped successfully.")
+        except Exception as e:
+            logging.error(f"Error stopping Agent panel: {e}")
         _panel_process = None
 
 def start_stt_popup():
@@ -49,6 +51,7 @@ def start_stt_popup():
                 stderr=subprocess.DEVNULL,
                 creationflags=creation_flags
             )
+            logging.info("STT popup started successfully.")
     except Exception as e:
         logging.error(f"STT popup start failed: {e}")
 
@@ -58,13 +61,21 @@ def stop_stt_popup():
         exit_stt_popup()
     except Exception:
         pass
+    
     if _stt_popup_process:
         try:
             proc_manager.kill_process_tree(_stt_popup_process.pid)
             _stt_popup_process.wait(timeout=2)
-        except Exception:
-            pass
+            logging.info("STT popup stopped successfully.")
+        except Exception as e:
+            logging.error(f"Error stopping STT popup: {e}")
         _stt_popup_process = None
+
+def is_stt_popup_running() -> bool:
+    global _stt_popup_process
+    if _stt_popup_process is None:
+        return False
+    return _stt_popup_process.poll() is None
 
 def start_baileys_server():
     global _baileys_process
@@ -89,6 +100,7 @@ def start_baileys_server():
                 stderr=stderr_target,
                 creationflags=creation_flags
             )
+            logging.info("Baileys server started successfully.")
     except Exception as e:
         logging.error(f"Baileys server start failed: {e}")
 
@@ -98,11 +110,19 @@ def stop_baileys_server():
         try:
             proc_manager.kill_process_tree(_baileys_process.pid)
             _baileys_process.wait(timeout=2)
-        except Exception:
-            pass
+            logging.info("Baileys server stopped successfully.")
+        except Exception as e:
+            logging.error(f"Error stopping Baileys server: {e}")
         _baileys_process = None
 
+def is_baileys_running() -> bool:
+    global _baileys_process
+    if _baileys_process is None:
+        return False
+    return _baileys_process.poll() is None
+
 def stop_all_services():
+    logging.info("Initiating shutdown of all background services.")
     stop_agent_panel()
     stop_stt_popup()
     stop_baileys_server()

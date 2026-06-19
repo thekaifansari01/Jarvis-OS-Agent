@@ -16,6 +16,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 os.system('cls' if os.name == 'nt' else 'clear')
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 from core.terminal.jarvis_terminal import init_terminal
 init_terminal()
 
@@ -29,16 +31,20 @@ from Proactive.proactive_agent import start_proactive_agent
 from core.main.BackgroundServices import start_agent_panel, start_stt_popup, start_baileys_server, stop_all_services
 from core.main.CommandHandler import main_command_processor, is_jarvis_busy
 from core.main.HotKeyManager import setup_hotkeys
+from core.main.ServiceWatchdog import start_watchdog, stop_watchdog
 
 _is_running = True
 
 def signal_handler(signum, frame):
     global _is_running
     _is_running = False
+    logging.info("Interrupt signal received. Initiating graceful shutdown.")
     try:
+        stop_watchdog()
+        stop_all_services()
         proc_manager.cleanup()
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Error during signal cleanup: {e}")
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -61,8 +67,8 @@ def main() -> None:
             hwnd = ctypes.windll.kernel32.GetConsoleWindow()
             if hwnd:
                 ctypes.windll.user32.ShowWindow(hwnd, 0)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Failed to hide console window: {e}")
 
     icon_path = None
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -80,8 +86,8 @@ def main() -> None:
         try:
             tray_thread = threading.Thread(target=start_tray_icon, args=(icon_path,), daemon=True)
             tray_thread.start()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Failed to start tray icon: {e}")
 
     try:
         from core.ui.agent_status import reset_agent_status
@@ -92,13 +98,15 @@ def main() -> None:
     start_agent_panel()
     start_stt_popup()
     start_baileys_server()
+    start_watchdog()
 
     if not is_dev_mode:
         time.sleep(1)
 
     try:
         memory = ContextMemory()
-    except Exception:
+    except Exception as e:
+        logging.warning(f"Failed to initialize ContextMemory, using fallback: {e}")
         class FakeMemory:
             def get_relevant_context(self, text): return ""
             def add_message(self, role, text, metadata=None): pass
@@ -110,16 +118,16 @@ def main() -> None:
 
     try:
         start_proactive_agent(memory, is_jarvis_busy)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to start proactive agent: {e}")
 
     mode = "TEXT" if is_dev_mode else "VOICE"
 
     if mode == "VOICE":
         try:
             stt.start_background_wake_word_listener()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Failed to start wake word listener: {e}")
 
     try:
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -140,6 +148,7 @@ def main() -> None:
 
                     if command and command.lower() in ["exit", "quit", "stop", "bye"]:
                         _is_running = False
+                        logging.info("Exit command received.")
                         try:
                             tts.stop_speaking()
                         except Exception:
@@ -151,8 +160,8 @@ def main() -> None:
                             try:
                                 memory.add_live_feedback(command)
                                 interrupt.clear_interrupt()
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logging.error(f"Failed to add live feedback: {e}")
                         else:
                             try:
                                 hide_stt_popup()
@@ -163,20 +172,28 @@ def main() -> None:
 
                 except KeyboardInterrupt:
                     _is_running = False
+                    logging.info("Keyboard interrupt received.")
                     break
-                except Exception:
+                except Exception as e:
+                    logging.error(f"Error in main event loop: {e}")
                     continue
     finally:
+        logging.info("Starting shutdown sequence.")
         try:
             tts.cleanup_temp()
             pygame.quit()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Error cleaning up TTS/Pygame: {e}")
+        
+        stop_watchdog()
         stop_all_services()
+        
         try:
             proc_manager.cleanup()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Error cleaning up process manager: {e}")
+            
+        logging.info("Shutdown sequence complete.")
 
 if __name__ == "__main__":
     main()
