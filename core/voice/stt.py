@@ -6,6 +6,7 @@ import struct
 import winsound
 import pyaudio
 import pvporcupine
+import random
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -225,9 +226,21 @@ class UnifiedVoiceAssistant:
 
         if not self.is_authorized and full_command not in ignore_words and len(full_command) > 3:
             from core.voice import tts
+            
             logger.warning(f"Voice Auth Failed! Command blocked: '{full_command}'")
             update_stt_status("idle")
-            tts.speak("Access denied. Unauthorized voice detected.")
+            
+            unauth_responses = [
+                "I'm sorry, but I don't recognize your voice print. Command ignored.",
+                "Apologies, but my protocols require authorization from the primary user.",
+                "Voice biometric mismatch. I am unable to process that request.",
+                "I'm afraid I can only accept commands from an authorized voice profile."
+            ]
+            
+            tts.speak(random.choice(unauth_responses))
+            
+            last_valid_command_time = 0 
+            
             self.command_queue.put("")
             
             self.is_awake = False
