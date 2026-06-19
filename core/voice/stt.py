@@ -14,7 +14,7 @@ from core.logger.logger import logger
 from core.voice.stt_status import update_stt_status
 from core.voice import interrupt
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
-from core.voice.EagelAuth import VoiceAuthenticator
+from core.auth.EagelAuth import VoiceAuthenticator
 
 load_dotenv()
 
