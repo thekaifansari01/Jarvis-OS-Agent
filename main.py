@@ -1,3 +1,5 @@
+import faulthandler
+faulthandler.enable()
 import os
 import sys
 import warnings
