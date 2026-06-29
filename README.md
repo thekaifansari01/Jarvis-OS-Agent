@@ -1,313 +1,706 @@
-# J.A.R.V.I.S – AI Agentic Virtual Assistant
+# 🧠 Jarvis - AI Assistant by Kaif Ansari
 
-**Version:** 3.1 (Mindly Core)  
-**Author:** Kaif Ansari (@thekaifansari01)  
-**Repository:** [github.com/thekaifansari01/jarvis-by-kaif-ansari](https://github.com/thekaifansari01/jarvis-by-kaif-ansari)
+<div align="center">
 
-> *“Jarvis, kal ki meeting ka email Kaif ko bhej do.”* – The assistant sends an email, schedules follow‑ups, and speaks back in milliseconds.
+![Jarvis Banner](https://img.shields.io/badge/Jarvis-AI%20Assistant-blueviolet?style=for-the-badge&logo=ai&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge)
 
-JARVIS is a voice‑first, multimodal AI assistant that combines the speed of Groq’s **Llama 3.3 70B** with the reasoning power of **Gemini’s agentic loops**. It controls your PC, manages emails, searches the web, generates images, conducts deep research, and maintains a long‑term memory – all through natural Hinglish (Roman script) or English commands.
+[![GitHub stars](https://img.shields.io/github/stars/thekaifansari01/jarvis-by-kaif-ansari)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/thekaifansari01/jarvis-by-kaif-ansari)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/network)
+[![GitHub issues](https://img.shields.io/github/issues/thekaifansari01/jarvis-by-kaif-ansari)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/issues)
+
+> **Your Personal, Intelligent, and Proactive AI Assistant**
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#-overview)
+- [Key Features](#-key-features)
+- [Architecture](#-architecture)
+- [Technology Stack](#-technology-stack)
+- [Installation](#-installation)
+- [Environment Setup](#-environment-setup)
+- [Usage](#-usage)
+- [Configuration](#-configuration)
+- [Project Structure](#-project-structure)
+- [Troubleshooting](#-troubleshooting)
+- [License](#-license)
+- [Contributing](#-contributing)
+
+---
+
+## 🌟 Overview
+
+**Jarvis** is a cutting-edge AI-powered personal assistant built by **Kaif Ansari**. It combines advanced natural language processing, biometric authentication, proactive intelligence, and multi-modal capabilities to create a seamless, human-like interaction experience.
+
+### 🎯 What Makes Jarvis Special?
+
+- **Hybrid Intelligence**: Combines Fast (stateless) and Agentic (stateful) reasoning for optimal performance
+- **Multi-Modal Capabilities**: Voice, text, vision, and emotion-aware interactions
+- **Biometric Security**: Voice and facial recognition for secure access
+- **Proactive Intelligence**: Automatically detects and notifies about important events
+- **Lifelong Memory**: Remembers facts, preferences, and conversations over time
+- **Workspace Management**: Full file system operations, image generation, and document handling
 
 ---
 
 ## ✨ Key Features
 
-| Category | Capabilities |
-|:---|:---|
-| **Voice** | Wake word (“Jarvis”) – Porcupine, real‑time STT (Deepgram Nova‑2), streaming TTS (Cartesia / Edge TTS fallback) with emotion detection |
-| **Fast Actions** | Open/close apps (fuzzy matching, registry cache), control volume/brightness, lock/sleep PC, open URLs, YouTube search |
-| **Agentic Tasks** | Send emails (Gmail API), WhatsApp messages, read/write workspace files, screen capture + vision analysis, clipboard control |
-| **Search & Research** | Web search (Tavily), arXiv papers, YouTube transcripts, webpage scraping (Jina Reader), autonomous deep research (Gemini, multi‑step) |
-| **Memory** | ChromaDB embeddings for chat history + workspace RAG (semantic file search), user bio/preferences, mood tracking, long‑term summaries |
-| **Image Generation** | FLUX (Together AI) – 4‑step instant generation, AI Horde img2img editing |
-| **UI** | Rich terminal (Claude‑style), floating STT popup (Dynamic Island), agent thought panel (PyQt5), system tray, global hotkey (Ctrl+Shift+J) |
-| **Workspace** | `Jarvis_Workspace/` with Vault (RAG), Creations (outputs), Temp (auto‑cleaned), registry.json for instant file lookups |
+### 🤖 Intelligent Processing
+| Feature | Description |
+|---------|-------------|
+| **FastBrain** | Stateless, instant responses using Groq's Llama models |
+| **AgenticBrain** | Stateful reasoning with Gemini's native tools and multi-step planning |
+| **Smart Router** | Automatically selects Fast or Agentic mode based on command complexity |
+| **Deep Research** | Tavily-powered comprehensive research with report generation |
+
+### 🔐 Biometric Authentication
+| Feature | Description |
+|---------|-------------|
+| **Voice Authentication** | Picovoice Eagle-based speaker verification |
+| **Face Authentication** | Face++ API-based facial recognition with live capture |
+| **Multi-Factor Security** | Combined voice + face authentication options |
+
+### 🧠 Memory Systems
+| Feature | Description |
+|---------|-------------|
+| **Context Memory** | 15-day short-term chat history with JSONL storage |
+| **Lifetime Memory** | ChromaDB-based long-term episodic memory with embeddings |
+| **User Bio & Preferences** | Learns and stores user facts, likes, and mood history |
+| **RAG Engine** | Retrieval-Augmented Generation for workspace files |
+
+### 🛠️ Integrated Tools
+| Category | Tools |
+|----------|-------|
+| **Communication** | Email (Gmail API), WhatsApp (Baileys), Calendar (Google Calendar) |
+| **Workspace** | File CRUD, Smart Search, Image Generation (Flux/AI Horde) |
+| **Search** | Web (Tavily), YouTube Transcripts, ArXiv Papers, Webpage Scraping |
+| **System** | App Open/Close, Volume/Brightness Control, Screenshot, Clipboard |
+| **Proactive** | Email Listener, WhatsApp Listener, Reminder Listener |
+
+### 🎨 User Interface
+- **Agent Panel**: Floating, animated UI showing real-time agent status
+- **STT Popup**: Visual feedback for speech recognition
+- **System Tray**: Quick access and background operation
+- **Terminal Output**: Clean, color-coded logs with rich formatting
+
+### 🔊 Voice Features
+- **Wake Word Detection**: "Jarvis" triggers listening mode
+- **Deepgram STT**: Real-time speech-to-text with Hindi support
+- **Edge TTS**: Fast, natural-sounding text-to-speech
+- **Parallel Authentication**: Voice verification during wake word capture
 
 ---
 
-## 🧠 Architecture
+## 🏗️ Architecture
 
-The assistant uses a **hybrid router** that decides whether a command is simple (FAST) or complex (AGENTIC):
-
+```mermaid
+graph TD
+    A[User Input] --> B{Input Type}
+    B -->|Voice| C[Wake Word Detection]
+    B -->|Text| D[Hotkey Popup]
+    C --> E[Biometric Auth]
+    E --> F[Deepgram STT]
+    F --> G[Smart Router]
+    D --> G
+    
+    G --> H{Complexity Check}
+    H -->|Simple| I[FastBrain]
+    H -->|Complex| J[AgenticBrain]
+    
+    I --> K[Groq Llama]
+    J --> L[Gemini Agent]
+    
+    K --> M[Tool Executor]
+    L --> M
+    
+    M --> N[System Tools]
+    M --> O[Communication]
+    M --> P[Workspace]
+    M --> Q[Search Tools]
+    
+    R[Proactive Listeners] --> S[Event Queue]
+    S --> T[Proactive Agent]
+    T --> U[TTS Notification]
+    
+    V[Memory Systems] --> W[Context Memory]
+    V --> X[Lifetime Memory]
+    V --> Y[RAG Engine]
 ```
-User Input (Voice / Text)
-    │
-    ▼
-┌──────────────┐       FAST (70%)       ┌─────────────────┐
-│ Smart Router │ ─────────────────────► │   Fast Brain    │
-│  (Groq 8B)   │                         │ (Groq Llama 3.3)│
-└──────────────┘                         │   + tool call   │
-    │                                     └────────┬────────┘
-    │ AGENTIC (30%)                                │
-    ▼                                              ▼
-┌──────────────┐                         ┌─────────────────┐
-│ Agentic Brain│ ◄───────────────────── │ execute_actions │
-│ (Gemini 31B) │                         │  (async / sync) │
-│   13 tools   │                         └────────┬────────┘
-└──────────────┘                                  │
-    │                                             │
-    └──────────────────┬──────────────────────────┘
-                       ▼
-              ┌────────────────┐
-              │   Tools Layer  │
-              │ (Search, Mail, │
-              │ Workspace, ...)│
-              └────────────────┘
-```
 
-**How it works:**
+### 🧩 Core Components
 
-1. **Router** decides if command is FAST (app open, stateless chat) or AGENTIC (email, web research, file ops).
-2. **Fast Brain** (Groq 70B) uses native `system_controller` tool – response in <1s.
-3. **Agentic Brain** (Gemini 31B) runs up to 20 tool‑calling steps, updates UI, handles follow‑ups.
-4. **Executor** runs actions in a thread pool, streams TTS, and logs everything.
+#### 1. **Processing Pipeline**
+- **FastBrain**: Uses Groq's `llama-3.3-70b-versatile` for quick, stateless responses
+- **AgenticBrain**: Uses Gemini's `gemma-4-31b-it` for complex, multi-step tasks
+- **Smart Router**: Analyzes command complexity to choose the right processor
+
+#### 2. **Memory Architecture**
+- **Short-term**: JSONL-based chat history with 15-day rolling window
+- **Long-term**: ChromaDB with Gemini embeddings for semantic search
+- **User Context**: JSON stores for bio, preferences, and mood history
+
+#### 3. **Authentication Layer**
+- **Voice**: Picovoice Eagle with real-time scoring
+- **Face**: Face++ API with live camera capture
+- **Session**: Token-based authentication for Gmail and Calendar
+
+#### 4. **Proactive Intelligence**
+- **Listeners**: Gmail Pub/Sub, WhatsApp Baileys, Calendar Reminders
+- **Event Queue**: Thread-safe queue for event processing
+- **Scout Agent**: Evaluates event importance before notification
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack
 
-| Component | Technology |
-|:---|:---|
-| **LLM (Fast)** | Groq – Llama 3.3 70B / Router 8B |
-| **LLM (Agentic)** | Gemini – Gemma 4 31B (1M context) |
-| **Embeddings** | Gemini Embedding 2 (768d) |
-| **Vector DB** | ChromaDB (separate for chat & RAG) |
-| **STT** | Deepgram Nova‑2 (websocket, Hindi+English) |
-| **Wake Word** | Porcupine (offline) |
-| **TTS** | Cartesia Sonic‑3 (primary) / Edge TTS (fallback) |
-| **Image** | Together AI (FLUX) + AI Horde (edit) |
-| **Search** | Tavily, arXiv, YouTube Transcript, Jina Reader |
-| **Email** | Gmail API (OAuth) |
-| **WhatsApp** | pywhatkit / Twilio |
-| **System** | psutil, pycaw, screen‑brightness‑control, pyautogui |
-| **UI** | PyQt5, Rich, pystray, PIL |
-| **Utilities** | python‑dotenv, keyboard, pyperclip |
+### 🤖 AI & Machine Learning
+| Technology | Purpose |
+|------------|---------|
+| **Groq API** | Fast inference for Router, FastBrain, and Summarization |
+| **Gemini API** | Agentic reasoning, Embeddings, and Vision capabilities |
+| **Gemma 4** | 31B parameter model for complex reasoning |
+| **Llama 3.3** | 70B parameter model for fast responses |
+| **Flux.1-Schnell** | Image generation |
+| **AI Horde** | Community-powered image editing |
+| **Tavily** | Research and web search |
+
+### 🎤 Voice & Audio
+| Technology | Purpose |
+|------------|---------|
+| **Deepgram Nova-2** | Real-time speech-to-text with Hindi support |
+| **Picovoice Porcupine** | Wake word detection ("Jarvis") |
+| **Picovoice Eagle** | Voice biometric authentication |
+| **Edge TTS** | Fast, natural text-to-speech |
+| **Pygame** | Audio playback engine |
+
+### 🗄️ Storage & Databases
+| Technology | Purpose |
+|------------|---------|
+| **ChromaDB** | Vector database for embeddings |
+| **SQLite** | Local message storage for WhatsApp |
+| **JSON/L** | Configuration and chat history |
+
+### 🔧 APIs & Services
+| Service | Purpose |
+|---------|---------|
+| **Gmail API** | Email sending and receiving |
+| **Google Calendar API** | Event management |
+| **WhatsApp Baileys** | WhatsApp messaging |
+| **Face++ API** | Facial recognition |
+| **Together AI** | Image generation |
+| **Pub/Sub** | Email notifications |
+
+### 🖥️ UI & Visualization
+| Technology | Purpose |
+|------------|---------|
+| **PyQt5** | Agent panel and UI popups |
+| **Pystray** | System tray integration |
+| **Rich** | Terminal formatting and logging |
+| **ZMQ** | Real-time inter-process communication |
 
 ---
 
-## 🚀 Installation
+## 📦 Installation
 
-### 1. Clone the repository
+### Prerequisites
+
+- **Python**: 3.10 or higher
+- **Node.js**: 18.0 or higher (for WhatsApp Baileys)
+- **Git**: For cloning the repository
+- **Windows**: For optimal system integration (works on Linux/macOS with limitations)
+
+### Step-by-Step Setup
+
+#### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/thekaifansari01/jarvis-by-kaif-ansari.git
 cd jarvis-by-kaif-ansari
 ```
 
-### 2. Set up Python environment
+#### 2. Create Virtual Environment
 
 ```bash
+# Windows
 python -m venv venv
-source venv/bin/activate          # Linux/Mac
-venv\Scripts\activate             # Windows
+venv\Scripts\activate
+
+# Linux/macOS
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-### 3. Install dependencies
+#### 3. Install Python Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> **Windows note:** Also install `pywin32` for tray hiding functionality.
+#### 4. Install Node.js Dependencies
 
-### 4. Configure API keys
-
-Copy `.env.example` to `.env` and fill in your keys:
-
-```ini
-GROQ_API_KEY=your_groq_key
-GEMINI_API_KEY=your_gemini_key
-TOGETHER_AI=your_together_key
-TAVILY_API_KEY=your_tavily_key
-PICOVOICE_API_KEY=your_picovoice_key
-CARTESIA_API_KEY=your_cartesia_key    # optional
-DEEPGRAM_API_KEY=your_deepgram_key
+```bash
+cd tools/Messanger/whatsapp/BaileysServer
+npm install
+cd ../../../../..
 ```
 
-### 5. Set up Gmail OAuth (for email)
+#### 5. Set Up Environment Variables
 
-- Download `credentials.json` from Google Cloud Console → Gmail API.
-- Place it in `Data/SessionCookies/credentials.json`.
-- The first email will automatically generate `token.json`.
+Create a `.env` file in the root directory:
 
-### 6. Build app cache (optional)
+```env
+# API Keys
+GROQ_API_KEY=your_groq_api_key
+GEMINI_API_KEY=your_gemini_api_key
+TAVILY_API_KEY=your_tavily_api_key
+TOGETHER_AI=your_together_ai_key
 
-The assistant builds a cache of installed apps in the background – no action needed.
+# Speech & Voice
+PICOVOICE_ACCESS_KEY=your_picovoice_key
+DEEPGRAM_API_KEY=your_deepgram_api_key
+
+# Face Recognition
+FACEPP_API_KEY=your_facepp_api_key
+FACEPP_API_SECRET=your_facepp_api_secret
+
+# WhatsApp
+TWILIO_ACCOUNT_SID=your_twilio_sid
+TWILIO_AUTH_TOKEN=your_twilio_token
+TWILIO_FROM_NUMBER=your_twilio_number
+
+# User Settings
+USER_NAME=Kaif
+```
+
+#### 6. Add Required Files
+
+Create the following directory structure:
+
+```
+Data/
+├── Jarvis_Workspace/
+│   ├── Creations/
+│   ├── Vault/
+│   └── Temp/
+├── UserProfile/
+│   ├── kaif_profile.egl      # Voice profile
+│   └── UserFace.jpg          # Reference face image
+├── jarvis_memory/
+│   ├── lifetime_db/          # ChromaDB for LTM
+│   └── rag_chroma_db/        # ChromaDB for RAG
+├── SessionCookies/
+│   ├── credentials.json      # Gmail OAuth credentials
+│   ├── calendar_token.json   # Calendar OAuth token
+│   └── auth_info_baileys/    # WhatsApp session
+└── fonts/
+    ├── english.ttf
+    └── devangri.ttf
+```
+
+#### 7. Set Up Google OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable Gmail API and Google Calendar API
+4. Create OAuth 2.0 credentials
+5. Download `credentials.json` and place it in `Data/SessionCookies/`
+
+#### 8. Set Up Face++ API
+
+1. Register at [Face++](https://www.faceplusplus.com/)
+2. Get API Key and Secret
+3. Add them to `.env`
+4. Place reference face image at `Data/UserProfile/UserFace.jpg`
+
+#### 9. Set Up Voice Profile
+
+1. Use Picovoice's Eagle to enroll voice
+2. Save profile as `Data/UserProfile/kaif_profile.egl`
 
 ---
 
-## 💻 Usage
+## 🚀 Usage
 
-### Start the assistant (voice mode)
+### Basic Commands
 
+#### Text Mode
 ```bash
-python main.py
-```
-
-- Say **“Jarvis”** to wake.
-- Speak your command (supports Hinglish / English).
-- Watch the floating STT popup and agent panel.
-
-### Text‑only mode (no microphone)
-
-```bash
+# Run in text mode (test mode)
 python main.py test_jarvis
+
+# Type your commands
+❯ open YouTube
+❯ send email to John about meeting
+❯ generate image of a sunset
+❯ what's the weather today?
 ```
 
-### Force a specific TTS engine
-
+#### Voice Mode
 ```bash
-python main.py voice=edge_tts
-python main.py voice=cartesia
+# Run in voice mode (default)
+python main.py
+
+# Say "Jarvis" to activate
+# Speak your command naturally
 ```
 
-### Disable system tray (keep console always visible)
-
+### System Tray Mode
 ```bash
-python main.py system_tray=no
+# Run with system tray
+python main.py
+
+# The app will minimize to system tray
+# Use Ctrl+Shift+J to open input popup
+# Right-click tray icon to show or exit
 ```
 
-### Global hotkey
+### Command Examples
 
-Press **Ctrl+Shift+J** anywhere to open a floating text input popup – type your command and press Enter.
-
----
-
-## 📁 Project Structure (Highlights)
-
+#### 🗣️ System Controls
+```bash
+open chrome and spotify
+close calculator
+volume increase by 20
+brightness set to 75
+lock the PC
+take a screenshot
 ```
-jarvis-by-kaif-ansari/
-├── main.py                # Entry point
-├── core/
-│   ├── brain/             # Memory, Router, Fast/Agentic brains, Executor
-│   ├── voice/             # STT, TTS, wake word, interrupt
-│   ├── ui/                # PyQt5 panels (agent_status, STT popup, input popup)
-│   ├── terminal/          # Rich console + tray manager
-│   └── utils/             # ProcessManager, helper utils
-├── tools/                 # All tool implementations
-│   ├── OpenCloseApps/     # SmartAppOpener, close_any
-│   ├── SearchTools/       # Web, Arxiv, YouTube, Scraper, DeepResearch
-│   ├── Messanger/         # Email, WhatsApp, contact_book
-│   ├── ImageGeneration/   # Flux + AI Horde
-│   ├── SystemTools/       # clipboard, OS controls, screen capture
-│   └── workspace/         # WorkspaceManager (vault/creations/temp)
-├── Data/                  # ChromaDBs, JSON profiles, workspace folder
-└── .env                   # API keys (ignored by git)
+
+#### 📧 Communication
+```bash
+send email to kaif@gmail.com subject "Meeting" body "Meeting at 3 PM"
+whatsapp rahul "Coming to the party!"
+check my calendar for tomorrow
+create a reminder for 5 PM today "Gym"
 ```
+
+#### 📁 Workspace
+```bash
+write a file report.md with content "Q4 Results..."
+read the file report.md
+list all files in workspace
+open the image sunset.png
+generate an image of a flying dragon
+```
+
+#### 🌐 Search & Research
+```bash
+search web for "latest AI news 2026"
+read webpage https://example.com
+search arxiv for "quantum computing"
+deep research "future of renewable energy"
+```
+
+#### 🧠 Memory & Context
+```bash
+what did we talk about yesterday?
+remember that I like coffee
+what's my name?
+tell me about my previous projects
+```
+
+### Hotkeys
+
+| Hotkey | Action |
+|--------|--------|
+| `Ctrl+Shift+J` | Open text input popup |
+| `System Tray` | Show/Hide Jarvis |
+| `Voice` | Say "Jarvis" to activate |
 
 ---
 
 ## ⚙️ Configuration
 
-All major settings are in `core/brain/config.py`:
+### Core Configuration (`core/brain/config.py`)
 
-| Constant | Default | Description |
-|:---|:---|:---|
-| `EMBEDDING_DIM` | 768 | Gemini embedding size |
-| `AGENT_MAX_STEPS` | 20 | Max tool calls per agentic task |
-| `AGENT_TIMEOUT` | 900s | Agent loop timeout |
-| `DEEP_RESEARCH_TIMEOUT` | 420s | Deep research timeout |
-| `COMMAND_HISTORY_LIMIT` | 10 | In‑memory command history |
-| `ACTIVE_CONTEXT_WINDOW` | 120s | Auto‑relisten after wake word |
+```python
+# Model Configuration
+GROQ_ROUTER_MODEL = "llama-3.1-8b-instant"
+GROQ_FAST_MODEL = "llama-3.3-70b-versatile"
+GEMINI_AGENT_MODEL = "gemma-4-31b-it"
+GEMINI_EMBEDDING_MODEL = "gemini-embedding-2"
+GROQ_SUMMARY_MODEL = "openai/gpt-oss-120b"
 
-You can also override via CLI flags (see Usage above).
+# Agent Configuration
+CONFIG = {
+    "AGENT_MAX_STEPS": 20,
+    "AGENT_TIMEOUT": 900,
+    "AGENT_RETRY_LIMIT": 2,
+}
 
----
+# Voice Configuration
+EDGE_TTS_VOICE = "hi-IN-MadhurNeural"
+WHISPER_ENERGY_THRESHOLD = 400
+WHISPER_PAUSE_THRESHOLD = 0.5
+```
 
-## 🧠 Memory & RAG
+### Environment Variables
 
-- **Chat memory:** ChromaDB stores embeddings of all user messages. Semantic recall adds relevant past conversations to context.
-- **User profile:** `user_bio.json`, `preferences.json`, `user_mood.json` – auto‑extracted by Groq 120B every few messages.
-- **Workspace RAG:** Separate ChromaDB for files in `Vault/` and `Creations/`. Background indexing with MD5 hash cache.
-- **Command history:** In‑memory deque – no disk I/O for speed.
-
----
-
-## 💬 Example Commands
-
-### Fast Actions (instant response)
-
-| You say | What happens |
-|:---|:---|
-| “Jarvis, chrome khol” | Opens Google Chrome (FAST path) |
-| “Volume 30 kar do” | Sets system volume |
-| “YouTube pe Arijit Singh songs chala” | Opens YouTube and searches |
-| “Screen bright kar 50” | Adjusts screen brightness |
-| “PC lock kar” | Locks the workstation instantly |
-
-### Agentic Tasks (tool‑calling loop)
-
-| You say | What happens |
-|:---|:---|
-| “Kaif ko email bhej ki meeting kal hai” | Looks up contact, sends email via Gmail API |
-| “Deep research kar latest AI trends pe” | Autonomous research (web + arXiv) → saves .md report |
-| “Screen capture karke bata isme kya likha hai” | Captures screen, injects image into Gemini vision |
-| “Mera workspace vault search kar ‘budget’ ke liye” | RAG search over your files |
-| “Ek image generate kar robot ka” | FLUX generates PNG → opens in viewer |
-
-### Advanced Problem‑Solving Commands
-
-| You say | What Jarvis does |
-|:---|:---|
-| “Kal se agle hafte tak ke calendar events mujhe summarise kar” | Fetches Google Calendar events, summarizes using Groq, and reads aloud |
-| “Mere saare WhatsApp contacts mein ‘Happy Diwali’ bhej, attachment mein ye photo daal” | Reads contact list, loops through numbers, sends personalized message + image via Twilio |
-| “GitHub repo ‘jarvis’ ka latest code download kar, usme ek bug fix apply kar, aur commit kar” | Uses `git clone`, searches for bug pattern (e.g., missing import), fixes it, commits, and pushes |
-| “Budget tracker bana – mere saare emails scan kar jo ‘invoice’ subject se aaye hain, total extract kar, aur chart bana” | Scans Gmail for invoices, extracts amounts using regex/Groq, creates a bar chart using matplotlib, saves to Creations, and shows it |
-| “System monitor – CPU 80% cross kare toh mujhe WhatsApp alert bhej” | Background loop monitoring CPU (psutil), triggers WhatsApp notification via Twilio when threshold crossed |
-| “Is image mein given outfit ke liye shopping links search kar aur email bhej” | Uses vision to analyze image (detect clothing style/color), searches Tavily for product links, composes email with links and images, sends via Gmail |
-| “Mera latest research paper ‘AI in healthcare’ ka presentation bana – web search + arXiv + workspace papers combine kar ke PPT generate kar” | Searches web + arXiv, reads relevant files from Vault, generates a structured Markdown report, converts to PowerPoint using `python-pptx`, saves to Creations |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GROQ_API_KEY` | Groq API key | ✅ Yes |
+| `GEMINI_API_KEY` | Google Gemini API key | ✅ Yes |
+| `TAVILY_API_KEY` | Tavily API key | ✅ Yes |
+| `PICOVOICE_ACCESS_KEY` | Picovoice key | For Voice |
+| `DEEPGRAM_API_KEY` | Deepgram key | For STT |
+| `FACEPP_API_KEY` | Face++ key | For Face Auth |
+| `FACEPP_API_SECRET` | Face++ secret | For Face Auth |
+| `TOGETHER_AI` | Together AI key | For Image Gen |
+| `USER_NAME` | User's name | Recommended |
 
 ---
 
-## 🎤 Voice & Emotion
+## 📁 Project Structure
 
-- **Wake word:** “Jarvis” – offline, low‑latency (Porcupine).
-- **STT:** Deepgram Nova‑2 (supports Hindi + English code‑switching).
-- **TTS:** Cartesia with emotion tags (anger, cheerful, sad, etc.). Fallback: Edge TTS.
-- **Interruption:** Saying “Jarvis” while TTS is speaking cancels and re‑arms listening.
+```
+jarvis-by-kaif-ansari/
+├── core/
+│   ├── auth/
+│   │   ├── EagelAuth.py          # Voice authentication
+│   │   └── FaceAuth.py           # Face authentication
+│   ├── brain/
+│   │   ├── Memory/
+│   │   │   ├── Memory.py         # Context memory
+│   │   │   └── LifetimeMemory.py # Long-term memory
+│   │   ├── Processor/
+│   │   │   ├── Processor.py      # Smart router
+│   │   │   ├── FastBrain.py      # Fast responses
+│   │   │   ├── AgenticBrain.py   # Complex reasoning
+│   │   │   └── Prompts.py        # System prompts
+│   │   ├── executor.py           # Tool executor
+│   │   ├── RagEngine.py          # RAG for workspace
+│   │   └── config.py             # Configuration
+│   ├── voice/
+│   │   ├── stt.py                # Speech-to-text
+│   │   ├── tts.py                # Text-to-speech
+│   │   ├── stt_status.py         # STT UI updates
+│   │   └── interrupt.py          # Speech interruption
+│   ├── terminal/
+│   │   ├── jarvis_terminal.py    # Terminal UI
+│   │   └── tray_manager.py       # System tray
+│   ├── ui/
+│   │   ├── agent_panel.py        # Floating agent UI
+│   │   ├── agent_status.py       # ZMQ status updates
+│   │   └── typing_status.py      # Typing indicator
+│   ├── main/
+│   │   ├── main.py               # Entry point
+│   │   ├── CommandHandler.py     # Command processing
+│   │   ├── HotKeyManager.py      # Hotkey management
+│   │   ├── BackgroundServices.py # Service management
+│   │   └── ServiceWatchdog.py    # Service monitoring
+│   ├── logger/
+│   │   └── logger.py             # Logging configuration
+│   └── utils/
+│       ├── ProcessManager.py     # Process management
+│       └── utils.py              # Utilities
+├── tools/
+│   ├── Messanger/
+│   │   ├── email_manager.py      # Gmail integration
+│   │   └── whatsapp/
+│   │       ├── whatsapp.py       # WhatsApp API
+│   │       └── BaileysServer/    # Node.js bridge
+│   ├── SystemTools/
+│   │   ├── SystemTools.py        # System controls
+│   │   └── clipboard_tool.py     # Clipboard operations
+│   ├── SearchTools/
+│   │   ├── WebSearch.py          # Tavily search
+│   │   ├── SearchHub.py          # Search aggregator
+│   │   ├── DeepResearch.py       # Tavily research
+│   │   ├── ArxivTool.py          # ArXiv search
+│   │   ├── YoutubeTranscriptFetcher.py
+│   │   └── Scraper.py            # Webpage scraper
+│   ├── workspace/
+│   │   └── workspace.py          # File management
+│   ├── ImageGeneration/
+│   │   └── generate_image.py     # Image generation
+│   ├── Calendar/
+│   │   └── CalendarTool.py       # Google Calendar
+│   └── OpenCloseApps/
+│       ├── open_any.py           # App opener
+│       └── close_any.py          # App closer
+├── Proactive/
+│   ├── proactive_agent.py        # Proactive intelligence
+│   ├── event_queue.py            # Event queue
+│   ├── prompts.py                # Proactive prompts
+│   ├── Email/
+│   │   └── EmailProactive.py     # Email listener
+│   ├── WhatsApp/
+│   │   └── WhatsappProactive.py  # WhatsApp listener
+│   └── Reminder/
+│       └── ReminderProactive.py  # Calendar listener
+├── Data/
+│   ├── Jarvis_Workspace/         # User workspace
+│   ├── UserProfile/              # Authentication data
+│   ├── jarvis_memory/            # Memory databases
+│   ├── SessionCookies/           # OAuth tokens
+│   └── fonts/                    # UI fonts
+├── Bin/                          # Compiled executables
+├── requirements.txt              # Python dependencies
+├── .env                          # Environment variables
+└── README.md                     # This file
+```
 
 ---
 
-## 🖥️ UI Components
+## 🐛 Troubleshooting
 
-| Component | Description |
-|:---|:---|
-| **Rich Terminal** | Claude‑style orange theme, tree‑formatted logs, markdown rendering |
-| **STT Popup** | Dynamic Island style (black pill, waveform) – shows live transcription |
-| **Agent Panel** | Frameless PyQt5 window – shows thought, action, observation, step counter (auto‑hides) |
-| **Input Popup** | Glassmorphic text input (Ctrl+Shift+J) |
-| **System Tray** | Hide/show console, exit |
+### Common Issues & Solutions
+
+#### 🔴 **API Key Errors**
+```
+Error: PICOVOICE_ACCESS_KEY missing in .env file.
+```
+**Solution**: Ensure all required API keys are set in `.env` file.
+
+#### 🔴 **Voice Authentication Failed**
+```
+Voice Verification Failed! (Score: 0.34)
+```
+**Solution**: 
+- Re-enroll voice profile for better accuracy
+- Check microphone quality and background noise
+- Adjust `AUTH_THRESHOLD` in `core/voice/stt.py`
+
+#### 🔴 **Deepgram Connection Failed**
+```
+Deepgram Error: Connection timeout
+```
+**Solution**:
+- Check internet connection
+- Verify `DEEPGRAM_API_KEY` is valid
+- Try increasing timeout values
+
+#### 🔴 **Baileys WhatsApp Issues**
+```
+Node.js server is offline!
+```
+**Solution**:
+```bash
+cd tools/Messanger/whatsapp/BaileysServer
+npm install
+node baileys_service.js
+```
+
+#### 🔴 **Gmail Auth Issues**
+```
+Credentials file not found
+```
+**Solution**:
+1. Download `credentials.json` from Google Cloud Console
+2. Place in `Data/SessionCookies/`
+3. Delete existing `token.json` and restart
+
+#### 🔴 **ChromaDB Path Errors**
+```
+Failed to initialize LTM ChromaDB
+```
+**Solution**:
+```bash
+rm -rf Data/jarvis_memory/lifetime_db/*
+rm -rf Data/jarvis_memory/rag_chroma_db/*
+```
+Restart Jarvis to rebuild indexes.
+
+#### 🔴 **Face Recognition Fails**
+```
+Face++ API Error
+```
+**Solution**:
+- Ensure `UserFace.jpg` is clear and front-facing
+- Check `FACEPP_API_KEY` and `FACEPP_API_SECRET`
+- Verify internet connectivity to Face++ servers
+
+### Performance Tips
+
+1. **Reduce Memory Usage**:
+   - Lower `AGENT_MAX_STEPS` in config
+   - Reduce `top_k` in LTM searches
+   - Clear workspace cache regularly
+
+2. **Improve Response Time**:
+   - Use FastBrain for simple commands
+   - Pre-warm model connections
+   - Use `test_jarvis` mode for faster testing
+
+3. **Voice Quality**:
+   - Use a good quality microphone
+   - Reduce background noise
+   - Adjust `ENERGY_THRESHOLD` for sensitivity
 
 ---
 
-## 🛠️ Troubleshooting
+## 📄 License
 
-| Issue | Solution |
-|:---|:---|
-| `ModuleNotFoundError` | Run `pip install -r requirements.txt` again. |
-| Wake word not working | Check `PICOVOICE_API_KEY` and microphone permissions. |
-| Deepgram timeout | Ensure internet connection; try `test_jarvis` mode. |
-| Gemini 429 quota | Free tier limit – wait 60 seconds or use Groq fallback. |
-| Agent panel not showing | Kill any existing `agent_panel.py` process; main will respawn. |
-| Image generation fails | Verify `TOGETHER_AI` key; for editing, AI Horde may have a queue (Jarvis speaks the wait time). |
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 📜 License
+## 🤝 Contributing
 
-[MIT License](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/blob/main/LICENSE) – feel free to use, modify, and contribute.
+Contributions are welcome! Here's how you can help:
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
+3. **Commit** your changes (`git commit -m 'Add some AmazingFeature'`)
+4. **Push** to the branch (`git push origin feature/AmazingFeature`)
+5. **Open** a Pull Request
+
+### Development Guidelines
+
+- Follow PEP 8 style guidelines
+- Add docstrings for all functions
+- Update README for new features
+- Test on Windows (primary), Linux, macOS (secondary)
+- Keep dependencies minimal
+
+### Reporting Issues
+
+When reporting issues, please include:
+- Operating system and version
+- Python version (`python --version`)
+- Error logs with traceback
+- Steps to reproduce the issue
 
 ---
 
-## 👤 Credits
+## 🙏 Acknowledgments
 
-Developed by **Kaif Ansari** ([@thekaifansari01](https://github.com/thekaifansari01)).  
-Built with Groq, Google Gemini, Cartesia, Deepgram, and many open‑source libraries.
-
-> “Jarvis is not just an assistant – it’s a blueprint for hybrid, agentic AI on the desktop.”
+- **Kaif Ansari** - Creator and Lead Developer
+- **OpenAI** - For inspiring the AI assistant concept
+- **Picovoice** - For voice wake word and biometrics
+- **Deepgram** - For real-time speech recognition
+- **Groq** - For fast inference capabilities
+- **Google** - For Gemini, Gmail, and Calendar APIs
+- **Baileys** - For WhatsApp integration
+- **Tavily** - For research and web search
 
 ---
 
-## ⭐ Star the repo
+## 📞 Contact & Support
 
-If you find this project useful, please give it a ⭐ on GitHub!
+- **GitHub**: [@thekaifansari01](https://github.com/thekaifansari01)
+- **Email**: kaif13018@gmail.com
+- **Issues**: [GitHub Issues](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/issues)
+
+---
+
+<div align="center">
+
+### Made with ❤️ by Kaif Ansari
+
+[![GitHub followers](https://img.shields.io/github/followers/thekaifansari01?label=Follow&style=social)](https://github.com/thekaifansari01)
+[![Twitter Follow](https://img.shields.io/twitter/follow/thekaifansari?label=Follow&style=social)](https://twitter.com/thekaifansari)
+
+**🌟 Star this repo if you find it useful!**
+
+</div>
+
+---
+
+**Note**: This project is under active development. Features and APIs may change. Always refer to the latest documentation.
