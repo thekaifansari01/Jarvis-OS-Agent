@@ -28,6 +28,7 @@
 - [Usage](#-usage)
 - [Configuration](#-configuration)
 - [Project Structure](#-project-structure)
+- [Research Paper](#-research-paper)
 - [Troubleshooting](#-troubleshooting)
 - [License](#-license)
 - [Contributing](#-contributing)
@@ -108,26 +109,26 @@ graph TD
     E --> F[Deepgram STT]
     F --> G[Smart Router]
     D --> G
-    
+
     G --> H{Complexity Check}
     H -->|Simple| I[FastBrain]
     H -->|Complex| J[AgenticBrain]
-    
+
     I --> K[Groq Llama]
     J --> L[Gemini Agent]
-    
+
     K --> M[Tool Executor]
     L --> M
-    
+
     M --> N[System Tools]
     M --> O[Communication]
     M --> P[Workspace]
     M --> Q[Search Tools]
-    
+
     R[Proactive Listeners] --> S[Event Queue]
     S --> T[Proactive Agent]
     T --> U[TTS Notification]
-    
+
     V[Memory Systems] --> W[Context Memory]
     V --> X[Lifetime Memory]
     V --> Y[RAG Engine]
@@ -268,11 +269,6 @@ DEEPGRAM_API_KEY=your_deepgram_api_key
 # Face Recognition
 FACEPP_API_KEY=your_facepp_api_key
 FACEPP_API_SECRET=your_facepp_api_secret
-
-# WhatsApp
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-TWILIO_FROM_NUMBER=your_twilio_number
 
 # User Settings
 USER_NAME=Kaif
@@ -548,6 +544,20 @@ jarvis-by-kaif-ansari/
 
 ---
 
+## 📄 Research Paper
+
+A comprehensive research paper on JARVIS has been published, detailing the architecture, implementation, and experimental results. The paper covers:
+
+- **Hybrid Intelligence Architecture**: FastBrain + AgenticBrain + Smart Router
+- **Biometric Security**: Voice (Eagle) + Face (Face++) authentication
+- **Proactive Intelligence**: Context-aware event filtering
+- **Memory Systems**: Short-term + Lifetime memory with RAG
+- **Experimental Results**: 89% routing accuracy, 850ms FastBrain latency, 5.6% EER
+
+📄 **[Read the Full Research Paper](./Jarvis_Research_Paper_Kaif_Ansari.pdf)**
+
+---
+
 ## 🐛 Troubleshooting
 
 ### Common Issues & Solutions
@@ -672,7 +682,6 @@ When reporting issues, please include:
 ## 🙏 Acknowledgments
 
 - **Kaif Ansari** - Creator and Lead Developer
-- **OpenAI** - For inspiring the AI assistant concept
 - **Picovoice** - For voice wake word and biometrics
 - **Deepgram** - For real-time speech recognition
 - **Groq** - For fast inference capabilities
@@ -685,7 +694,7 @@ When reporting issues, please include:
 ## 📞 Contact & Support
 
 - **GitHub**: [@thekaifansari01](https://github.com/thekaifansari01)
-- **Email**: kaif13018@gmail.com
+- **Email**: kaif.ansari.global@gmail.com
 - **Issues**: [GitHub Issues](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/issues)
 
 ---
