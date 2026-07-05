@@ -544,19 +544,6 @@ jarvis-by-kaif-ansari/
 
 ---
 
-## 📄 Research Paper
-
-A comprehensive research paper on JARVIS has been published, detailing the architecture, implementation, and experimental results. The paper covers:
-
-- **Hybrid Intelligence Architecture**: FastBrain + AgenticBrain + Smart Router
-- **Biometric Security**: Voice (Eagle) + Face (Face++) authentication
-- **Proactive Intelligence**: Context-aware event filtering
-- **Memory Systems**: Short-term + Lifetime memory with RAG
-- **Experimental Results**: 89% routing accuracy, 850ms FastBrain latency, 5.6% EER
-
-📄 **[Read the Full Research Paper](./Jarvis_Research_Paper_Kaif_Ansari.pdf)**
-
----
 
 ## 🐛 Troubleshooting
 
