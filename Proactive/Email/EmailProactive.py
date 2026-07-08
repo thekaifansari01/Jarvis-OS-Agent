@@ -4,6 +4,7 @@ import base64
 import re
 import html
 import time
+import threading
 from google.cloud import pubsub_v1
 
 import tools.Messanger.email_manager as email_manager
@@ -133,11 +134,14 @@ def listen_for_emails():
 
     start_time_ms = int(time.time() * 1000)
     print("🎧 Jarvis Universal Email Listener connected to Proactive Queue...")
+    
+    email_lock = threading.Lock()
 
     def process_notification(message):
         try:
-            message.ack() 
-            name, email, sub, body = get_latest_unread_email(service, start_time_ms)
+            message.ack()
+            with email_lock:
+                name, email, sub, body = get_latest_unread_email(service, start_time_ms)
             if name:
                 print("\n" + "="*80)
                 print(f"👤 Name    : {name}")
