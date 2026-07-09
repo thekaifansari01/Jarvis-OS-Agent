@@ -1,3 +1,4 @@
+# email_manager.py
 import os
 import time
 import base64
@@ -20,18 +21,15 @@ try:
 except ImportError:
     def speak(text): print(f"🔊 JARVIS SAYS: {text}")
 
-START_TIMESTAMP = int(time.time())
-
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-SCOPES = ['https://mail.google.com/']
+SCOPES = ['https://mail.google.com/', 'https://www.googleapis.com/auth/pubsub']
 
 def authenticate_gmail():
-    """Google API connection with credentials inside Data/SessionCookies folder."""
     base_path = os.path.dirname(os.path.abspath(__file__))
-    
+
     if "tools" in base_path or "core" in base_path:
         project_root = base_path
         while os.path.basename(project_root) in ["tools", "Messanger", "core", "brain"]:
@@ -39,16 +37,16 @@ def authenticate_gmail():
         session_folder = os.path.join(project_root, 'Data', 'SessionCookies')
     else:
         session_folder = os.path.join(base_path, 'Data', 'SessionCookies')
-    
+
     os.makedirs(session_folder, exist_ok=True)
-    
+
     credentials_path = os.path.join(session_folder, 'credentials.json')
     token_path = os.path.join(session_folder, 'token.json')
 
     creds = None
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
-    
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
@@ -57,33 +55,31 @@ def authenticate_gmail():
             except Exception as e:
                 print(f"⚠️ Token refresh failed (might be revoked). Generating a new one... Error: {e}")
                 creds = None
-        
+
         if not creds or not creds.valid:
             print(f"🔐 Gmail Access: Using {credentials_path}")
             if not os.path.exists(credentials_path):
                 print(f"❌ Error: credentials.json nahi mili is path par: {credentials_path}")
                 return None
-                
+
             flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
             creds = flow.run_local_server(port=0)
-        
+
         with open(token_path, 'w') as token:
             token.write(creds.to_json())
-            
+
     return build('gmail', 'v1', credentials=creds)
 
 def send_email(to_address, subject, body, attachment_path=None):
-    """Jarvis ke through kisi ko email bhejna, ab attachments ke saath."""
-    
     if attachment_path and not os.path.exists(attachment_path):
         print(f"❌ Attachment file missing: {attachment_path}")
         return False
-    
+
     try:
         service = authenticate_gmail()
         if not service:
             return False
-            
+
         message = EmailMessage()
         message.set_content(body)
         message['To'] = to_address
@@ -120,7 +116,7 @@ def delete_email(query):
             return False
         results = service.users().messages().list(userId='me', q=query, maxResults=1).execute()
         messages = results.get('messages', [])
-        
+
         if not messages:
             print("😶 Koi matching email nahi mila delete karne ke liye.")
             return False
@@ -132,7 +128,6 @@ def delete_email(query):
     except Exception as e:
         print(f"⚠️ Error deleting email: {e}")
         return False
-
 
 if __name__ == "__main__":
     print("Testing Gmail Authentication path configurations...")

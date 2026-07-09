@@ -1,3 +1,4 @@
+# BackgroundServices.py
 import os
 import sys
 import subprocess
@@ -61,7 +62,7 @@ def stop_stt_popup():
         exit_stt_popup()
     except Exception:
         pass
-    
+
     if _stt_popup_process:
         try:
             proc_manager.kill_process_tree(_stt_popup_process.pid)
@@ -84,15 +85,15 @@ def start_baileys_server():
         baileys_dir = os.path.join(base_dir, "tools", "Messanger", "whatsapp", "BaileysServer")
         script_path = os.path.join(baileys_dir, "baileys_service.js")
         session_creds_path = os.path.join(base_dir, "Data", "SessionCookies", "auth_info_baileys", "creds.json")
-        
+
         if os.path.exists(script_path):
             creation_flags = 0
             stdout_target = None
             stderr_target = None
-            
+
             if platform.system() == 'Windows':
                 creation_flags = subprocess.CREATE_NEW_CONSOLE if not os.path.exists(session_creds_path) else subprocess.CREATE_NO_WINDOW
-            
+
             _baileys_process = proc_manager.spawn(
                 ["node", script_path],
                 cwd=baileys_dir,

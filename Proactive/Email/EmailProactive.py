@@ -1,3 +1,4 @@
+# EmailProactive.py
 import os
 import json
 import base64
@@ -30,119 +31,166 @@ if os.path.exists(token_path):
     except Exception:
         pass
 
-PROJECT_ID = "jarvisemailmanager"  
+PROJECT_ID = "jarvisemailmanager"
 TOPIC_NAME = f"projects/{PROJECT_ID}/topics/jarvis-email-topic"
 SUBSCRIPTION_NAME = f"projects/{PROJECT_ID}/subscriptions/jarvis-email-sub"
 
-def get_latest_unread_email(service, start_time_ms):
+_stop_event = threading.Event()
+_subscriber = None
+_streaming_future = None
+_watch_timer = None
+_email_service = None
+_email_lock = threading.Lock()
+
+def stop_email_listener():
+    global _streaming_future, _subscriber, _watch_timer
+    _stop_event.set()
+    if _watch_timer:
+        _watch_timer.cancel()
+        _watch_timer = None
+    if _streaming_future:
+        _streaming_future.cancel()
+    if _subscriber:
+        try:
+            _subscriber.close()
+        except:
+            pass
+
+def _renew_watch():
+    global _email_service, _watch_timer
+    if _stop_event.is_set():
+        return
     try:
-        results = service.users().messages().list(userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=1).execute()
-        messages = results.get('messages', [])
-        if not messages: 
-            return None, None, None, None
-        
-        msg_id = messages[0]['id']
-        msg = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
-        
-        if int(msg.get('internalDate', 0)) < start_time_ms:
-            return None, None, None, None
-
-        payload = msg.get('payload', {})
-        headers = payload.get('headers', [])
-        
-        sender_name, sender_email, subject = "Unknown", "Unknown", "No Subject"
-        for header in headers:
-            if header['name'] == 'From':
-                from_val = header['value']
-                if '<' in from_val:
-                    sender_name = from_val.split('<')[0].strip()
-                    sender_email = from_val.split('<')[1].replace('>', '').strip()
-                else:
-                    sender_name, sender_email = from_val, from_val
-            if header['name'] == 'Subject':
-                subject = header['value']
-                
-        def decode_base64(data_str):
-            try:
-                data_str += "=" * ((4 - len(data_str) % 4) % 4)
-                return base64.urlsafe_b64decode(data_str).decode('utf-8', errors='ignore')
-            except Exception:
-                return ""
-
-        plain_text = ""
-        html_text = ""
-
-        def traverse_parts(parts):
-            nonlocal plain_text, html_text
-            for part in parts:
-                mime_type = part.get('mimeType', '')
-                data = part.get('body', {}).get('data', '')
-                
-                if mime_type == 'text/plain' and data:
-                    plain_text += decode_base64(data) + "\n"
-                elif mime_type == 'text/html' and data:
-                    html_text += decode_base64(data) + "\n"
-                elif 'parts' in part:
-                    traverse_parts(part['parts'])
-
-        top_mime_type = payload.get('mimeType', '')
-        top_data = payload.get('body', {}).get('data', '')
-
-        if top_mime_type == 'text/plain' and top_data:
-            plain_text += decode_base64(top_data)
-        elif top_mime_type == 'text/html' and top_data:
-            html_text += decode_base64(top_data)
-        elif 'parts' in payload:
-            traverse_parts(payload['parts'])
-
-        final_body = plain_text.strip()
-
-        if not final_body and html_text:
-            clean = re.sub(r'<style.*?>.*?</style>', '', html_text, flags=re.IGNORECASE|re.DOTALL)
-            clean = re.sub(r'<script.*?>.*?</script>', '', clean, flags=re.IGNORECASE|re.DOTALL)
-            clean = re.sub(r'<[^>]+>', ' ', clean)
-            clean = html.unescape(clean)
-            clean = re.sub(r' {2,}', ' ', clean)
-            clean = re.sub(r'\n\s*\n', '\n', clean)
-            final_body = clean.strip()
-
-        if not final_body:
-            final_body = msg.get('snippet', 'No readable text found in this email.')
-
-        return sender_name, sender_email, subject, final_body
+        if _email_service:
+            body = {'topicName': TOPIC_NAME, 'labelIds': ['INBOX'], 'labelFilterAction': 'include'}
+            _email_service.users().watch(userId='me', body=body).execute()
+            print("🔄 Gmail Watch renewed.")
     except Exception as e:
-        print(f"⚠️ Error extracting email: {e}")
-        return None, None, None, None
+        print(f"⚠️ Watch renewal failed: {e}")
+    finally:
+        if not _stop_event.is_set():
+            _watch_timer = threading.Timer(6 * 24 * 3600, _renew_watch)
+            _watch_timer.daemon = True
+            _watch_timer.start()
+
+def decode_base64(data_str):
+    try:
+        data_str += "=" * ((4 - len(data_str) % 4) % 4)
+        return base64.urlsafe_b64decode(data_str).decode('utf-8', errors='ignore')
+    except Exception:
+        return ""
+
+def extract_email_content(msg):
+    payload = msg.get('payload', {})
+    headers = payload.get('headers', [])
+    sender_name, sender_email, subject = "Unknown", "Unknown", "No Subject"
+    for header in headers:
+        if header['name'] == 'From':
+            from_val = header['value']
+            if '<' in from_val:
+                sender_name = from_val.split('<')[0].strip()
+                sender_email = from_val.split('<')[1].replace('>', '').strip()
+            else:
+                sender_name, sender_email = from_val, from_val
+        if header['name'] == 'Subject':
+            subject = header['value']
+
+    plain_text = ""
+    html_text = ""
+
+    def traverse_parts(parts):
+        nonlocal plain_text, html_text
+        for part in parts:
+            mime_type = part.get('mimeType', '')
+            data = part.get('body', {}).get('data', '')
+            if mime_type == 'text/plain' and data:
+                plain_text += decode_base64(data) + "\n"
+            elif mime_type == 'text/html' and data:
+                html_text += decode_base64(data) + "\n"
+            elif 'parts' in part:
+                traverse_parts(part['parts'])
+
+    top_mime_type = payload.get('mimeType', '')
+    top_data = payload.get('body', {}).get('data', '')
+    if top_mime_type == 'text/plain' and top_data:
+        plain_text += decode_base64(top_data)
+    elif top_mime_type == 'text/html' and top_data:
+        html_text += decode_base64(top_data)
+    elif 'parts' in payload:
+        traverse_parts(payload['parts'])
+
+    final_body = plain_text.strip()
+    if not final_body and html_text:
+        clean = re.sub(r'<style.*?>.*?</style>', '', html_text, flags=re.IGNORECASE|re.DOTALL)
+        clean = re.sub(r'<script.*?>.*?</script>', '', clean, flags=re.IGNORECASE|re.DOTALL)
+        clean = re.sub(r'<[^>]+>', ' ', clean)
+        clean = html.unescape(clean)
+        clean = re.sub(r' {2,}', ' ', clean)
+        clean = re.sub(r'\n\s*\n', '\n', clean)
+        final_body = clean.strip()
+    if not final_body:
+        final_body = msg.get('snippet', 'No readable text found in this email.')
+
+    return sender_name, sender_email, subject, final_body
+
+def get_all_unread_emails(service, max_results=10):
+    try:
+        results = service.users().messages().list(userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=max_results).execute()
+        messages = results.get('messages', [])
+        emails = []
+        for msg in messages:
+            msg_id = msg['id']
+            full_msg = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
+            name, email, sub, body = extract_email_content(full_msg)
+            emails.append((name, email, sub, body, msg_id))
+        return emails
+    except Exception as e:
+        print(f"⚠️ Error fetching unread emails: {e}")
+        return []
+
+def mark_as_read(service, msg_id):
+    try:
+        service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
+    except Exception as e:
+        print(f"⚠️ Failed to mark email {msg_id} as read: {e}")
 
 def start_gmail_watch():
+    global _email_service, _watch_timer
     try:
         service = authenticate_gmail()
-        if not service: 
+        if not service:
             return None
         body = {'topicName': TOPIC_NAME, 'labelIds': ['INBOX'], 'labelFilterAction': 'include'}
         response = service.users().watch(userId='me', body=body).execute()
         print(f"✅ Gmail Watch Active! History ID: {response.get('historyId')}")
+        _email_service = service
+        if _watch_timer:
+            _watch_timer.cancel()
+        _watch_timer = threading.Timer(6 * 24 * 3600, _renew_watch)
+        _watch_timer.daemon = True
+        _watch_timer.start()
         return service
     except Exception as e:
         print(f"⚠️ Watch setup failed: {e}")
         return None
 
 def listen_for_emails():
+    global _subscriber, _streaming_future
     service = start_gmail_watch()
-    if not service: 
+    if not service:
         return
 
-    start_time_ms = int(time.time() * 1000)
     print("🎧 Jarvis Universal Email Listener connected to Proactive Queue...")
-    
-    email_lock = threading.Lock()
 
     def process_notification(message):
         try:
             message.ack()
-            with email_lock:
-                name, email, sub, body = get_latest_unread_email(service, start_time_ms)
-            if name:
+            with _email_lock:
+                emails = get_all_unread_emails(service)
+            for name, email, sub, body, msg_id in emails:
+                if _stop_event.is_set():
+                    break
+                mark_as_read(service, msg_id)
                 print("\n" + "="*80)
                 print(f"👤 Name    : {name}")
                 print(f"📧 Email   : {email}")
@@ -150,7 +198,6 @@ def listen_for_emails():
                 print("-" * 80)
                 print(f"📝 Body    :\n{body}")
                 print("="*80 + "\n")
-                
                 event_data = f"Email from: {name} ({email})\nSubject: {sub}\nBody: {body}"
                 push_proactive_event("Gmail", event_data)
         except Exception as e:
@@ -158,10 +205,31 @@ def listen_for_emails():
 
     try:
         subscriber = pubsub_v1.SubscriberClient(credentials=service._http.credentials)
+        _subscriber = subscriber
         streaming_pull_future = subscriber.subscribe(SUBSCRIPTION_NAME, callback=process_notification)
-        with subscriber:
-            streaming_pull_future.result()
+        _streaming_future = streaming_pull_future
+
+        while not _stop_event.is_set():
+            try:
+                streaming_pull_future.result(timeout=1)
+            except TimeoutError:
+                continue
+            except Exception as e:
+                if not _stop_event.is_set():
+                    print(f"⚠️ Streaming error: {e}")
+                break
+
     except KeyboardInterrupt:
         print("\n👋 Listener stopped.")
     except Exception as e:
         print(f"⚠️ Critical error: {e}")
+    finally:
+        if _streaming_future:
+            _streaming_future.cancel()
+        if _subscriber:
+            try:
+                _subscriber.close()
+            except:
+                pass
+        if _watch_timer:
+            _watch_timer.cancel()
