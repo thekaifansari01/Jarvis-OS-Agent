@@ -1,4 +1,3 @@
-# EmailProactive.py
 import os
 import json
 import base64
@@ -41,6 +40,9 @@ _streaming_future = None
 _watch_timer = None
 _email_service = None
 _email_lock = threading.Lock()
+_processed_ids = set()
+_processed_ids_lock = threading.Lock()
+_START_TIME_MS = int(time.time() * 1000)
 
 def stop_email_listener():
     global _streaming_future, _subscriber, _watch_timer
@@ -133,7 +135,7 @@ def extract_email_content(msg):
 
     return sender_name, sender_email, subject, final_body
 
-def get_all_unread_emails(service, max_results=10):
+def get_all_unread_emails(service, start_time_ms, max_results=10):
     try:
         results = service.users().messages().list(userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=max_results).execute()
         messages = results.get('messages', [])
@@ -141,6 +143,9 @@ def get_all_unread_emails(service, max_results=10):
         for msg in messages:
             msg_id = msg['id']
             full_msg = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
+            internal_date = int(full_msg.get('internalDate', 0))
+            if internal_date < start_time_ms:
+                continue
             name, email, sub, body = extract_email_content(full_msg)
             emails.append((name, email, sub, body, msg_id))
         return emails
@@ -186,10 +191,14 @@ def listen_for_emails():
         try:
             message.ack()
             with _email_lock:
-                emails = get_all_unread_emails(service)
+                emails = get_all_unread_emails(service, _START_TIME_MS)
             for name, email, sub, body, msg_id in emails:
                 if _stop_event.is_set():
                     break
+                with _processed_ids_lock:
+                    if msg_id in _processed_ids:
+                        continue
+                    _processed_ids.add(msg_id)
                 mark_as_read(service, msg_id)
                 print("\n" + "="*80)
                 print(f"👤 Name    : {name}")
