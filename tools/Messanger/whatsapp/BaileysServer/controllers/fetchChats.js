@@ -7,33 +7,57 @@ module.exports = async (req, res, db) => {
         }
 
         const cleanNumber = number.toString().replace(/[^0-9]/g, '');
-        const targetJid = `${cleanNumber}@s.whatsapp.net`;
+        const targetJidExact = `${cleanNumber}@s.whatsapp.net`;
 
-        const query = `
-            SELECT * FROM Messages 
-            WHERE phone_number = ? 
-            AND timestamp BETWEEN ? AND ? 
+        console.log(`🔍 Fetching chats for: ${targetJidExact} (Clean: ${cleanNumber})`);
+
+        const baseQuery = `
+            SELECT * FROM Messages
+            WHERE timestamp BETWEEN ? AND ?
             ORDER BY timestamp ASC
         `;
 
-        db.all(query, [targetJid, start_timestamp, end_timestamp], (err, rows) => {
+        const queryExact = baseQuery.replace("WHERE", "WHERE phone_number = ? AND");
+        const queryLike = baseQuery.replace("WHERE", "WHERE phone_number LIKE ? AND");
+
+        db.all(queryExact, [targetJidExact, start_timestamp, end_timestamp], (err, rows) => {
             if (err) {
                 console.error("❌ [DB FETCH ERROR]:", err.message);
                 return res.status(500).json({ error: "Database error" });
             }
 
-            if (!rows || rows.length === 0) return res.json({ success: true, messages: [] });
-
-            const formattedChats = rows.map(row => {
-                return {
+            if (rows && rows.length > 0) {
+                console.log(`📥 Exact match found: ${rows.length} messages.`);
+                const formattedChats = rows.map(row => ({
                     fromMe: row.from_me === 1,
                     text: row.text,
                     timestamp: row.timestamp
-                };
-            });
+                }));
+                return res.json({ success: true, messages: formattedChats });
+            }
 
-            console.log(`📥 Fetched ${formattedChats.length} messages for ${cleanNumber} from database.`);
-            res.json({ success: true, messages: formattedChats });
+            console.log(`⚠️ Exact match failed. Trying fallback LIKE pattern for: %${cleanNumber}%`);
+            const likePattern = `%${cleanNumber}%`;
+
+            db.all(queryLike, [likePattern, start_timestamp, end_timestamp], (err2, rows2) => {
+                if (err2) {
+                    console.error("❌ [DB FETCH FALLBACK ERROR]:", err2.message);
+                    return res.status(500).json({ error: "Database error" });
+                }
+
+                if (rows2 && rows2.length > 0) {
+                    console.log(`📥 Fallback LIKE match found: ${rows2.length} messages.`);
+                    const formattedChats = rows2.map(row => ({
+                        fromMe: row.from_me === 1,
+                        text: row.text,
+                        timestamp: row.timestamp
+                    }));
+                    return res.json({ success: true, messages: formattedChats });
+                }
+
+                console.log(`❌ No messages found for ${cleanNumber} in the given timeframe.`);
+                res.json({ success: true, messages: [] });
+            });
         });
 
     } catch (error) {

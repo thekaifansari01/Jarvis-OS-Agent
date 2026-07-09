@@ -5,8 +5,8 @@ import requests
 from datetime import datetime
 
 CONTACTS_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 
-    "Data", 
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "Data",
     "contacts.json"
 )
 
@@ -14,7 +14,7 @@ def load_contacts():
     if not os.path.exists(CONTACTS_FILE):
         logging.warning(f"⚠️ contacts.json file not found at path: {CONTACTS_FILE}")
         return {}
-    
+
     try:
         with open(CONTACTS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -56,25 +56,25 @@ def send_whatsapp_message(to_target: str, message: str = "", attachment_path: st
             error_msg = f"❌ Workspace file not found: {attachment_path}"
             logging.error(error_msg)
             return error_msg
-        
+
         if not os.access(attachment_path, os.R_OK):
             error_msg = f"❌ Missing read permission for file: {attachment_path}"
             logging.error(error_msg)
             return error_msg
 
     local_baileys_url = "http://localhost:3000/send"
-    
+
     payload = {
         "number": target_number,
         "message": message,
-        "file_path": attachment_path  
+        "file_path": attachment_path
     }
 
     try:
         logging.info(f"🚀 Sending command to local Baileys bridge for {clean_target}...")
-        
+
         response = requests.post(local_baileys_url, json=payload, timeout=20)
-        
+
         if response.status_code == 200:
             status_text = "✅ WhatsApp message (with attachment)" if attachment_path else "✅ WhatsApp message"
             success_text = f"{status_text} successfully sent to {clean_target} via Baileys."
@@ -84,7 +84,7 @@ def send_whatsapp_message(to_target: str, message: str = "", attachment_path: st
             error_text = f"❌ Baileys Server Error (Code {response.status_code}): {response.text}"
             logging.error(error_text)
             return error_text
-            
+
     except requests.exceptions.ConnectionError:
         error_msg = "❌ Node.js server is offline! Please start 'node baileys_service.js' in the BaileysServer directory first."
         logging.error(error_msg)
@@ -122,10 +122,12 @@ def fetch_whatsapp_chats(to_target: str, start_date: str, end_date: str) -> str:
         if not target_number:
             return f"❌ Number for '{clean_target}' not found in contacts.json, and it is not a valid direct number."
 
+    logging.info(f"📱 Fetching chats for numeric ID: {target_number}")
+
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         start_timestamp = int(start_dt.timestamp())
-        
+
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         end_dt = end_dt.replace(hour=23, minute=59, second=59)
         end_timestamp = int(end_dt.timestamp())
@@ -133,7 +135,7 @@ def fetch_whatsapp_chats(to_target: str, start_date: str, end_date: str) -> str:
         return "❌ Error: Invalid date format. Please use YYYY-MM-DD exactly."
 
     local_baileys_url = "http://localhost:3000/fetch-chats"
-    
+
     payload = {
         "number": target_number,
         "start_timestamp": start_timestamp,
@@ -141,24 +143,24 @@ def fetch_whatsapp_chats(to_target: str, start_date: str, end_date: str) -> str:
     }
 
     try:
-        logging.info(f"📥 Fetching chats for {clean_target} from Baileys bridge...")
-        
+        logging.info(f"📥 Sending fetch request to Baileys bridge for {clean_target}...")
+
         response = requests.post(local_baileys_url, json=payload, timeout=20)
-        
+
         if response.status_code == 200:
             data = response.json()
             messages = data.get("messages", [])
-            
+
             if not messages:
                 return f"Observation: No conversation history found with {clean_target} between {start_date} and {end_date}."
-            
+
             chat_lines = [f"📱 [CHAT HISTORY WITH {clean_target.upper()} | {start_date} to {end_date}]"]
             for msg in messages:
                 sender = "Me (Jarvis)" if msg.get("fromMe") else clean_target.capitalize()
                 msg_time = datetime.fromtimestamp(msg.get("timestamp")).strftime("%d %b, %H:%M")
                 text = msg.get("text", "[Media/Unknown]")
                 chat_lines.append(f"[{msg_time}] {sender}: {text}")
-            
+
             success_text = "\n".join(chat_lines)
             logging.info(f"✅ Fetched {len(messages)} messages successfully.")
             return success_text
@@ -166,7 +168,7 @@ def fetch_whatsapp_chats(to_target: str, start_date: str, end_date: str) -> str:
             error_text = f"❌ Baileys Server Error (Code {response.status_code}): {response.text}"
             logging.error(error_text)
             return error_text
-            
+
     except requests.exceptions.ConnectionError:
         error_msg = "❌ Node.js server is offline! Please start 'node baileys_service.js' in the BaileysServer directory first."
         logging.error(error_msg)

@@ -1,7 +1,7 @@
 const originalLog = console.log;
 console.log = function (...args) {
     if (args[0] && typeof args[0] === 'string' && args[0].includes('Closing session:')) {
-        return; 
+        return;
     }
     originalLog.apply(console, args);
 };
@@ -12,7 +12,7 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const pino = require('pino');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose(); 
+const sqlite3 = require('sqlite3').verbose();
 
 const sendMessageController = require('./Controllers/sendMessage');
 const fetchChatsController = require('./Controllers/fetchChats');
@@ -28,9 +28,10 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 const PORT = 3000;
 
-let sock; 
+let sock;
 let unreadAlerts = [];
 const SCRIPT_START_TIME = Math.floor(Date.now() / 1000);
+const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
 try {
@@ -55,43 +56,47 @@ db.serialize(() => {
         from_me INTEGER
     )`, (err) => {
         if (err) console.error("🚨 [DB TABLE ERROR] Failed to create table:", err.message);
+        else console.log("✅ SQLite Messages table is ready.");
+    });
+
+    db.run("CREATE INDEX IF NOT EXISTS idx_phone_timestamp ON Messages(phone_number, timestamp)", (err) => {
+        if (err) console.error("⚠️ Index creation warning:", err.message);
     });
 });
 
-function keepTop20ChatsOnly() {
-    const cleanupQuery = `
-        DELETE FROM Messages
-        WHERE phone_number NOT IN (
-            SELECT phone_number FROM Messages
-            GROUP BY phone_number
-            ORDER BY MAX(timestamp) DESC
-            LIMIT 20
-        )
-    `;
-    db.run(cleanupQuery, (err) => {
-        if (err) console.error("❌ [DB CLEANUP ERROR]:", err.message);
+function cleanupOldMessages() {
+    const cutoff = Math.floor(Date.now() / 1000) - THIRTY_DAYS_SECONDS;
+    db.run("DELETE FROM Messages WHERE timestamp < ?", [cutoff], function(err) {
+        if (err) {
+            console.error("❌ [DB CLEANUP ERROR]:", err.message);
+        } else if (this.changes > 0) {
+            console.log(`🧹 Cleaned up ${this.changes} messages older than 30 days.`);
+        }
     });
 }
+
+cleanupOldMessages();
+setInterval(cleanupOldMessages, 6 * 60 * 60 * 1000);
 
 const store = {
     bind: (ev) => {
         const processMessages = (messages, isBulkSync = false) => {
             try {
                 if (!messages || !Array.isArray(messages) || messages.length === 0) return;
-                
+
                 let validMessageCount = 0;
                 let uniqueChats = new Set();
 
                 messages.forEach(msg => {
                     try {
                         if (!msg || !msg.key || !msg.key.remoteJid) return;
-                        
+
                         const jid = msg.key.remoteJid;
 
                         if (jid.endsWith('@g.us') || jid === 'status@broadcast') {
-                            return; 
+                            return;
                         }
-                        
+
                         const id = msg.key.id;
                         const timestamp = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
                         const fromMe = msg.key.fromMe ? 1 : 0;
@@ -103,16 +108,12 @@ const store = {
                         }
 
                         validMessageCount++;
-                        uniqueChats.add(jid.split('@')[0]); 
+                        uniqueChats.add(jid.split('@')[0]);
 
                         const insertQuery = `INSERT OR IGNORE INTO Messages (id, phone_number, text, timestamp, from_me) VALUES (?, ?, ?, ?, ?)`;
-                        
+
                         db.run(insertQuery, [id, jid, text, timestamp, fromMe], (err) => {
-                            if (!err) {
-                                keepTop20ChatsOnly();
-                            } else {
-                                console.error("❌ [DB INSERT ERROR]:", err.message);
-                            }
+                            if (err) console.error("❌ [DB INSERT ERROR]:", err.message);
                         });
                     } catch (msgErr) {
                         console.error("⚠️ [MESSAGE PARSING ERROR] Skipped a malformed message:", msgErr.message);
@@ -136,7 +137,7 @@ const store = {
         };
 
         ev.on('messages.upsert', ({ messages }) => processMessages(messages, false));
-        
+
         ev.on('messaging-history.set', ({ messages }) => {
             console.log(`\n⏳ [SYSTEM WAKING UP] Fetching pending history from WhatsApp servers...`);
             processMessages(messages, true);
@@ -152,7 +153,7 @@ async function connectToWhatsApp() {
         sock = makeWASocket({
             auth: state,
             logger: pino({ level: 'silent' }),
-            printQRInTerminal: false 
+            printQRInTerminal: false
         });
 
         store.bind(sock.ev);
@@ -160,22 +161,22 @@ async function connectToWhatsApp() {
         sock.ev.on('connection.update', (update) => {
             try {
                 const { connection, lastDisconnect, qr } = update;
-                
+
                 if (qr) {
                     console.log('\n📱 Please scan this QR Code from your WhatsApp device:\n');
-                    qrcode.generate(qr, { small: true }); 
+                    qrcode.generate(qr, { small: true });
                 }
-                
+
                 if (connection === 'close') {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-                    
+
                     if (statusCode === DisconnectReason.loggedOut) {
                         console.log('❌ [LOGGED OUT] Device has been logged out from WhatsApp Web. Please delete session folder and rescan.');
                     } else if (statusCode === 440) {
                         console.log('⚠️ [CONFLICT - 440] WhatsApp Web is open elsewhere. Jarvis is waiting 10s to avoid spam...');
-                        setTimeout(connectToWhatsApp, 10000); 
-                        return; 
+                        setTimeout(connectToWhatsApp, 10000);
+                        return;
                     } else if (statusCode === DisconnectReason.timedOut) {
                         console.log('⚠️ [TIMEOUT] Connection is slow, attempting to reconnect in 5s...');
                         setTimeout(connectToWhatsApp, 5000);
@@ -185,7 +186,7 @@ async function connectToWhatsApp() {
                     }
 
                     if (shouldReconnect) {
-                        setTimeout(connectToWhatsApp, 3000); 
+                        setTimeout(connectToWhatsApp, 3000);
                     }
                 } else if (connection === 'open') {
                     console.log('\n✅ JARVIS WHATSAPP ENGINE IS ONLINE (MODULAR & SQLITE MODE)!\n');
@@ -205,7 +206,7 @@ async function connectToWhatsApp() {
 
 app.post('/send', (req, res) => {
     try {
-        sendMessageController(req, res, () => sock); 
+        sendMessageController(req, res, () => sock);
     } catch (err) {
         console.error("🚨 [ROUTE ERROR - /send]:", err.message);
         if (!res.headersSent) res.status(500).json({ error: "Internal Server Error in /send route" });
@@ -214,7 +215,7 @@ app.post('/send', (req, res) => {
 
 app.post('/fetch-chats', (req, res) => {
     try {
-        fetchChatsController(req, res, db); 
+        fetchChatsController(req, res, db);
     } catch (err) {
         console.error("🚨 [ROUTE ERROR - /fetch-chats]:", err.message);
         if (!res.headersSent) res.status(500).json({ error: "Internal Server Error in /fetch-chats route" });
@@ -224,7 +225,7 @@ app.post('/fetch-chats', (req, res) => {
 app.get('/get-alerts', (req, res) => {
     if (unreadAlerts.length > 0) {
         const alertsToSend = [...unreadAlerts];
-        unreadAlerts = []; 
+        unreadAlerts = [];
         res.json({ success: true, alerts: alertsToSend });
     } else {
         res.json({ success: true, alerts: [] });
