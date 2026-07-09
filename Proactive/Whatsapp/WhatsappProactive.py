@@ -8,6 +8,7 @@ def listen_for_whatsapp():
     
     local_baileys_url = "http://localhost:3000/get-alerts"
     node_offline_logged = False
+    first_poll = True  # <-- First poll to clear old alerts
 
     while True:
         try:
@@ -18,9 +19,16 @@ def listen_for_whatsapp():
                 data = response.json()
                 alerts = data.get("alerts", [])
                 
+                # Pehli call pe sirf clear karo, process mat karo
+                if first_poll:
+                    if alerts:
+                        print(f"🧹 Cleared {len(alerts)} old alerts from Baileys server.")
+                    first_poll = False
+                    # Alerts already cleared from server, so ignore them
+                    continue
+                
                 for alert in alerts:
                     print(f"📥 [NEW WHATSAPP ALERT]: {alert}")
-       
                     push_proactive_event("WhatsApp", alert, priority="high")
                     
         except requests.exceptions.ConnectionError:
