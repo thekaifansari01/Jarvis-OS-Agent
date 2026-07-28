@@ -2,9 +2,9 @@ import json
 import os
 import re
 import time
+import tempfile
 import datetime
 from typing import Dict, Optional
-from PIL import Image
 
 from groq import Groq
 from google import genai
@@ -63,7 +63,6 @@ User Command: "{raw_command}"
         memory_instance.ephemeral = {}
     ephemeral = memory_instance.ephemeral if memory_instance else {}
 
-    pending_image_to_read = None
     native_tools = get_native_tools()
 
     while step < max_steps:
@@ -147,16 +146,6 @@ If the <Mission> is fully complete, call 'complete_task'.
                         full_prompt = AGENT_SYSTEM_PROMPT.format(max_steps=max_steps, panic_step=panic_step) + "\n\n" + prompt
                         
                         contents_payload = [full_prompt]
-                        
-                        if pending_image_to_read and os.path.exists(pending_image_to_read):
-                            try:
-                                img_obj = Image.open(pending_image_to_read)
-                                contents_payload.append(img_obj)
-                                logger.info(f"👁️ VISION INJECTED: Image requested by agent attached from {pending_image_to_read}!")
-                                pending_image_to_read = None 
-                            except Exception as e:
-                                logger.error(f"Vision injection error: {e}")
-                                pending_image_to_read = None
 
                         response = gemini_client.models.generate_content(
                             model=AGENT_MODEL_GEMINI,

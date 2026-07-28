@@ -356,7 +356,7 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                 if "error" in msg.lower():
                     sys_observations.append(msg)
                 else:
-                    sys_observations.append(f"{msg}. To analyze what is on the screen, use the 'run_python_code' tool to read this image file in your next step.")
+                    sys_observations.append(f"{msg}. Screenshot taken successfully.")
             
             elif system_action == 'lock':
                 sys_observations.append(SystemController.lock_pc())
