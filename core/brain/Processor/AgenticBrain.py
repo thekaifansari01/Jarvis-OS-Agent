@@ -225,9 +225,12 @@ If the <Mission> is fully complete, call 'complete_task'.
                             elif value.get("lifetime_recall"):
                                 action_detail = f"Recalling LTM: {value.get('lifetime_recall')}"
                         elif key == "search_actions" and isinstance(value, dict):
-                             action_detail = value.get("web", "") or value.get("youtube", "") or value.get("arxiv", "") or value.get("vault", "") or value.get("read_webpage", "")
-                        elif key == "workspace_action" and isinstance(value, dict):
-                            action_detail = f"{value.get('action', '')} -> {value.get('file', '')}"
+                            action_detail = value.get("web", "") or value.get("youtube", "") or value.get("arxiv", "") or value.get("vault", "") or value.get("read_webpage", "")
+                        elif key == "execute_terminal_command" and isinstance(value, dict):
+                            action_detail = value.get("command", "")
+                        elif key == "run_python_code" and isinstance(value, dict):
+                            code = value.get("code_string", "").strip()
+                            action_detail = code.split("\n")[0][:60] if code else "Running Script"
                         elif key == "deep_research" and isinstance(value, dict):
                             action_detail = value.get("topic", "")
                         elif key == "email_action" and isinstance(value, dict):
@@ -305,24 +308,12 @@ If the <Mission> is fully complete, call 'complete_task'.
                         if action_key in ["email_action", "whatsapp_action"]:
                             ephemeral["last_contact"] = ai_response.get(action_key, {}).get("to", "")
 
-                        if action_key == "workspace_action" and ai_response.get("workspace_action", {}).get("action") == "read":
-                            target_file = str(ai_response.get("workspace_action", {}).get("file", ""))
-                            if target_file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                                from tools.workspace.workspace import workspace
-                                full_path = os.path.join(str(workspace.vault_dir), target_file)
-                                
-                                if os.path.exists(full_path):
-                                    pending_image_to_read = full_path
-                                    logger.info(f"📸 Smart Trigger: Agent requested workspace image. Scheduled: {pending_image_to_read}")
-                                else:
-                                    logger.warning(f"⚠️ Image requested but not found at: {full_path}")
-                        
                         if "http" in observation and "link" in observation.lower():
                             urls = re.findall(r'https?://[^\s]+', observation)
                             if urls:
                                 ephemeral["last_found_links"] = urls[:3]
-                        if "file" in observation.lower() and (".png" in observation or ".md" in observation):
-                            file_match = re.search(r'([\w\-]+\.(png|md|txt|jpg))', observation)
+                        if "file" in observation.lower() and (".png" in observation or ".md" in observation or ".txt" in observation or ".jpg" in observation):
+                            file_match = re.search(r'([\w\-:\\/.]+\.(png|md|txt|jpg))', observation)
                             if file_match:
                                 ephemeral["last_accessed_file"] = file_match.group(1)
                     
@@ -342,18 +333,12 @@ If the <Mission> is fully complete, call 'complete_task'.
                                 if sys_data.get("system_action") == "screenshot" and sys_data.get("screenshot_filename"):
                                     ephemeral["last_screenshot"] = sys_data.get("screenshot_filename")
 
-                            elif action_key == "workspace_action":
-                                ws_data = ai_response.get("workspace_action", {})
-                                act = ws_data.get("action")
-                                if act in ["write", "delete", "move"]:
-                                    file_entry = {"file_name": ws_data.get("file", "unknown"), "action_type": act.capitalize()}
-                                    if act == "write":
-                                        content = ws_data.get("content", "")
-                                        if len(content) > 800:
-                                            file_entry["content"] = content[:800] + "\n... [TRUNCATED FOR MEMORY. USE 'read' TOOL FOR FULL FILE]"
-                                        else:
-                                            file_entry["content"] = content
-                                    metadata_tracker["files_touched"].append(file_entry)
+                            elif action_key == "execute_terminal_command":
+                                cmd_data = ai_response.get("execute_terminal_command", {})
+                                metadata_tracker["system_events"].append(f"Terminal Command: {cmd_data.get('command', '')}")
+
+                            elif action_key == "run_python_code":
+                                metadata_tracker["system_events"].append("Executed Python Code Script")
                             
                             else:
                                 metadata_tracker["system_events"].append(f"Executed {action_key}: {action_detail}")

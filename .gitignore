@@ -29,9 +29,10 @@ core/UiSrc/SttPopup/release/
 core/UiSrc/SttPopup/.qtcreator/
 core/UiSrc/SttPopup/.qmake.stash
 core/UiSrc/SttPopup/Makefile*
+core/UiSrc/JarvisPhotoPopupViewer/debug/
+core/UiSrc/JarvisPhotoPopupViewer/release/
+core/UiSrc/JarvisPhotoPopupViewer/.qtcreator/
+core/UiSrc/JarvisPhotoPopupViewer/.qmake.stash
+core/UiSrc/JarvisPhotoPopupViewer/Makefile*
 .DS_Store
 Thumbs.db
-
-#for temp
-.txt
-test_eagle.py

@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from groq import Groq
 from core.logger.logger import logger
-from tools.workspace.workspace import workspace
 from core.brain.config import GROQ_SUMMARY_MODEL
 
 class ContextMemory:
@@ -26,7 +25,7 @@ class ContextMemory:
             try:
                 os.remove(old_json_file)
             except Exception as e:
-                logger.error(f"Failed to delete old JSON file: {e}")
+                pass
         
         self.user_bio = self._load_json(self.user_bio_file, {"name": "User", "facts": []})
         self.preferences = self._load_json(self.preferences_file, {"likes": []})
@@ -40,7 +39,6 @@ class ContextMemory:
         try:
             self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
         except Exception as e:
-            logger.error(f"Failed to initialize Groq client: {e}")
             self.groq_client = None
 
         self._start_background_pruning()
@@ -63,7 +61,6 @@ class ContextMemory:
                     return json.load(f)
             return default
         except Exception as e: 
-            logger.error(f"Error loading JSON {file_path.name}: {e}")
             return default
     
     def _save_json(self, file_path, data):
@@ -72,7 +69,7 @@ class ContextMemory:
                 with open(file_path, 'w', encoding='utf-8') as f: 
                     json.dump(data, f, indent=2, ensure_ascii=False)
             except Exception as e: 
-                logger.error(f"Error saving JSON {file_path.name}: {e}")
+                pass
 
     def _load_history_jsonl(self, file_path):
         history = []
@@ -83,7 +80,7 @@ class ContextMemory:
                         if line.strip():
                             history.append(json.loads(line))
             except Exception as e:
-                logger.error(f"Error loading JSONL {file_path.name}: {e}")
+                pass
         return history
 
     def _append_history_jsonl(self, file_path, entry):
@@ -92,7 +89,7 @@ class ContextMemory:
                 with open(file_path, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
             except Exception as e:
-                logger.error(f"Error appending JSONL {file_path.name}: {e}")
+                pass
 
     def _rewrite_history_jsonl(self, file_path, data_list):
         with self._lock:
@@ -101,7 +98,7 @@ class ContextMemory:
                     for entry in data_list:
                         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
             except Exception as e:
-                logger.error(f"Error rewriting JSONL {file_path.name}: {e}")
+                pass
 
     def _track_session_state(self, message):
         try:
@@ -114,7 +111,7 @@ class ContextMemory:
             if (datetime.now() - self.mode_timer).total_seconds() / 60 > 30: 
                 self.current_mode = "General Assistant"
         except Exception as e:
-            logger.error(f"Error tracking session state: {e}")
+            pass
 
     def _async_extract_insights(self, message):
         try:
@@ -122,7 +119,7 @@ class ContextMemory:
             thread.daemon = True
             thread.start()
         except Exception as e:
-            logger.error(f"Error starting insight thread: {e}")
+            pass
 
     def _extract_insights_ai(self, message):
         if not self.groq_client or len(message.split()) < 3: 
@@ -173,7 +170,6 @@ class ContextMemory:
             insights = json.loads(clean_text)
             
             updated = False
-            mood_updated = False
             
             if insights.get("bio") and len(insights["bio"]) > 0:
                 for fact in insights["bio"]:
@@ -203,10 +199,9 @@ class ContextMemory:
                 if len(self.user_mood.get("mood_history", [])) > 10:
                     self.user_mood["mood_history"] = self.user_mood["mood_history"][-10:]
                 self._save_json(self.user_mood_file, self.user_mood)
-                mood_updated = True
                     
         except Exception as e:
-            logger.error(f"Error in extract insights AI: {e}")
+            pass
 
     def _start_background_pruning(self):
         try:
@@ -215,7 +210,7 @@ class ContextMemory:
             timer.daemon = True
             timer.start()
         except Exception as e:
-            logger.error(f"Error in background pruning timer: {e}")
+            pass
 
     def _prune_old_messages(self):
         if not self.master_history: 
@@ -243,13 +238,13 @@ class ContextMemory:
                     from core.brain.Memory.LifetimeMemory import ltm_engine
                     ltm_engine.archive_old_chats(messages_to_archive)
                 except Exception as e:
-                    logger.error(f"Failed to trigger LTM archive: {e}")
+                    pass
                     
             if len(filtered_history) < len(self.master_history):
                 self.master_history = filtered_history
                 self._rewrite_history_jsonl(self.master_history_file, self.master_history)
         except Exception as e:
-            logger.error(f"Error during message pruning: {e}")
+            pass
 
     def add_message(self, role, message, metadata=None):
         if not message or not message.strip(): 
@@ -278,7 +273,7 @@ class ContextMemory:
                 self._track_session_state(message)
                 self._async_extract_insights(message)
         except Exception as e:
-            logger.error(f"Error adding message: {e}")
+            pass
 
     def get_fast_history_context(self):
         if not self.master_history: 
@@ -294,7 +289,6 @@ class ContextMemory:
                     history_str.append(f"[{time_str}] {entry.get('role', 'UNKNOWN')}: {entry.get('message', '')}")
             return "\n".join(history_str)
         except Exception as e:
-            logger.error(f"Error fetching fast history context: {e}")
             return "Error retrieving history."
 
     def get_agentic_fast_context(self):
@@ -321,19 +315,13 @@ class ContextMemory:
                     apps_opened = metadata.get("apps_opened", [])
                     apps_closed = metadata.get("apps_closed", [])
                     system_events = metadata.get("system_events", [])
-                    files_touched = metadata.get("files_touched", [])
                     
                     if apps_opened or apps_closed or system_events:
-                        log_content.append("  🛠️ ACTIONS TAKEN:")
+                        log_content.append("  ACTIONS TAKEN:")
                         if apps_opened: log_content.append(f"  - Opened Apps: {', '.join(apps_opened)}")
                         if apps_closed: log_content.append(f"  - Closed Apps: {', '.join(apps_closed)}")
                         for evt in system_events: log_content.append(f"  - System: {evt}")
                         log_content.append("")
-                        
-                    if files_touched:
-                        log_content.append("  📂 WORKSPACE ACTIVITY:")
-                        for f in files_touched:
-                            log_content.append(f"  - Action: {f.get('action_type', 'Touched')} file '{f.get('file_name', 'unknown')}'")
                     
                     if log_content:
                         xml_log = "\n<System_Execution_Log>\n" + "\n".join(log_content).strip() + "\n</System_Execution_Log>"
@@ -347,31 +335,26 @@ class ContextMemory:
             history_lines.append("</Recent_Context>")
             return "\n\n".join(history_lines)
         except Exception as e:
-            logger.error(f"Error fetching agentic fast context: {e}")
             return "<Recent_Context>\nError retrieving history.\n</Recent_Context>"
 
     def get_relevant_context(self, query):
         try:
             context = [
-                f"⏱️ Current Time: {datetime.now().strftime('%A, %Y-%m-%d %H:%M')}",
-                f"🧠 SESSION MODE: {self.current_mode}"
+                f"Current Time: {datetime.now().strftime('%A, %Y-%m-%d %H:%M')}",
+                f"SESSION MODE: {self.current_mode}"
             ]
             
             if self.user_bio.get("facts"):
-                context.append("\n👤 USER FACTS:\n" + "\n".join([f"- {fact.get('text', '')}" for fact in self.user_bio["facts"]]))
+                context.append("\nUSER FACTS:\n" + "\n".join([f"- {fact.get('text', '')}" for fact in self.user_bio["facts"]]))
             if self.preferences.get("likes"):
-                context.append("\n🎯 USER PREFS:\n" + "\n".join([f"- {like}" for like in self.preferences["likes"]]))
+                context.append("\nUSER PREFS:\n" + "\n".join([f"- {like}" for like in self.preferences["likes"]]))
             
             if self.user_mood.get("mood_history"):
                 moods = "\n".join([f"- {m.get('date', '')} {m.get('time', '')} | Mood: {m.get('mood', '')}" for m in self.user_mood["mood_history"][-5:]])
-                context.append(f"\n🎭 RECENT MOOD HISTORY:\n{moods}")
-                
-            workspace_data = workspace.get_workspace_context()
-            context.append(f"\n📁 MY WORKSPACE FILES & STORAGE STATUS:\n{workspace_data}")
+                context.append(f"\nRECENT MOOD HISTORY:\n{moods}")
                     
             return "\n".join(context)
         except Exception as e:
-            logger.error(f"Error fetching relevant context: {e}")
             return "Error retrieving relevant context."
 
     def get_chat_history_for_tool(self):
@@ -398,22 +381,13 @@ class ContextMemory:
                     apps_opened = metadata.get("apps_opened", [])
                     apps_closed = metadata.get("apps_closed", [])
                     system_events = metadata.get("system_events", [])
-                    files_touched = metadata.get("files_touched", [])
                     
                     if apps_opened or apps_closed or system_events:
-                        log_content.append("  🛠️ ACTIONS TAKEN:")
+                        log_content.append("  ACTIONS TAKEN:")
                         if apps_opened: log_content.append(f"  - Opened Apps: {', '.join(apps_opened)}")
                         if apps_closed: log_content.append(f"  - Closed Apps: {', '.join(apps_closed)}")
                         for evt in system_events: log_content.append(f"  - System: {evt}")
                         log_content.append("")
-                        
-                    if files_touched:
-                        log_content.append("  📂 WORKSPACE ACTIVITY:")
-                        for f in files_touched:
-                            log_content.append(f"  - Action: {f.get('action_type', 'Touched')} file '{f.get('file_name', 'unknown')}'")
-                            content = f.get('content', '')
-                            if content:
-                                log_content.append(f"  - Content Snippet:\n    ```\n    {content}\n    ```")
                     
                     if log_content:
                         xml_log = "\n\n<System_Execution_Log>\n" + "\n".join(log_content).strip() + "\n</System_Execution_Log>"
@@ -426,5 +400,4 @@ class ContextMemory:
                     
             return "\n\n".join(history_lines)
         except Exception as e:
-            logger.error(f"Error formatting chat history for tool: {e}")
             return "Error retrieving conversation history."

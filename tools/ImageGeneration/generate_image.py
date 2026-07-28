@@ -4,22 +4,22 @@ import base64
 import requests
 from PIL import Image
 from io import BytesIO
+from pathlib import Path
 from together import Together
 from dotenv import load_dotenv
 from core.logger.logger import logger
 from core.voice.tts import speak 
 
-from tools.workspace.workspace import workspace 
-
 from core.brain.config import FLUX_IMAGE_MODEL, AI_HORDE_IMAGE_MODEL, TOGETHER_API_KEY
 
 load_dotenv()
 
-TOGETHER_AI = os.getenv("TOGETHER_AI")
+CREATIONS_DIR = Path("C:/Documents/Jarvis/GeneratedImages")
+CREATIONS_DIR.mkdir(parents=True, exist_ok=True)
+
 together_client = Together(api_key=TOGETHER_API_KEY) if TOGETHER_API_KEY else None
 
 def image_to_base64(image_path):
-    """Image ko base64 mein convert karta hai (Editing ke liye)"""
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode('utf-8')
 
@@ -40,21 +40,18 @@ def generate_flux(prompt, filename):
         img = Image.open(BytesIO(image_data))
         
         safe_filename = f"{filename}.png" if not filename.endswith(".png") else filename
-        save_path = workspace.creations_dir / safe_filename
+        save_path = CREATIONS_DIR / safe_filename
         
         img.save(save_path)
         img.show()
         
-        workspace.add_file_record(safe_filename, "Creations", f"Generated image. Prompt: {prompt}")
-        
         logger.info(f"Generation Complete! Saved at: {save_path}")
-        return str(save_path)
+        return str(save_path.resolve())
     except Exception as e:
         logger.error(f"FLUX Error: {e}")
         return None
 
 def edit_via_horde(prompt, source_image_path, new_filename):
-    """AI Horde use karega editing ke liye with Clean Terminal UI"""
     url = "https://aihorde.net/api/v2/generate/async"
     headers = {"apikey": "0000000000", "Content-Type": "application/json"}
 
@@ -98,24 +95,20 @@ def edit_via_horde(prompt, source_image_path, new_filename):
                 img = Image.open(BytesIO(img_res.content))
                 
                 safe_filename = f"{new_filename}.png" if not new_filename.endswith(".png") else new_filename
-                save_path = workspace.creations_dir / safe_filename
+                save_path = CREATIONS_DIR / safe_filename
                 
                 img.save(save_path)
                 
                 print("\n")
                 img.show()
                 
-                source_name = os.path.basename(source_image_path)
-                workspace.add_file_record(safe_filename, "Creations", f"Edited from {source_name}. Prompt: {prompt}")
-                
                 success_msg = "Sir, image successfully edit ho gayi hai. Aap screen par dekh sakte hain."
                 logger.info(f"Editing Complete! Saved successfully at {save_path}.")
                 speak(success_msg) 
                 
-                return str(save_path)
+                return str(save_path.resolve())
             
             wait_time = status_res.get('wait_time', 0)
-            queue_pos = status_res.get('queue_position', 0)
 
             if not first_time_notified and wait_time > 0:
                 minutes = wait_time // 60
@@ -132,20 +125,12 @@ def edit_via_horde(prompt, source_image_path, new_filename):
                 speak(notification) 
                 first_time_notified = True
             
-            
     except Exception as e:
         print("\n") 
         logger.error(f"Horde Error: {e}")
         return None
 
 def handle_image_command(action_type, prompt, filename=None, target_file=None):
-    """
-    Jarvis is function ko call karega.
-    action_type: 'generate' ya 'edit'
-    prompt: User ka diya gaya prompt
-    filename: Nayi image ka naam (generate/edit dono ke baad save karne ke liye)
-    target_file: Purani image ka naam jise edit karna hai
-    """
     if not filename:
         filename = f"image_{int(time.time())}"
 
@@ -159,11 +144,11 @@ def handle_image_command(action_type, prompt, filename=None, target_file=None):
             return None
             
         safe_target = f"{target_file}.png" if not target_file.endswith(".png") else target_file
-        source_image_path = workspace.creations_dir / safe_target
+        source_image_path = Path(target_file) if os.path.exists(target_file) else CREATIONS_DIR / safe_target
         
         if not source_image_path.exists():
             logger.warning(f"File nahi mili: {source_image_path}")
-            speak(f"Sir, mujhe '{safe_target}' naam ki koi image workspace mein nahi mili.")
+            speak(f"Sir, mujhe '{safe_target}' naam ki koi image nahi mili.")
             return None
             
         return edit_via_horde(prompt, source_image_path, filename)

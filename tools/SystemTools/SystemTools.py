@@ -126,8 +126,7 @@ class SystemController:
     def capture_screenshot(filename: str = None, save_dir: str = None):
         try:
             if not save_dir:
-                from tools.workspace.workspace import workspace
-                save_dir = str(workspace.vault_dir)
+                save_dir = "C:/Documents/Jarvis/Screenshots"  
                 
             os.makedirs(save_dir, exist_ok=True)
             

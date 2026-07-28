@@ -6,7 +6,6 @@ from typing import Dict, Optional
 from groq import Groq
 
 from core.logger.logger import logger
-from tools.workspace.workspace import workspace
 from core.brain.Processor.Prompts import SYSTEM_PROMPT
 from core.brain.config import GROQ_FAST_MODEL, GROQ_API_KEY
 
@@ -24,7 +23,6 @@ def make_result(response, **kwargs):
         "apps_to_close": [], 
         "urls_to_open": [],
         "youtube_play": "", 
-        "workspace_file_to_open": "", 
         "volume": {},           
         "brightness": {},       
         "system_action": "",    
@@ -49,15 +47,6 @@ def build_fast_brain_prompt(raw_command: str, memory_instance=None, ephemeral: d
     
     fast_history = memory_instance.get_fast_history_context() if memory_instance else "No recent conversation."
     history_block = f"\n[RECENT CONVERSATION]\n{fast_history}\n"
-    
-    try:
-        registry = workspace._load_registry()
-        file_names = [f.get("filename") for f in registry.get("files", []) if f.get("filename")]
-        files_str = ", ".join(file_names) if file_names else "No files in workspace."
-    except Exception as e:
-        logger.error(f"Failed to load lightweight registry: {e}")
-        files_str = "Error loading files."
-    workspace_block = f"\n[WORKSPACE FILES (ONLY NAMES)]\n{files_str}\n"
 
     ephemeral_block = ""
     if ephemeral:
@@ -69,7 +58,7 @@ def build_fast_brain_prompt(raw_command: str, memory_instance=None, ephemeral: d
         if ephemeral.get("last_accessed_file"):
             ephemeral_block += f"Last file accessed: {ephemeral['last_accessed_file']}\n"
     
-    return f"""[SYSTEM STATUS]\nTime: {current_time}{user_info_block}\n[AVAILABLE APPS]\nYou can open/close ANY standard Windows App or popular Website. The system handles indexing dynamically.\n{history_block}{workspace_block}{ephemeral_block}\n[USER COMMAND]\n"{raw_command}"\nReturn STRICT JSON."""
+    return f"""[SYSTEM STATUS]\nTime: {current_time}{user_info_block}\n[AVAILABLE APPS]\nYou can open/close ANY standard Windows App or popular Website. The system handles indexing dynamically.\n{history_block}{ephemeral_block}\n[USER COMMAND]\n"{raw_command}"\nReturn STRICT JSON."""
 
 def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = None) -> Optional[Dict[str, any]]:
     if not groq_client: return None
@@ -77,7 +66,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
     
     result = {
         "response": "", "apps_to_open": [], "apps_to_close": [], "urls_to_open": [],
-        "youtube_play": "", "workspace_file_to_open": "", 
+        "youtube_play": "", 
         "volume": {}, "brightness": {}, "system_action": "",
         "priority": "high"
     }
@@ -103,7 +92,6 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                             "apps_to_close": {"type": "array", "items": {"type": "string"}},
                             "urls_to_open": {"type": "array", "items": {"type": "string"}},
                             "youtube_play": {"type": "string"},
-                            "workspace_file_to_open": {"type": "string"},
                             "volume": {
                                 "type": "object",
                                 "properties": {
@@ -186,7 +174,6 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 result["apps_to_close"] = args.get("apps_to_close", [])
                 result["urls_to_open"] = args.get("urls_to_open", [])
                 result["youtube_play"] = args.get("youtube_play", "")
-                result["workspace_file_to_open"] = args.get("workspace_file_to_open", "")
                 result["volume"] = args.get("volume", {})
                 result["brightness"] = args.get("brightness", {})
                 result["system_action"] = args.get("system_action", "")

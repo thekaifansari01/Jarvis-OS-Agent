@@ -42,6 +42,13 @@ AGENT_SYSTEM_PROMPT = """
         </step>
     </intelligence_core_workflow>
 
+    <system_operations_directive>
+        <rule>You are a System-Level AI. You DO NOT have a restricted workspace anymore.</rule>
+        <rule>Whenever the user asks you to find a file, read data, write files, check system specs, or do anything on the PC that requires fetching information, you MUST autonomously use 'execute_terminal_command' (to navigate/search) or 'run_python_code' (to read/process files).</rule>
+        <rule>When cloning a repository using git clone, always first navigate to a specific Desktop or Downloads folder using cd (or use absolute paths in your command), so you know exactly where the files are going. Avoid cloning into the current working directory.</rule>
+        <rule>Do not wait for the user to explicitly tell you to use the terminal or write code.</rule>
+    </system_operations_directive>
+
     <language_and_tone_directive>
         <rule>Your internal thought and final spoken response MUST be EXCLUSIVELY in natural English.</rule>
         <rule>EMOTION DYNAMICS: You must start your final spoken response with an emotion tag. For longer Agentic responses, change your tone mid-response by inserting a new emotion tag exactly at the BEGINNING of a new sentence whenever the context or mood naturally shifts.</rule>
@@ -64,7 +71,7 @@ AGENT_SYSTEM_PROMPT = """
         </rule>
         <rule number="4">
             <phase>Screenshot & Vision</phase>
-            <directive>If you take a screenshot using system_controller, you MUST immediately call workspace_action (read) in your very next step using the filename provided in your [EPHEMERAL] context.</directive>
+            <directive>If you take a screenshot using system_controller, you MUST analyze the screen context in your next step either by calling run_python_code to process the image file or using the vision pipeline if configured.</directive>
         </rule>
     </tool_calling_directive>
 
@@ -80,34 +87,7 @@ AGENT_SYSTEM_PROMPT = """
 </agent_system_prompt>
 """
 
-ROUTER_PROMPT = """Analyze the command and output EXACTLY ONE WORD: 'FAST' or 'AGENTIC'.
-
-[RULES]
-Output 'FAST' ONLY for these reflex actions:
-- Open/close specific apps or websites
-- PC controls (volume, brightness, lock, sleep, screenshot)
-- Play YouTube videos
-- Quick facts (weather, time, date) or basic greetings
-- Open a known file by its exact name
-
-For EVERYTHING else (emails, whatsapp, coding, writing, memory, complex questions, undefined tasks), output 'AGENTIC'.
-
-[EXAMPLES]
-Command: "youtube pe song chalao" -> FAST
-Command: "rahul ko whatsapp karo" -> AGENTIC
-Command: "volume 100 kardo aur chrome kholo" -> FAST
-Command: "kal wali file summary do" -> AGENTIC
-Command: "aaj ka mausam" -> FAST
-Command: "hi jarvis" -> FAST
-
-[CONTEXT]
-{recent_context}
-
-Output ONLY 'FAST' or 'AGENTIC'. No other text.
-"""
-
 def get_native_tools():
-    """Returns a list of tools for Native Function Calling."""
     return [
         types.Tool(
             function_declarations=[
@@ -171,19 +151,36 @@ def get_native_tools():
                         }
                     )
                 ),
-               types.FunctionDeclaration(
-                    name="workspace_action",
-                    description="Manage files. Actions: 'read', 'write', 'move', 'list', 'open', or 'delete'.",
+                types.FunctionDeclaration(
+                    name="execute_terminal_command",
+                    description="Execute a command directly in the system's Terminal (CMD/PowerShell). Use this to navigate the OS (e.g., 'dir', 'cd', 'ls'), manage files without a workspace, or run system utilities.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "action": types.Schema(type=types.Type.STRING, description="Must be exactly: 'read', 'write', 'move', 'list', 'open', or 'delete'"),
-                            "file": types.Schema(type=types.Type.STRING, description="Exact filename (e.g., 'report.md', 'diagram.png')."),
-                            "content": types.Schema(type=types.Type.STRING, description="Full file content if action is 'write'"),
-                            "to": types.Schema(type=types.Type.STRING, description="Target folder name if action is 'move'"),
-                            "dest_name": types.Schema(type=types.Type.STRING, description="OPTIONAL: New filename when moving.")
+                            "command": types.Schema(
+                                type=types.Type.STRING, 
+                                description="The exact terminal command to run. Ensure syntax is correct for the host OS."
+                            ),
+                            "timeout_seconds": types.Schema(
+                                type=types.Type.INTEGER, 
+                                description="Optional. Set to 30 for quick commands (dir, cd). For heavy commands (git clone, pip install, npm install), set between 120 to 300 to wait for full execution."
+                            )
                         },
-                        required=["action"]
+                        required=["command"]
+                    )
+                ),
+                types.FunctionDeclaration(
+                    name="run_python_code",
+                    description="Execute Python code dynamically in a REPL environment. Use this to read files from absolute paths, analyze data, parse text, or do complex automation. CRITICAL: You MUST use print() statements to output the results you want to observe, as only stdout/stderr will be returned to your context.",
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "code_string": types.Schema(
+                                type=types.Type.STRING, 
+                                description="The complete, syntactically correct Python code to execute. Always import required standard libraries like 'os', 'json', etc."
+                            )
+                        },
+                        required=["code_string"]
                     )
                 ),
                 types.FunctionDeclaration(
@@ -195,7 +192,7 @@ def get_native_tools():
                             "to": types.Schema(type=types.Type.STRING, description="Put the FULL exact email address here (e.g., kaif13018@gmail.com). If the user just says a name or 'my email', find their full email address from your [USER FACTS] or Chat History and use that."),
                             "subject": types.Schema(type=types.Type.STRING, description="Email subject"),
                             "body": types.Schema(type=types.Type.STRING, description="Email body content"),
-                            "file_path": types.Schema(type=types.Type.STRING, description="MANDATORY IF ATTACHING: Exact filename")
+                            "file_path": types.Schema(type=types.Type.STRING, description="MANDATORY IF ATTACHING: Exact absolute filename path.")
                         },
                         required=["to", "subject", "body"]
                     )
@@ -220,7 +217,7 @@ def get_native_tools():
                             ),
                             "file_path": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[MODE: SEND ONLY] Exact local file path to attach. DO NOT use if action is 'fetch'."
+                                description="[MODE: SEND ONLY] Exact absolute local file path to attach. DO NOT use if action is 'fetch'."
                             ),
                             "start_date": types.Schema(
                                 type=types.Type.STRING, 
@@ -243,7 +240,7 @@ def get_native_tools():
                             "action": types.Schema(type=types.Type.STRING, description="Must be 'generate' or 'edit'"),
                             "prompt": types.Schema(type=types.Type.STRING),
                             "filename": types.Schema(type=types.Type.STRING),
-                            "target_file": types.Schema(type=types.Type.STRING, description="For edit, original filename")
+                            "target_file": types.Schema(type=types.Type.STRING, description="For edit, original absolute filename path.")
                         },
                         required=["action", "prompt"]
                     )
@@ -279,7 +276,7 @@ def get_native_tools():
                 ),
                 types.FunctionDeclaration(
                     name="system_controller",
-                    description="Open/close apps, urls, play youtube, or control system settings (volume, brightness, power, screenshot). If you need to SEE the screen, set system_action to 'screenshot' FIRST and provide a 'screenshot_filename', then in your NEXT step use 'workspace_action' (action: 'read') on that file to analyze it.",
+                    description="Open/close apps, urls, play youtube, or control system settings (volume, brightness, power, screenshot). If you need to SEE the screen, set system_action to 'screenshot' FIRST and provide a 'screenshot_filename', then in your NEXT step use your native vision capabilities or run_python_code to read it.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
@@ -292,7 +289,7 @@ def get_native_tools():
                             "brightness_action": types.Schema(type=types.Type.STRING, description="Must be 'set', 'increase', or 'decrease'"),
                             "brightness_value": types.Schema(type=types.Type.INTEGER, description="Percentage value (0-100) - Required if brightness_action is 'set'"),
                             "system_action": types.Schema(type=types.Type.STRING, description="Must be 'lock', 'sleep', or 'screenshot'"),
-                            "screenshot_filename": types.Schema(type=types.Type.STRING, description="OPTIONAL: If system_action is 'screenshot', provide a contextual name (e.g., 'vscode_error.png', 'browser_page.png') so you remember why you took it.")
+                            "screenshot_filename": types.Schema(type=types.Type.STRING, description="OPTIONAL: If system_action is 'screenshot', provide an absolute path to save the file (e.g., 'C:/temp/screen.png').")
                         }
                     )
                 ),

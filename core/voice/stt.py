@@ -2,10 +2,10 @@ import os
 import time
 import threading
 import queue
-import struct
 import winsound
 import pyaudio
-import pvporcupine
+import numpy as np
+from openwakeword.model import Model
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -16,11 +16,10 @@ from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 
 load_dotenv()
 
-PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "oLxGUCx6LY/f8Ru4pUzZIattcQ9NLLmzYkDXKB7vao5dn2laj14DIg==")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 if not DEEPGRAM_API_KEY:
-    logger.error("DEEPGRAM_API_KEY nahi mili! Please check your .env file.")
+    logger.error("DEEPGRAM_API_KEY missing in .env")
 
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
@@ -28,26 +27,25 @@ update_stt_status("idle", "")
 ACTIVE_CONTEXT_WINDOW = 120  
 last_valid_command_time = 0
 
-
 class UnifiedVoiceAssistant:
     def __init__(self):
         try:
-            self.porcupine = pvporcupine.create(
-                access_key=PICOVOICE_ACCESS_KEY,
-                keywords=['jarvis'],
-                sensitivities=[0.40]
-            )
+            model_path = "Data/model/jarvis.onnx"
+            self.oww_model = Model(wakeword_models=[model_path])
         except Exception as e:
-            logger.error(f"Porcupine init error: {e}")
+            logger.error(f"openWakeWord init error: {e}")
             raise
 
+        self.CHUNK = 1280
+        self.RATE = 16000
+        
         self.audio = pyaudio.PyAudio()
         self.stream = self.audio.open(
             format=pyaudio.paInt16,
             channels=1,
-            rate=16000,
+            rate=self.RATE,
             input=True,
-            frames_per_buffer=self.porcupine.frame_length
+            frames_per_buffer=self.CHUNK
         )
 
         self.is_awake = False
@@ -60,7 +58,7 @@ class UnifiedVoiceAssistant:
         self.command_done = threading.Event()
 
     def start(self):
-        logger.info("Unified Voice Engine Started (Waiting for 'Jarvis')...")
+        logger.info("Unified Voice Engine Started with openWakeWord...")
         self.listen_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.listen_thread.start()
 
@@ -71,11 +69,9 @@ class UnifiedVoiceAssistant:
             pass
 
     def _setup_deepgram(self):
-        """Initialize Deepgram live connection for speech-to-text."""
         self.current_transcript = ""
         self.live_text = ""
         self.command_done.clear()
-
         assistant = self
 
         try:
@@ -83,15 +79,12 @@ class UnifiedVoiceAssistant:
 
             def on_message(dg_self, result, **kwargs):
                 sentence = result.channel.alternatives[0].transcript
-
                 if result.is_final:
                     if sentence:
                         assistant.current_transcript += " " + sentence
                     assistant.live_text = assistant.current_transcript.strip()
                     update_stt_status("listening", assistant.live_text)
-
                     if getattr(result, 'speech_final', False):
-                        logger.info("Speech Final triggered by Deepgram.")
                         assistant.command_done.set()
                 else:
                     if sentence:
@@ -99,12 +92,10 @@ class UnifiedVoiceAssistant:
                         update_stt_status("listening", assistant.live_text)
 
             def on_utterance_end(dg_self, utterance_end, **kwargs):
-                logger.info("Utterance End (Silence) detected by Deepgram.")
                 if assistant.live_text.strip():
                     assistant.command_done.set()
 
             def on_error(dg_self, error, **kwargs):
-                logger.error(f"Deepgram Error: {error}")
                 assistant.command_done.set()
 
             self.dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
@@ -122,82 +113,80 @@ class UnifiedVoiceAssistant:
                 utterance_end_ms="1500",
                 encoding="linear16",
                 channels=1,
-                sample_rate=16000,
+                sample_rate=self.RATE,
             )
 
             if not self.dg_connection.start(options):
-                logger.error("Failed to connect to Deepgram API")
                 return False
             return True
 
-        except Exception as e:
-            logger.error(f"Deepgram Setup Error: {e}")
+        except Exception:
             return False
 
     def _audio_loop(self):
-        from core.voice import tts
-
         while self.running:
             try:
-                pcm_data = self.stream.read(self.porcupine.frame_length, exception_on_overflow=False)
+                pcm_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
 
                 if not self.is_awake:
-                    pcm_unpacked = struct.unpack_from("h" * self.porcupine.frame_length, pcm_data)
-                    keyword_index = self.porcupine.process(pcm_unpacked)
+                    audio_array = np.frombuffer(pcm_data, dtype=np.int16)
+                    prediction = self.oww_model.predict(audio_array)
+                    
+                    triggered = False
+                    for model_name, score in prediction.items():
+                        if score > 0.5:
+                            triggered = True
+                            break
 
-                    if keyword_index >= 0:
-                        logger.info("WAKE WORD DETECTED!")
-                        tts.stop_speaking()
+                    if triggered:
+                        try:
+                            from core.voice import tts
+                            tts.stop_speaking()
+                        except Exception:
+                            pass 
+                            
                         interrupt.set_interrupt()
                         self.play_wake_sound()
 
-                        # Start listening immediately – no authentication
                         if self._setup_deepgram():
                             self.is_awake = True
                             update_stt_status("listening", "")
                 else:
-                    # Active listening: send audio to Deepgram
                     if self.dg_connection:
                         self.dg_connection.send(pcm_data)
 
-                    # If command is complete, process it
                     if self.command_done.is_set():
                         self.process_final_command()
 
-            except Exception as e:
-                logger.debug(f"Audio loop error/glitch: {e}")
-                time.sleep(0.1)
+            except Exception:
+                time.sleep(0.01)
 
     def process_final_command(self):
-        """Process the final transcribed command."""
         global last_valid_command_time
 
         if self.dg_connection:
             try:
                 self.dg_connection.finish()
-            except Exception as e:
-                logger.error(f"Error closing Deepgram connection: {e}")
+            except Exception:
+                pass
             finally:
                 self.dg_connection = None
 
         full_command = self.live_text.lower().strip()
         ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you", "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
 
+        self.is_awake = False
+        interrupt.clear_interrupt()
+
         if full_command and full_command not in ignore_words and len(full_command) > 3:
-            logger.info(f"You said: {full_command}")
             update_stt_status("understanding")
             last_valid_command_time = time.time()
             self.command_queue.put(full_command)
         else:
-            logger.info("Silence or garbage noise detected.")
             update_stt_status("idle")
             self.command_queue.put("")
 
-        self.is_awake = False
-        interrupt.clear_interrupt()
-
     def get_command(self, is_retry=False):
-        """Retrieve the next command from the queue."""
         global last_valid_command_time
 
         command = None
@@ -215,11 +204,12 @@ class UnifiedVoiceAssistant:
             current_time = time.time()
             time_since_last_cmd = current_time - last_valid_command_time
 
-            # If within active context window, prompt user to speak again
             if last_valid_command_time > 0 and time_since_last_cmd < ACTIVE_CONTEXT_WINDOW and not is_retry:
-                from core.voice.tts import speak
-                logger.info("Active Context Detected: Prompting user...")
-                speak("[thinking] Ji sir? Main sun raha hu.")
+                try:
+                    from core.voice.tts import speak
+                    speak("[thinking] Ji sir? Main sun raha hu.")
+                except:
+                    pass
                 time.sleep(0.5)
 
                 if self._setup_deepgram():
@@ -231,44 +221,28 @@ class UnifiedVoiceAssistant:
         return command
 
     def stop(self):
-        """Clean shutdown."""
         self.running = False
         try:
             self.stream.stop_stream()
             self.stream.close()
             self.audio.terminate()
-            self.porcupine.delete()
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
+        except Exception:
+            pass
 
-
-# Global engine instance
 engine = UnifiedVoiceAssistant()
-
 
 def start_background_wake_word_listener():
     engine.start()
 
-
 def listen():
     return engine.get_command()
 
-
 if __name__ == "__main__":
-    print("\n" + "=" * 60)
-    print(" JARVIS STT - CLEAN (NO BIOMETRIC AUTH) ")
-    print("=" * 60)
-
     try:
         start_background_wake_word_listener()
-
         while True:
             command = listen()
             if command:
-                print(f"\n FINAL COMMAND CAUGHT: '{command}'\n")
-            else:
-                print("\n Koi command capture nahi hui (Silence/Noise).\n")
-
+                pass
     except KeyboardInterrupt:
-        print("\n\n Test mode band kiya jaa raha hai... Goodbye!")
         engine.stop()

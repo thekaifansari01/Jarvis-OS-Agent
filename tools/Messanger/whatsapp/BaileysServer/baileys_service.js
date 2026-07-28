@@ -8,11 +8,12 @@ console.log = function (...args) {
 
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
-const qrcode = require('qrcode-terminal');
+const qrcode = require('qrcode');
 const fs = require('fs');
 const pino = require('pino');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
+const { exec } = require('child_process');
 
 const sendMessageController = require('./Controllers/sendMessage');
 const fetchChatsController = require('./Controllers/fetchChats');
@@ -30,10 +31,13 @@ const PORT = 3000;
 
 let sock;
 let unreadAlerts = [];
+let popupProcess = null;
 const SCRIPT_START_TIME = Math.floor(Date.now() / 1000);
 const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
+const binDir = path.join(__dirname, '..', '..', '..', '..', 'Bin');
+
 try {
     if (!fs.existsSync(sessionDir)) {
         fs.mkdirSync(sessionDir, { recursive: true });
@@ -112,12 +116,8 @@ const store = {
 
                         const insertQuery = `INSERT OR IGNORE INTO Messages (id, phone_number, text, timestamp, from_me) VALUES (?, ?, ?, ?, ?)`;
 
-                        db.run(insertQuery, [id, jid, text, timestamp, fromMe], (err) => {
-                            if (err) console.error("❌ [DB INSERT ERROR]:", err.message);
-                        });
-                    } catch (msgErr) {
-                        console.error("⚠️ [MESSAGE PARSING ERROR] Skipped a malformed message:", msgErr.message);
-                    }
+                        db.run(insertQuery, [id, jid, text, timestamp, fromMe], (err) => {});
+                    } catch (msgErr) {}
                 });
 
                 if (validMessageCount > 0) {
@@ -131,9 +131,7 @@ const store = {
                         }
                     }
                 }
-            } catch (mainErr) {
-                console.error("🚨 [PROCESS MESSAGES FATAL ERROR]:", mainErr.message);
-            }
+            } catch (mainErr) {}
         };
 
         ev.on('messages.upsert', ({ messages }) => processMessages(messages, false));
@@ -163,8 +161,21 @@ async function connectToWhatsApp() {
                 const { connection, lastDisconnect, qr } = update;
 
                 if (qr) {
-                    console.log('\n📱 Please scan this QR Code from your WhatsApp device:\n');
-                    qrcode.generate(qr, { small: true });
+                    const qrImagePath = path.join(__dirname, 'qr_code.png');
+                    qrcode.toFile(qrImagePath, qr, {
+                        color: { dark: '#000000', light: '#FFFFFF' }
+                    }, (err) => {
+                        if (err) return;
+                        
+                        if (!popupProcess) {
+                            const exePath = path.join(binDir, 'JarvisPhotoPopupViewer.exe');
+                            const command = `"${exePath}" --image "${qrImagePath}" --title "JARVIS WhatsApp Bridge" --description "Scan to Authenticate"`;
+                            
+                            popupProcess = exec(command, (error) => {
+                                popupProcess = null;
+                            });
+                        }
+                    });
                 }
 
                 if (connection === 'close') {
@@ -190,6 +201,11 @@ async function connectToWhatsApp() {
                     }
                 } else if (connection === 'open') {
                     console.log('\n✅ JARVIS WHATSAPP ENGINE IS ONLINE (MODULAR & SQLITE MODE)!\n');
+                    
+                    if (popupProcess) {
+                        exec(`taskkill /PID ${popupProcess.pid} /F /T`, () => {});
+                        popupProcess = null;
+                    }
                 }
             } catch (connErr) {
                 console.error("🚨 [CONNECTION EVENT ERROR]:", connErr.message);
@@ -208,7 +224,6 @@ app.post('/send', (req, res) => {
     try {
         sendMessageController(req, res, () => sock);
     } catch (err) {
-        console.error("🚨 [ROUTE ERROR - /send]:", err.message);
         if (!res.headersSent) res.status(500).json({ error: "Internal Server Error in /send route" });
     }
 });
@@ -217,7 +232,6 @@ app.post('/fetch-chats', (req, res) => {
     try {
         fetchChatsController(req, res, db);
     } catch (err) {
-        console.error("🚨 [ROUTE ERROR - /fetch-chats]:", err.message);
         if (!res.headersSent) res.status(500).json({ error: "Internal Server Error in /fetch-chats route" });
     }
 });

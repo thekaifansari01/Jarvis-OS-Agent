@@ -8,11 +8,11 @@ from tools.SearchTools.SearchHub import execute_search_actions
 from tools.Messanger.email_manager import send_email, delete_email
 from tools.Messanger.whatsapp.whatsapp import send_whatsapp_message, fetch_whatsapp_chats
 from core.voice.tts import speak
-from tools.workspace.workspace import workspace
 from tools.SystemTools.clipboard_tool import read_clipboard, write_clipboard
 from tools.SystemTools.SystemTools import SystemController
 from tools.SearchTools.DeepResearch import deep_research_as_tool
 from tools.Calendar.CalendarTool import create_event, check_events, delete_event
+from tools.Terminal.terminalTool import execute_terminal_command, run_python_code
 import shutil
 import platform
 import subprocess
@@ -20,66 +20,10 @@ import json
 import os
 import webbrowser
 import pywhatkit
-import difflib
 import traceback
-
-def smart_file_finder(requested_name):
-    """Voice commands ke liye Fuzzy/Smart File Matching - uses registry.json for O(1) lookup"""
-    try:
-        if not requested_name:
-            return None
-
-        exact_match = workspace.find_file_in_workspace(requested_name)
-        if exact_match:
-            return exact_match
-
-        registry = workspace._load_registry()
-        files_list = registry.get("files", [])
-        if not files_list:
-            return None
-
-        folder_paths = {
-            "Creations": workspace.creations_dir,
-            "Vault": workspace.vault_dir,
-            "Temp": workspace.temp_dir
-        }
-
-        clean_map = {}
-        for entry in files_list:
-            filename = entry.get("filename")
-            location = entry.get("location", "/Vault").strip("/") 
-            folder_name = location.split("/")[0] if location else "Vault"
-            folder_path = folder_paths.get(folder_name, workspace.vault_dir)
-            full_path = folder_path / filename
-
-            if not full_path.exists():
-                continue
-
-            clean_name = os.path.splitext(filename)[0].lower().replace("_", " ").replace("-", " ")
-            clean_map[clean_name] = full_path
-
-        if not clean_map:
-            return None
-
-        req_clean = requested_name.lower().replace(" file", "").replace(" wali", "").replace(" report", "").replace(".md", "").replace(".txt", "").strip()
-
-        if req_clean in clean_map:
-            return clean_map[req_clean]
-
-        matches = difflib.get_close_matches(req_clean, clean_map.keys(), n=1, cutoff=0.4)
-        if matches:
-            matched_path = clean_map[matches[0]]
-            logger.info(f"🔍 Smart Finder: '{requested_name}' matched with '{matched_path.name}'")
-            return matched_path
-
-        return None
-    except Exception as e:
-        logger.error(f"❌ Error in smart_file_finder: {e}")
-        return None
+import tempfile
 
 def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str:
-    """Fast Brain execution: Only handles Chat, Apps, URLs, YouTube, Workspace Open."""
-    
     def log_action(message: str) -> None:
         logger.info(message)
 
@@ -171,32 +115,31 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
                     SystemController.sleep_pc()
                     log_action("🌙 PC Sleep")
                 elif action == 'screenshot':
-                    from tools.workspace.workspace import workspace
-                    msg = SystemController.capture_screenshot(save_dir=str(workspace.vault_dir))
+                    temp_dir = tempfile.gettempdir()
+                    msg = SystemController.capture_screenshot(save_dir=temp_dir)
                     log_action(f"📸 {msg}")
-                    executor.submit(speak, "Screenshot vault mein save ho gaya sir.")
+                    executor.submit(speak, "Screenshot save ho gaya sir.")
             executor.submit(sys_act)
 
         workspace_file_to_open = result.get('workspace_file_to_open')
         if workspace_file_to_open and isinstance(workspace_file_to_open, str) and workspace_file_to_open.strip():
-            def open_workspace_file_fast(filename):
-                file_path = smart_file_finder(filename)
-                if file_path:
-                    log_action(f"📂 Fast Brain: Opening workspace file: {file_path.name}")
+            def open_workspace_file_fast(filepath):
+                if os.path.exists(filepath):
+                    log_action(f"📂 Fast Brain: Opening file: {filepath}")
                     try:
                         if platform.system() == 'Windows':
-                            os.startfile(str(file_path))
+                            os.startfile(filepath)
                         elif platform.system() == 'Darwin':
-                            subprocess.call(('open', str(file_path)))
+                            subprocess.call(('open', filepath))
                         else:
-                            subprocess.call(('xdg-open', str(file_path)))
-                        executor.submit(speak, f"Sir, {file_path.name} khol diya.")
+                            subprocess.call(('xdg-open', filepath))
+                        executor.submit(speak, "Sir, file khol di.")
                     except Exception as e:
-                        logger.error(f"❌ OS Failed to open file {file_path.name}. Error: {e}\n{traceback.format_exc()}")
-                        executor.submit(speak, f"Sir, file system error ki wajah se file nahi khul rahi.")
+                        logger.error(f"❌ OS Failed to open file {filepath}. Error: {e}\n{traceback.format_exc()}")
+                        executor.submit(speak, "Sir, file system error ki wajah se file nahi khul rahi.")
                 else:
-                    logger.warning(f"❌ Workspace file not found for opening: {filename}")
-                    executor.submit(speak, f"Sir, '{filename}' workspace mein nahi mili.")
+                    logger.warning(f"❌ File not found for opening: {filepath}")
+                    executor.submit(speak, "Sir, file nahi mili. Kripya pura absolute path dijiye.")
             executor.submit(open_workspace_file_fast, workspace_file_to_open.strip())
             
     except Exception as e:
@@ -206,7 +149,6 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
 
 
 def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
-    """Executes a single tool synchronously and returns the Observation string."""
     observation = "Observation: No valid action executed."
 
     search_actions = action_dict.get('search_actions')
@@ -221,13 +163,12 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                     rag_hits = rag_engine.search_vault(vault_query)
                     if rag_hits:
                         vault_data = "\n\n".join([f"📄 [File: {hit['file_path']}]\nSnippet: {hit['content']}" for hit in rag_hits])
-                        return f"Observation: Vault Search successful. Found these snippets:\n{vault_data}\n💡 Hint: If you need to read the FULL file, use 'workspace_action' -> 'read' with the File name."
+                        return f"Observation: Vault Search successful. Found these snippets:\n{vault_data}\n💡 Hint: If you need to read the FULL file, use 'run_python_code' tool to open and read it."
                     return "Observation: Vault Search found no matching documents."
                 except Exception as e:
                     logger.error(f"❌ RAG/Vault Search error: {e}\n{traceback.format_exc()}")
                     return f"Observation: Vault Search failed internally due to {e}."
 
-            from tools.SearchTools.SearchHub import execute_search_actions
             search_output = execute_search_actions(search_actions)
             
             if search_output:
@@ -238,118 +179,23 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             logger.error(f"❌ Search Hub API failed: {e}\n{traceback.format_exc()}")
             return f"Observation: Search API failed -> {e}"
 
-    workspace_cmd = action_dict.get('workspace_action')
-    if workspace_cmd and isinstance(workspace_cmd, dict) and workspace_cmd.get('action'):
-        act = workspace_cmd.get('action')
-        fname = workspace_cmd.get('file', '').strip("/\\")
-        
-        if act == "list":
-            try:
-                context_str = workspace.get_workspace_context()
-                return f"Observation: Workspace files:\n{context_str}"
-            except Exception as e:
-                logger.error(f"❌ Workspace list failed: {e}\n{traceback.format_exc()}")
-                return f"Observation: Workspace list failed -> {e}"
-        
-        if not fname:
-            return "Observation: Error -> Workspace action requires 'file' parameter."
-            
-        if act == "write":
-            if fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
-                return f"Observation: Error -> You cannot write or create image files using workspace_action. Use the 'image_command' tool instead."
-            try:
-                logger.info(f"🤖 Agent Creating/Writing File: {fname}")
-                content = workspace_cmd.get('content', '')
-                if not content:
-                    return f"Observation: Error -> Missing 'content' parameter to write into '{fname}'."
-                
-                clean_fname = os.path.basename(fname.replace("\\", "/"))
-                
-                existing_file_path = smart_file_finder(clean_fname)
-                
-                if existing_file_path:
-                    file_path = existing_file_path
-                    folder_name = file_path.parent.name
-                    logger.info(f"✏️ Overwriting/Editing existing file at: {file_path}")
-                else:
-                    target_dir = workspace.creations_dir
-                    file_path = target_dir / clean_fname
-                    folder_name = "Creations"
-                    logger.info(f"🆕 Creating new file at: {file_path}")
-                
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-                
-                workspace.add_file_record(file_path.name, folder_name, "Generated/Edited and saved by AI Agent.")
-                workspace.sync_registry()
-                return f"Observation: Successfully wrote to '{file_path.name}' in {folder_name} folder. [Length: {len(content)} chars]"
-            except PermissionError:
-                logger.error(f"❌ Permission denied while writing {fname}")
-                return f"Observation: Error -> OS Permission denied. Cannot write to '{fname}'."
-            except Exception as e:
-                logger.error(f"❌ Workspace file write failed: {e}\n{traceback.format_exc()}")
-                return f"Observation: Workspace file write failed -> {e}"
-        
-        file_path = smart_file_finder(fname)
-        if not file_path:
-            for folder in [workspace.creations_dir, workspace.vault_dir, workspace.temp_dir]:
-                candidate = folder / fname
-                if candidate.exists():
-                    file_path = candidate
-                    break
-            if not file_path:
-                return f"Observation: File '{fname}' NOT FOUND. 💡 Tip: Try using {{\"workspace_action\": {{\"action\": \"list\"}}}} to see exact available filenames."
-
+    terminal_cmd = action_dict.get('execute_terminal_command')
+    if terminal_cmd and isinstance(terminal_cmd, dict) and terminal_cmd.get('command'):
         try:
-            if act == "read":
-                logger.info(f"🤖 Agent Reading File: {file_path.name}")
-                if file_path.name.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
-                    return f"Observation: Workspace Image loaded successfully at {file_path}. Please analyze this image in the next step."
-                elif file_path.name.lower().endswith(('.pdf', '.exe', '.zip', '.mp4', '.mp3')):
-                    return f"Observation: Error -> Cannot read binary file '{file_path.name}'. Do not try to read this again."
-                
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                
-                max_read_chars = 150000
-                if len(content) > max_read_chars:
-                    logger.warning(f"⚠️ File {file_path.name} is too large. Truncating for Agent memory.")
-                    content = content[:max_read_chars] + f"\n\n... [⚠️ TRUNCATED: Original file had {len(content)} characters. Displaying first {max_read_chars} chars to save Context Window.]"
-                
-                return f"Observation: Content of {file_path.name} fetched. [Length: {len(content)} chars] -> {content}"
-            
-            elif act == "open":
-                logger.info(f"🤖 Agent Opening File: {file_path.name}")
-                if platform.system() == 'Windows': os.startfile(str(file_path))
-                elif platform.system() == 'Darwin': subprocess.call(('open', str(file_path)))
-                else: subprocess.call(('xdg-open', str(file_path)))
-                return f"Observation: Successfully opened file '{file_path.name}' on screen."
-            
-            elif act == "delete":
-                logger.info(f"🤖 Agent Deleting File: {file_path.name}")
-                os.remove(file_path)
-                workspace.sync_registry()
-                return f"Observation: Successfully deleted file '{file_path.name}'."
-            
-            elif act == "move":
-                dest_folder = workspace_cmd.get('to', 'Vault').capitalize()
-                if dest_folder not in ["Vault", "Creations", "Temp"]: dest_folder = "Vault"
-                dest_dir = getattr(workspace, f"{dest_folder.lower()}_dir", workspace.vault_dir)
-                dest_name = workspace_cmd.get('dest_name', file_path.name)
-                dest_path = dest_dir / dest_name
-                
-                if dest_path.exists():
-                    return f"Observation: Move FAILED. File '{dest_name}' already exists in {dest_folder}. Please use a different dest_name or delete the existing file first."
-                
-                shutil.move(str(file_path), str(dest_path))
-                workspace.add_file_record(dest_name, dest_folder, f"Moved by Agent from {file_path.parent.name}")
-                workspace.sync_registry()
-                return f"Observation: Successfully moved '{file_path.name}' to {dest_folder} as '{dest_name}'."
-            else:
-                return f"Observation: Workspace action '{act}' not supported."
+            logger.info(f"🤖 Agent executing Terminal Command: {terminal_cmd.get('command')}")
+            return execute_terminal_command(terminal_cmd.get('command'))
         except Exception as e:
-            logger.error(f"❌ Workspace action '{act}' failed on {fname}: {e}\n{traceback.format_exc()}")
-            return f"Observation: Workspace action failed -> {e}"
+            logger.error(f"❌ Terminal Command failed: {e}\n{traceback.format_exc()}")
+            return f"Observation: Terminal Command error -> {e}"
+
+    python_cmd = action_dict.get('run_python_code')
+    if python_cmd and isinstance(python_cmd, dict) and python_cmd.get('code_string'):
+        try:
+            logger.info(f"🤖 Agent executing Python Script.")
+            return run_python_code(python_cmd.get('code_string'))
+        except Exception as e:
+            logger.error(f"❌ Python Execution failed: {e}\n{traceback.format_exc()}")
+            return f"Observation: Python Execution error -> {e}"
 
     email_action = action_dict.get('email_action', {})
     if email_action and isinstance(email_action, dict) and email_action.get('to'):
@@ -384,12 +230,11 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
 
             attachment_abs_path = None
             if file_path_raw:
-                found = smart_file_finder(file_path_raw)
-                if found: 
-                    attachment_abs_path = str(found)
-                else: 
+                if os.path.exists(file_path_raw):
+                    attachment_abs_path = file_path_raw
+                else:
                     logger.warning(f"⚠️ Email attachment not found: {file_path_raw}")
-                    return f"Observation: Failed to send email. Attachment '{file_path_raw}' not found in workspace."
+                    return f"Observation: Failed to send email. Attachment '{file_path_raw}' not found at the given absolute path."
 
             logger.info(f"🤖 Agent Sending Email to: {to_address}")
             
@@ -428,12 +273,11 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                 
                 attachment_abs_path = None
                 if file_path_raw:
-                    found = smart_file_finder(file_path_raw)
-                    if found: 
-                        attachment_abs_path = str(found)
-                    else: 
+                    if os.path.exists(file_path_raw):
+                        attachment_abs_path = file_path_raw
+                    else:
                         logger.warning(f"⚠️ WhatsApp attachment not found: {file_path_raw}")
-                        return f"Observation: Failed to send WhatsApp. Attachment '{file_path_raw}' not found."
+                        return f"Observation: Failed to send WhatsApp. Attachment '{file_path_raw}' not found at the given absolute path."
                 
                 logger.info(f"🤖 Agent Sending WhatsApp to: {to_name}")
                 wa_result = send_whatsapp_message(to_name, msg_body, attachment_abs_path)
@@ -505,24 +349,14 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
         if system_action:
             if system_action == 'screenshot':
                 custom_filename = system_ctrl.get('screenshot_filename')
-                from tools.workspace.workspace import workspace
+                temp_dir = tempfile.gettempdir()
                 
-                msg = SystemController.capture_screenshot(filename=custom_filename, save_dir=str(workspace.vault_dir))
+                msg = SystemController.capture_screenshot(filename=custom_filename, save_dir=temp_dir)
                 
                 if "error" in msg.lower():
                     sys_observations.append(msg)
                 else:
-                    saved_name = custom_filename if custom_filename else msg.split("at: ")[1]
-                    if saved_name and not saved_name.lower().endswith(('.png', '.jpg', '.jpeg')):
-                        saved_name += ".png"
-                    
-                    try:
-                        workspace.add_file_record(saved_name, "Vault", "Agent captured screenshot for screen analysis.")
-                        workspace.sync_registry()
-                    except Exception as reg_err:
-                        logger.error(f"❌ Screenshot registry track failed: {reg_err}")
-                        
-                    sys_observations.append(f"Screenshot saved successfully as '{saved_name}' in Vault. To analyze what is on the screen, use 'workspace_action' with action='read' and file='{saved_name}' in your next step.")
+                    sys_observations.append(f"{msg}. To analyze what is on the screen, use the 'run_python_code' tool to read this image file in your next step.")
             
             elif system_action == 'lock':
                 sys_observations.append(SystemController.lock_pc())
@@ -550,7 +384,7 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             
             if result_path: 
                 logger.info(f"✅ Image {action} successful: {result_path}")
-                return f"Observation: Image successfully {action}d at {result_path}. It is now in the workspace."
+                return f"Observation: Image successfully {action}d at absolute path: {result_path}."
             else: 
                 logger.error(f"❌ Image {action} failed. returned None.")
                 return f"Observation: Image {action} failed. API might be down or rejected the prompt."

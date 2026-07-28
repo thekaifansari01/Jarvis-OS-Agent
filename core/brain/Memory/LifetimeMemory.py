@@ -24,9 +24,9 @@ class LifetimeMemoryEngine:
         try:
             self.chroma_client = chromadb.PersistentClient(path=str(self.db_path))
             self.ltm_collection = self.chroma_client.get_or_create_collection(name="jarvis_episodic_memory")
-            logger.info("🧠 LTM (Lifetime Memory) ChromaDB Initialized.")
+            logger.info("LTM ChromaDB Initialized.")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize LTM ChromaDB: {e}")
+            logger.error(f"Failed to initialize LTM ChromaDB: {e}")
 
     def get_embedding(self, text, input_type="search_document"):
         if not text or not text.strip() or not self.google_client: 
@@ -44,7 +44,6 @@ class LifetimeMemoryEngine:
             return None
 
     def _generate_episode_summary(self, chat_logs, date_str):
-        """Uses Groq to convert raw chat logs into a dense factual summary."""
         if not self.groq_client or not chat_logs:
             return None
             
@@ -76,7 +75,6 @@ class LifetimeMemoryEngine:
             return None
 
     def archive_old_chats(self, chat_list, date_str=None):
-        """Called by memory.py before deleting 15-day old chats. Runs in background."""
         if not chat_list: return
         
         target_date = date_str or datetime.now().strftime('%Y-%m-%d')
@@ -85,7 +83,6 @@ class LifetimeMemoryEngine:
             try:
                 raw_text = "\n".join([f"{msg['role']}: {msg['message']}" for msg in chat_list])
                 
-                logger.info(f"⏳ Consolidating LTM Episode for {target_date}...")
                 summary = self._generate_episode_summary(raw_text, target_date)
                 
                 if summary:
@@ -99,21 +96,15 @@ class LifetimeMemoryEngine:
                             metadatas=[{"date": target_date, "type": "daily_summary"}],
                             documents=[f"Date: {target_date}\nMemory: {summary}"]
                         )
-                        logger.info(f"✅ LTM Episode saved successfully for {target_date}.")
-                else:
-                    logger.info(f"⏭️ No important data to save for LTM on {target_date}.")
-                    
             except Exception as e:
-                logger.error(f"❌ Failed to archive LTM: {e}")
+                logger.error(f"Failed to archive LTM: {e}")
 
         threading.Thread(target=_process_and_store, daemon=True).start()
 
     def search_lifetime_memory(self, query, top_k=3):
-        """Native Tool function for the Agentic Brain to recall past events."""
         if not query or not query.strip(): 
             return "Observation: Query was empty."
             
-        logger.info(f"🧠 Agent searching LTM for: '{query}'")
         query_embedding = self.get_embedding(query, "search_query")
         
         if not query_embedding or self.ltm_collection.count() == 0: 
@@ -129,7 +120,7 @@ class LifetimeMemoryEngine:
             hits = []
             if results['documents'] and results['documents'][0]:
                 for doc in results['documents'][0]:
-                    hits.append(f"📄 Past Record:\n{doc}")
+                    hits.append(f"Past Record:\n{doc}")
             
             if hits:
                 return "Observation: Found these records from Lifetime Memory:\n\n" + "\n\n".join(hits)
@@ -137,7 +128,6 @@ class LifetimeMemoryEngine:
                 return "Observation: Found nothing relevant in Lifetime Memory for this query."
                 
         except Exception as e:
-            logger.error(f"❌ LTM Search error: {e}")
             return f"Observation: Lifetime Memory search failed due to error: {e}"
 
 ltm_engine = LifetimeMemoryEngine()

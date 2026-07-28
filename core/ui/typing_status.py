@@ -9,7 +9,6 @@ TYPING_STATUS_FILE = "Data/typing_status.json"
 _popup_process = None
 
 def launch_popup():
-    """Popup UI ko background mein launch karta hai agar wo pehle se nahi chal raha."""
     global _popup_process
     
     if _popup_process is None or _popup_process.poll() is not None:
@@ -27,10 +26,6 @@ def launch_popup():
             logging.error(f"Popup UI script not found at {popup_path}")
 
 def update_typing_status(status: str, text: str = ""):
-    """
-    JSON update karta hai jise Popup real-time mein padhega.
-    status: 'typing' (for Fast Brain stream), 'completed' (for Agent/End of stream)
-    """
     try:
         os.makedirs(os.path.dirname(TYPING_STATUS_FILE), exist_ok=True)
         with open(TYPING_STATUS_FILE, "w", encoding="utf-8") as f:
