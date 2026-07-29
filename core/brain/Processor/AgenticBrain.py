@@ -5,36 +5,42 @@ import time
 import tempfile
 import datetime
 from typing import Dict, Optional
-
-from groq import Groq
-from google import genai
-from google.genai import types
-
 from core.brain.config import CONFIG
 from core.logger.logger import logger
 from core.brain.executor import execute_single_tool_sync
 from core.ui.agent_status import update_agent_status
 from core.brain.config import (
-    GROQ_FAST_MODEL, GEMINI_AGENT_MODEL, 
-    GROQ_API_KEY, GEMINI_API_KEY 
+    GROQ_FAST_MODEL,
+    AGENT_PRIMARY_PROVIDER,
+    AGENT_FALLBACK_PROVIDER
 )
-
+from core.brain.Providers import get_provider
 from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
 from core.brain.Processor.FastBrain import make_result, clean_json_string
 
 from core.ui.typing_status import launch_popup, update_typing_status
 
 FAST_MODEL = GROQ_FAST_MODEL
-AGENT_MODEL_GEMINI = GEMINI_AGENT_MODEL
 
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 def run_agentic_loop(raw_command: str, context: str, memory_instance=None) -> Dict[str, any]:
-    logger.info(f"🤖 AGENTIC LOOP INITIATED (Gemini {AGENT_MODEL_GEMINI} - MISSION-ANCHORED REACT MODE)...")
-    
+    logger.info(f"🤖 AGENTIC LOOP INITIATED (Provider: {AGENT_PRIMARY_PROVIDER} | Fallback: {AGENT_FALLBACK_PROVIDER})...")
+    try:
+        primary_provider = get_provider(AGENT_PRIMARY_PROVIDER)
+        fallback_provider = get_provider(AGENT_FALLBACK_PROVIDER)
+        current_provider = primary_provider
+        logger.info(f"✅ Primary provider loaded: {AGENT_PRIMARY_PROVIDER}")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize primary provider: {e}")
+        try:
+            current_provider = get_provider(AGENT_FALLBACK_PROVIDER)
+            logger.info(f"🔄 Using fallback provider: {AGENT_FALLBACK_PROVIDER}")
+        except Exception as e2:
+            logger.error(f"❌ All providers failed to initialize: {e2}")
+            return make_result("Bhai, AI provider start nahi ho pa raha. Check API keys.", priority="high")
+
     recent_context_xml = memory_instance.get_agentic_fast_context() if memory_instance else "<Recent_Context>\nNo recent conversation.\n</Recent_Context>"
-    
+
     scratchpad = f"""<Mission>
 User Command: "{raw_command}"
 </Mission>
@@ -43,15 +49,15 @@ User Command: "{raw_command}"
 
 <Thought_Trail>
 """
-    
+
     max_steps = CONFIG.get("AGENT_MAX_STEPS", 10)
     timeout_seconds = CONFIG.get("AGENT_TIMEOUT", 120)
     retry_limit = CONFIG.get("AGENT_RETRY_LIMIT", 2)
     step = 0
     start_time = time.time()
-    
+
     completed_actions = set()
-    
+
     metadata_tracker = {
         "apps_opened": [],
         "apps_closed": [],
@@ -70,21 +76,21 @@ User Command: "{raw_command}"
         if elapsed > timeout_seconds:
             logger.warning(f"⏰ Agent loop timeout after {elapsed:.1f} seconds")
             update_agent_status(step=0, total_steps=max_steps, thought="Task timed out", action="", action_detail="")
-            
+
             timeout_msg = "Bhai, task thoda zyada time le raha tha, timeout ho gaya. Aap phir se try karo ya simple command do."
             launch_popup()
             update_typing_status("completed", timeout_msg)
             return make_result(timeout_msg, priority="high", agent_executed=True)
 
-        logger.info(f"🔄 Agent Loop Step {step + 1}/{max_steps}")
+        logger.info(f"🔄 Agent Loop Step {step + 1}/{max_steps} (Provider: {current_provider.__class__.__name__})")
         current_time = datetime.datetime.now().strftime('%A, %d %B %Y | %I:%M %p')
 
         live_feedback = ""
         override_block = "[⚡ LIVE OVERRIDES]\nNone"
-        
+
         if memory_instance and hasattr(memory_instance, 'get_and_clear_feedback'):
             live_feedback = memory_instance.get_and_clear_feedback()
-            
+
         if live_feedback:
             logger.warning(f"🚨 User injected live feedback: {live_feedback}")
             override_block = f"[⚡ LIVE OVERRIDES]\n🛑 CRITICAL USER UPDATE: {live_feedback}"
@@ -92,7 +98,7 @@ User Command: "{raw_command}"
 
         panic_warning = f"⚠️ WARNING: You are running out of steps! Execute final action NOW." if step + 1 >= max_steps - 1 else ""
         completed_list = "\n".join([f"- {act}" for act in completed_actions]) if completed_actions else "None yet."
-        
+
         ephemeral_prompt = ""
         if ephemeral.get("last_found_links"):
             ephemeral_prompt += f"\n[EPHEMERAL: Last found links = {ephemeral['last_found_links']}]"
@@ -125,6 +131,9 @@ Current Step: {step + 1} out of {max_steps}. {panic_warning}
 [🛑 CURRENT STATE & DIRECTIVE]
 Based on the <Mission>, [LIVE OVERRIDES], and the <Thought_Trail> above, determine your absolute next step natively.
 If the <Mission> is fully complete, call 'complete_task'.
+
+[IMPORTANT] When generating Python code, DO NOT use emoji characters (✅, ❌, 🎉, ✨, 🔥, 🚀, ✓, ✔, ✗, ✘) in print statements.
+Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
 """
 
         try:
@@ -138,68 +147,67 @@ If the <Mission> is fully complete, call 'complete_task'.
 
             ai_response = {}
             max_api_retries = 10
-            
+            provider_switched = False
             for attempt in range(max_api_retries):
                 try:
-                    if gemini_client:
-                        panic_step = max_steps - 2
-                        full_prompt = AGENT_SYSTEM_PROMPT.format(max_steps=max_steps, panic_step=panic_step) + "\n\n" + prompt
-                        
-                        contents_payload = [full_prompt]
+                    panic_step = max_steps - 2
+                    full_prompt = AGENT_SYSTEM_PROMPT.format(max_steps=max_steps, panic_step=panic_step) + "\n\n" + prompt
+                    messages = [{"role": "user", "content": full_prompt}]
 
-                        response = gemini_client.models.generate_content(
-                            model=AGENT_MODEL_GEMINI,
-                            contents=contents_payload,
-                            config=types.GenerateContentConfig(
-                                temperature=0.1,
-                                tools=native_tools
-                            )
-                        )
-                        
-                        thought_text = "Analyzing context natively..."
-                        
-                        if response.candidates and response.candidates[0].content.parts:
-                            for part in response.candidates[0].content.parts:
-                                if part.text:
-                                    thought_text = part.text.strip()
-                                elif part.function_call:
-                                    func_name = part.function_call.name
-                                    func_args = dict(part.function_call.args) if part.function_call.args else {}
-                                    
-                                    if func_name == "complete_task":
-                                        ai_response["is_task_complete"] = True
-                                        ai_response["response"] = func_args.get("response", "Task completed sir.")
-                                    else:
-                                        ai_response[func_name] = func_args
-                        
-                        ai_response["thought"] = thought_text
+                    response = current_provider.generate(
+                        messages=messages,
+                        tools=native_tools,
+                        temperature=0.1,
+                        max_tokens=4096,
+                        stream=False
+                    )
+                    if response.get("error"):
+                        raise Exception(response["error"])
 
-                    else:
-                        panic_step = max_steps - 2
-                        full_prompt = AGENT_SYSTEM_PROMPT.format(max_steps=max_steps, panic_step=panic_step)
-                        completion = groq_client.chat.completions.create(
-                            model=FAST_MODEL,
-                            messages=[{"role": "system", "content": full_prompt}, {"role": "user", "content": prompt}],
-                            temperature=0.2,
-                            response_format={"type": "json_object"}
-                        )
-                        ai_response = json.loads(clean_json_string(completion.choices[0].message.content.strip()))
-                    
+                    thought_text = response.get("content", "")
+                    if thought_text is None:
+                        thought_text = ""
+                    thought_text = thought_text.strip() or "Analyzing context..."
+
+                    tool_calls = response.get("tool_calls", [])
+                    if tool_calls:
+                        for tc in tool_calls:
+                            func_name = tc["function"]["name"]
+                            func_args = tc["function"]["arguments"]
+                            if func_name == "complete_task":
+                                ai_response["is_task_complete"] = True
+                                ai_response["response"] = func_args.get("response", "Task completed sir.")
+                            else:
+                                ai_response[func_name] = func_args
+
+                    ai_response["thought"] = thought_text
+
                     break
-                    
+
                 except Exception as api_err:
                     error_msg = str(api_err)
-                    if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
-                        raise api_err 
-                    if attempt < max_api_retries - 1:
+                    is_quota_error = "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower()
+
+                    if is_quota_error and not provider_switched:
+                        logger.warning(f"⚠️ Provider {current_provider.__class__.__name__} hit quota/rate limit. Switching to fallback...")
+                        try:
+                            current_provider = fallback_provider
+                            provider_switched = True
+                            logger.info(f"🔄 Switched to fallback provider: {AGENT_FALLBACK_PROVIDER}")
+                            continue
+                        except Exception as switch_err:
+                            logger.error(f"❌ Failed to switch to fallback: {switch_err}")
+                            raise api_err
+
+                    elif attempt < max_api_retries - 1:
                         logger.warning(f"⚠️ API Generation failed (Attempt {attempt + 1}/{max_api_retries}): {api_err}. Retrying in 2 seconds...")
                         time.sleep(2)
                     else:
                         logger.error(f"❌ API failed completely after {max_api_retries} attempts.")
-                        raise api_err 
-            
+                        raise api_err
+
             logger.info(f"🧠 Agent Thought: {ai_response.get('thought', 'Thinking...')}")
-            
+
             ignore_keys = ["thought", "is_task_complete", "response"]
             action_key = ""
             action_detail = ""
@@ -219,6 +227,26 @@ If the <Mission> is fully complete, call 'complete_task'.
                             action_detail = value.get("command", "")
                         elif key == "run_python_code" and isinstance(value, dict):
                             code = value.get("code_string", "").strip()
+                            if code:
+                                emoji_map = {
+                                    "✅": "[OK]",
+                                    "❌": "[ERR]",
+                                    "🎉": "[DONE]",
+                                    "✨": "[STAR]",
+                                    "🔥": "[FIRE]",
+                                    "🚀": "[ROCKET]",
+                                    "✓": "[V]",
+                                    "✔": "[V]",
+                                    "✗": "[X]",
+                                    "✘": "[X]",
+                                    "\\u2705": "[OK]",
+                                    "\\u274C": "[ERR]",
+                                    "\\u2713": "[V]",
+                                    "\\u2717": "[X]",
+                                }
+                                for emoji, text in emoji_map.items():
+                                    code = code.replace(emoji, text)
+                                ai_response["run_python_code"]["code_string"] = code
                             action_detail = code.split("\n")[0][:60] if code else "Running Script"
                         elif key == "deep_research" and isinstance(value, dict):
                             action_detail = value.get("topic", "")
@@ -250,18 +278,18 @@ If the <Mission> is fully complete, call 'complete_task'.
             if ai_response.get("is_task_complete"):
                 logger.info("✅ Agent declared task complete!")
                 final_text = ai_response.pop("response", "Task completed sir.")
-                
+
                 sys_ctrl = ai_response.get("system_controller", {})
                 if sys_ctrl.get("urls_to_open"):
                     ephemeral["last_found_links"] = sys_ctrl["urls_to_open"]
                 if ai_response.get("image_command", {}).get("filename"):
                     ephemeral["last_generated_image"] = ai_response["image_command"]["filename"]
-                
+
                 update_agent_status(step=0, total_steps=max_steps, thought="Task completed", action="", action_detail="")
-                
+
                 launch_popup()
                 update_typing_status("completed", final_text)
-                
+
                 return make_result(final_text, is_agentic=True, agent_executed=True, metadata=metadata_tracker, **ai_response)
 
             observation = None
@@ -269,7 +297,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                 try:
                     if action_key == "memory_actions":
                         mem_data = ai_response.get("memory_actions", {})
-                        
+
                         if mem_data.get("recent_logs"):
                             if memory_instance:
                                 logger.info("🧠 Agent requested full 15-day Chat History log natively.")
@@ -277,7 +305,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                                 observation = f"Observation: Successfully retrieved full 15-day history logs:\n\n{history_data}"
                             else:
                                 observation = "Observation: Error -> Memory system instance is offline."
-                                
+
                         elif mem_data.get("lifetime_recall"):
                             query = mem_data.get("lifetime_recall")
                             logger.info(f"🧠 Agent requesting LTM Recall for: {query}")
@@ -289,10 +317,10 @@ If the <Mission> is fully complete, call 'complete_task'.
                                 observation = f"Observation: LTM Recall error -> {e}"
                         else:
                             observation = "Observation: No valid memory target provided. Use 'recent_logs' or 'lifetime_recall'."
-                    
+
                     elif action_key and action_key != "THINKING":
                         observation = execute_single_tool_sync(ai_response)
-                    
+
                     if observation:
                         if action_key in ["email_action", "whatsapp_action"]:
                             ephemeral["last_contact"] = ai_response.get(action_key, {}).get("to", "")
@@ -305,12 +333,12 @@ If the <Mission> is fully complete, call 'complete_task'.
                             file_match = re.search(r'([\w\-:\\/.]+\.(png|md|txt|jpg))', observation)
                             if file_match:
                                 ephemeral["last_accessed_file"] = file_match.group(1)
-                    
+
                     obs_prefix = str(observation).lower()[:50]
                     if observation and ("error" not in obs_prefix and "❌" not in obs_prefix and "failed" not in obs_prefix):
                         action_fingerprint = f"{action_key}:{str(ai_response.get(action_key, ''))[:100]}"
                         completed_actions.add(action_fingerprint)
-                        
+
                         try:
                             if action_key == "system_controller":
                                 sys_data = ai_response.get("system_controller", {})
@@ -318,7 +346,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                                 if sys_data.get("apps_to_close"): metadata_tracker["apps_closed"].extend(sys_data["apps_to_close"])
                                 if sys_data.get("urls_to_open"): metadata_tracker["system_events"].append(f"Opened URLs: {', '.join(sys_data['urls_to_open'])}")
                                 if sys_data.get("system_action"): metadata_tracker["system_events"].append(f"System Action: {sys_data['system_action']}")
-                            
+
                                 if sys_data.get("system_action") == "screenshot" and sys_data.get("screenshot_filename"):
                                     ephemeral["last_screenshot"] = sys_data.get("screenshot_filename")
 
@@ -328,10 +356,10 @@ If the <Mission> is fully complete, call 'complete_task'.
 
                             elif action_key == "run_python_code":
                                 metadata_tracker["system_events"].append("Executed Python Code Script")
-                            
+
                             else:
                                 metadata_tracker["system_events"].append(f"Executed {action_key}: {action_detail}")
-                                
+
                         except Exception as meta_err:
                             logger.error(f"⚠️ Error tracking metadata: {meta_err}")
 
@@ -355,7 +383,7 @@ If the <Mission> is fully complete, call 'complete_task'.
 
             thought_str = ai_response.get('thought', 'Thinking...')
             action_str = f"{action_key} ({action_detail})" if action_key else "None (Missed Tool Call)"
-            
+
             scratchpad += f"""
 <Step number="{step+1}">
   <Thought>{thought_str}</Thought>
@@ -363,21 +391,21 @@ If the <Mission> is fully complete, call 'complete_task'.
   <Result>{observation}</Result>
 </Step>
 """
-            
+
             step += 1
             time.sleep(1)
 
         except Exception as e:
             error_msg = str(e)
             if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
-                logger.error("❌ Gemini API Rate Limit (429) Hit!")
-                update_agent_status(step=0, total_steps=max_steps, thought="Rate limit exceeded", action="", action_detail="")
-                
-                limit_msg = "Bhai, Google Gemini ki free API speed limit khatam ho gayi hai. 60 seconds ruko aur phir try karo."
+                logger.error("❌ All providers exhausted or rate limited!")
+                update_agent_status(step=0, total_steps=max_steps, thought="All providers failed", action="", action_detail="")
+
+                limit_msg = "Bhai, saare AI providers ki limit khatam ho gayi. Thoda ruko aur phir try karo."
                 launch_popup()
                 update_typing_status("completed", limit_msg)
                 return make_result(limit_msg, priority="high", agent_executed=True)
-            
+
             logger.error(f"❌ Agent Loop Error (API/Crash): {e}")
             time.sleep(3)
 
@@ -391,9 +419,9 @@ If the <Mission> is fully complete, call 'complete_task'.
             step += 1
 
     update_agent_status(step=0, total_steps=max_steps, thought="Max steps reached", action="", action_detail="")
-    
+
     limit_msg = f"Bhai, maine maximum steps ({max_steps}) le liye hain. Task loop limit tak pahunch gaya hai. Kripya simple command do."
     launch_popup()
     update_typing_status("completed", limit_msg)
-    
+
     return make_result(limit_msg, priority="high", agent_executed=True, metadata=metadata_tracker)
