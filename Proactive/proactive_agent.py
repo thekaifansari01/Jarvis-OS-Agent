@@ -1,110 +1,177 @@
-# proactive_agent.py
 import time
+import json
+import re
 import threading
+from typing import Dict, Any
 from groq import Groq, GroqError
 
 from core.logger.logger import logger
-from core.brain.config import GROQ_API_KEY
+from core.brain.config import GROQ_API_KEY, AGENT_PROACTIVE
 from core.voice.tts import speak
-from Proactive.event_queue import get_proactive_event
+from core.brain.Processor.AgenticBrain import run_agentic_loop
+from Proactive.event_queue import get_batched_events
 from Proactive.prompts import PROACTIVE_SCOUT_PROMPT
 from Proactive.Email.EmailProactive import listen_for_emails, stop_email_listener
 from Proactive.Whatsapp.WhatsappProactive import listen_for_whatsapp
 from Proactive.Reminder.ReminderProactive import listen_for_reminders
-from core.brain.config import AGENT_PROACTIVE
 
 PROACTIVE_AGENT = AGENT_PROACTIVE
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 _stop_proactive = threading.Event()
 
+SPAM_KEYWORDS = [
+    "otp", "one time password", "verification code", "no-reply", 
+    "donotreply", "newsletter", "unsubscribe", "promotions", 
+    "50% off", "sale starts", "cashback", "advertisement"
+]
+
 def stop_proactive_agent():
     _stop_proactive.set()
     stop_email_listener()
 
-def evaluate_event(source: str, data: str, priority: str, recent_history: str, current_mood: str) -> str:
+def is_instant_spam(text: str) -> bool:
+    text_lower = text.lower()
+    for kw in SPAM_KEYWORDS:
+        if re.search(rf'\b{re.escape(kw)}\b', text_lower):
+            return True
+    return False
+
+def clean_json_string(raw_text: str) -> str:
+    json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
+    if json_match:
+        return json_match.group(1).strip()
+    return re.sub(r'^```json\n|```$', '', raw_text, flags=re.MULTILINE).strip()
+
+def evaluate_events_batch(batched_data: str, recent_history: str, current_mood: str) -> Dict[str, Any]:
+    default_ignore = {"decision": "IGNORE", "emotion_tag": "[calm]", "announcement": "", "agent_command": ""}
     if not groq_client:
-        return "IGNORE"
+        return default_ignore
+
     backoff = 2
     for attempt in range(3):
         try:
             prompt = PROACTIVE_SCOUT_PROMPT.format(
-                source=source,
-                data=data,
-                priority=priority,
+                mood=current_mood,
                 history=recent_history,
-                mood=current_mood
+                batched_data=batched_data
             )
             completion = groq_client.chat.completions.create(
                 model=PROACTIVE_AGENT,
                 messages=[
-                    {"role": "system", "content": "You are Jarvis's proactive intelligence. Strictly follow the prompt's formatting and personality rules."},
+                    {"role": "system", "content": "You are Jarvis's proactive intelligence. Return strict JSON only."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.2,
-                max_tokens=150
+                max_tokens=1500,
+                response_format={"type": "json_object"}
             )
-            return completion.choices[0].message.content.strip()
+            raw_response = completion.choices[0].message.content.strip()
+            cleaned_json = clean_json_string(raw_response)
+            return json.loads(cleaned_json)
         except GroqError as ge:
             logger.warning(f"Groq API Error in Proactive Scout (Attempt {attempt+1}): {ge}")
             time.sleep(backoff)
             backoff *= 2
         except Exception as e:
-            logger.error(f"❌ Proactive evaluation error: {e}")
-            return "IGNORE"
-    return "IGNORE"
+            logger.error(f"Proactive evaluation error: {e}")
+            return default_ignore
+    return default_ignore
+
+def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, memory_instance, is_jarvis_busy_callback):
+    decision = decision_data.get("decision", "IGNORE").upper()
+    announcement = decision_data.get("announcement", "").strip()
+    agent_command = decision_data.get("agent_command", "").strip()
+
+    if "IGNORE" in decision:
+        return
+
+    if is_jarvis_busy_callback:
+        was_busy = False
+        while is_jarvis_busy_callback() and not _stop_proactive.is_set():
+            was_busy = True
+            time.sleep(1)
+        if was_busy:
+            time.sleep(5)
+
+    if decision in ["SUGGEST_ACTION", "ACT_AND_ANNOUNCE"] and agent_command:
+        logger.info(f"⚡ Proactive Triggering Silent Agentic Brain: {agent_command}")
+        
+        def _run_silent_agent():
+            try:
+                agent_context = f"[PROACTIVE EVENT TRIGGER]\n{batched_data}"
+                result = run_agentic_loop(agent_command, agent_context, memory_instance, silent=True)
+                if result and result.get("response"):
+                    reply_text = result["response"]
+                    logger.info(f"📢 Proactive Agent Confirmation: {reply_text}")
+                    speak(reply_text)
+                    if memory_instance:
+                        memory_instance.add_message(
+                            "PROACTIVE_BACKGROUND",
+                            reply_text,
+                            metadata={
+                                "is_background_event": False,
+                                "decision": decision,
+                                "waiting_for_confirmation": True
+                            }
+                        )
+            except Exception as e:
+                logger.error(f"Failed to execute background Agentic Brain: {e}")
+
+        threading.Thread(target=_run_silent_agent, daemon=True).start()
+        return
+
+    if decision == "ANNOUNCE" and announcement:
+        logger.info(f"📢 Proactive Announcement: {announcement}")
+        threading.Thread(target=speak, args=(announcement,), daemon=True).start()
+
+        if memory_instance:
+            try:
+                truncated_data = batched_data if len(batched_data) <= 2000 else batched_data[:2000] + "\n\n[...Message Truncated]"
+                memory_instance.add_message(
+                    "PROACTIVE_BACKGROUND",
+                    announcement,
+                    metadata={
+                        "is_background_event": True,
+                        "decision": decision,
+                        "original_data": truncated_data
+                    }
+                )
+            except Exception as mem_err:
+                logger.warning(f"Failed to add proactive message to memory: {mem_err}")
 
 def proactive_loop(memory_instance, is_jarvis_busy_callback):
     logger.info("🛡️ Proactive Scout Agent initialized and listening...")
     while not _stop_proactive.is_set():
         try:
-            event = get_proactive_event()
-            if event:
-                source = event.source
-                data = event.data
-                priority = getattr(event, 'priority', 'normal')
+            events = get_batched_events(window_seconds=4)
+            if events:
+                valid_events = []
+                for ev in events:
+                    if not is_instant_spam(ev.data):
+                        valid_events.append(ev)
 
-                recent_history = "No recent history."
-                current_mood = "Neutral"
+                if valid_events:
+                    batched_data = "\n---\n".join([
+                        f"Source: {ev.source} | Priority: {ev.priority} | Time: {ev.timestamp.strftime('%I:%M %p')}\nData: {ev.data}"
+                        for ev in valid_events
+                    ])
 
-                if memory_instance:
-                    try:
-                        recent_history = memory_instance.get_fast_history_context()
-                        mood_history = memory_instance.user_mood.get("mood_history", [])
-                        if mood_history:
-                            current_mood = mood_history[-1].get("mood", "Neutral")
-                    except Exception as mem_err:
-                        logger.warning(f"Failed to fetch memory context: {mem_err}")
-
-                decision = evaluate_event(source, data, priority, recent_history, current_mood)
-
-                if "IGNORE" not in decision.upper():
-                    if is_jarvis_busy_callback:
-                        was_busy = False
-                        while is_jarvis_busy_callback() and not _stop_proactive.is_set():
-                            was_busy = True
-                            time.sleep(1)
-                        if was_busy:
-                            time.sleep(5)
-
-                    logger.info(f"📢 Proactive Announcement ({source}): {decision}")
-                    threading.Thread(target=speak, args=(decision,), daemon=True).start()
+                    recent_history = "No recent history."
+                    current_mood = "Neutral"
 
                     if memory_instance:
                         try:
-                            truncated_data = data if len(data) <= 2000 else data[:2000] + "\n\n[...Message Truncated]"
-                            memory_instance.add_message(
-                                "PROACTIVE",
-                                decision,
-                                metadata={
-                                    "source": source,
-                                    "original_data": truncated_data
-                                }
-                            )
-                            logger.info("🧠 Proactive event injected into Memory with raw data.")
+                            recent_history = memory_instance.get_fast_history_context()
+                            mood_history = memory_instance.user_mood.get("mood_history", [])
+                            if mood_history:
+                                current_mood = mood_history[-1].get("mood", "Neutral")
                         except Exception as mem_err:
-                            logger.warning(f"Failed to add proactive message to memory: {mem_err}")
+                            logger.warning(f"Failed to fetch memory context: {mem_err}")
+
+                    decision_data = evaluate_events_batch(batched_data, recent_history, current_mood)
+                    handle_proactive_decision(decision_data, batched_data, memory_instance, is_jarvis_busy_callback)
         except Exception as e:
-            logger.error(f"❌ Error in Proactive Loop: {e}")
+            logger.error(f"Error in Proactive Loop: {e}")
         time.sleep(2)
 
 def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
@@ -123,6 +190,6 @@ def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
             listener_thread.start()
             logger.info(f"✅ Started Proactive Listener: {listener_func.__name__}")
         except Exception as e:
-            logger.error(f"❌ Failed to start listener {listener_func.__name__}: {e}")
+            logger.error(f"Failed to start listener {listener_func.__name__}: {e}")
 
     return brain_thread

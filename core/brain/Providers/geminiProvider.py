@@ -34,7 +34,6 @@ class GeminiProvider(BaseLLMProvider):
         **kwargs
     ) -> Dict[str, Any]:
         try:
-            # Convert messages to Gemini Content format
             contents = []
             for msg in messages:
                 role = "user" if msg["role"] == "user" else "model"
@@ -45,13 +44,12 @@ class GeminiProvider(BaseLLMProvider):
                     )
                 )
             
-            # Build config
             config_kwargs = {
                 "temperature": temperature,
                 "max_output_tokens": max_tokens,
             }
             if tools:
-                config_kwargs["tools"] = tools  # tools are already in Gemini format from Prompts.py
+                config_kwargs["tools"] = tools  
             if tool_choice == "auto":
                 config_kwargs["tool_config"] = types.ToolConfig(function_calling_config=types.FunctionCallingConfig(mode="AUTO"))
             
@@ -63,7 +61,6 @@ class GeminiProvider(BaseLLMProvider):
                 config=config
             )
             
-            # Parse response
             content_text = ""
             tool_calls = []
             

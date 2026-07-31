@@ -1,6 +1,8 @@
 import queue
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import List
 
 @dataclass
 class ProactiveEvent:
@@ -20,3 +22,20 @@ def get_proactive_event() -> ProactiveEvent:
         return _proactive_queue.get_nowait()
     except queue.Empty:
         return None
+
+def get_batched_events(window_seconds: int = 4) -> List[ProactiveEvent]:
+    first_event = get_proactive_event()
+    if not first_event:
+        return []
+        
+    events = [first_event]
+    start_time = time.time()
+    
+    while time.time() - start_time < window_seconds:
+        try:
+            next_event = _proactive_queue.get_nowait()
+            events.append(next_event)
+        except queue.Empty:
+            time.sleep(0.5)
+            
+    return events

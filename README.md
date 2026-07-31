@@ -1,583 +1,298 @@
-# 🧠 Jarvis – AI Assistant by Kaif Ansari
+<div align="center">
 
-> **Your Personal, Intelligent, and Proactive AI Assistant – Built with Python, Groq, Gemini, and Deepgram.**
+# 🧠 JARVIS — Autonomous OS Mastermind & Proactive AI Assistant
 
-[![GitHub license](https://img.shields.io/github/license/thekaifansari01/jarvis-by-kaif-ansari?color=blue)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/blob/main/LICENSE)
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![Node.js](https://img.shields.io/badge/node.js-18.x-green)](https://nodejs.org/)
-[![Groq](https://img.shields.io/badge/Groq-API-orange)](https://groq.com/)
-[![Gemini](https://img.shields.io/badge/Gemini-API-purple)](https://deepmind.google/technologies/gemini/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/pulls)
+**An Elite, Voice-First, Hybrid Intelligence System with Human-in-the-Loop (HITL) Safety & Local Workspace Mastery.**
 
----
+[![GitHub license](https://img.shields.io/github/license/thekaifansari01/jarvis-by-kaif-ansari?style=for-the-badge&color=2b3137)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/blob/main/LICENSE)
+[![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Groq API](https://img.shields.io/badge/Powered%20By-Groq%20LPU-f55036?style=for-the-badge)](https://groq.com/)
+[![Gemini API](https://img.shields.io/badge/Reasoning-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/pulls)
 
-## 📌 Table of Contents
+[**Key Features**](#-key-features) • [**Architecture**](#-system-architecture) • [**Installation**](#-getting-started) • [**Configuration**](#-configuration--security) • [**Tool Ecosystem**](#-integrated-tool-ecosystem) • [**Contributing**](#-contributing)
 
-- [🌟 Overview](#-overview)
-- [✨ Key Features](#-key-features)
-- [🏗️ Architecture](#-architecture)
-- [🛠️ Technology Stack](#-technology-stack)
-- [📦 Installation](#-installation)
-- [🚀 Usage](#-usage)
-- [⚙️ Configuration](#-configuration)
-- [📁 Project Structure](#-project-structure)
-- [🐛 Troubleshooting](#-troubleshooting)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-- [🙏 Acknowledgments](#-acknowledgments)
+</div>
 
 ---
 
-## 🌟 Overview
+## 🌟 Executive Summary
 
-**Jarvis** is a cutting-edge AI assistant that combines voice interaction, intelligent reasoning, lifelong memory, and a powerful toolset. It uses **Groq** for fast responses, **Gemini** for complex agentic tasks, **Deepgram** for speech recognition, and **Edge TTS** for natural speech output.
+**Jarvis** is a state-of-the-art, desktop-native AI Operating System designed to bridge the gap between low-latency conversational assistance and complex, multi-step autonomous task execution. Built with an emphasis on **Human-in-the-Loop (HITL) safety**, Jarvis monitors your digital environment proactively while never executing irreversible system actions without explicit user consent.
 
-### 🎯 What Makes Jarvis Special?
-
-- **Hybrid Intelligence** – FastBrain (stateless) for instant replies, AgenticBrain (stateful) for multi-step tasks.
-- **Voice-First** – Wake word "Jarvis", real-time STT, and natural TTS.
-- **Lifelong Memory** – Remembers facts, preferences, and conversations over time.
-- **Proactive Intelligence** – Automatically detects important emails, WhatsApp messages, and calendar reminders.
-- **Workspace Integration** – Read, write, search, and generate files and images locally.
-- **Rich Toolset** – Email, WhatsApp, Calendar, Web Search, Deep Research, System Control, and more.
+Unlike conventional chatbots, Jarvis operates directly on your local system — combining **real-time speech recognition**, **vector-based long-term memory**, **retrieval-augmented generation (RAG)**, and **native OS control** into a unified, highly extensible personal assistant.
 
 ---
 
-## ✨ Key Features
+## ✨ Why Jarvis Stands Out
 
-### 🤖 Intelligent Processing
-
-| Component | Description |
-|-----------|-------------|
-| **FastBrain** | Uses Groq's `llama-3.3-70b-versatile` for low-latency, stateless responses. |
-| **AgenticBrain** | Uses Gemini's `gemma-4-31b-it` with native function calling for planning and tool use. |
-| **Smart Router** | Analyzes command complexity to route to Fast or Agentic path automatically. |
-| **Deep Research** | Tavily-powered comprehensive research with structured report generation. |
-
-### 🧠 Memory Systems
-
-| System | Technology | Purpose |
-|--------|------------|---------|
-| **Context Memory** | JSONL (15-day rolling window) | Short-term chat history and recent actions. |
-| **Lifetime Memory** | ChromaDB + Gemini Embeddings | Long-term episodic memory with semantic search. |
-| **User Profile** | JSON (bio, preferences, mood) | Learns user facts, likes, and emotional state. |
-| **RAG Engine** | ChromaDB + Gemini Embeddings | Retrieval-augmented generation from workspace files. |
-
-### 🛠️ Integrated Tools
-
-| Category | Tools |
-|----------|-------|
-| **Communication** | Gmail (send/delete), WhatsApp (Baileys – send/fetch), Google Calendar (create/check/delete). |
-| **Workspace** | File CRUD, smart search, image generation (Flux.1-Schnell), image editing (AI Horde). |
-| **Search** | Web (Tavily), YouTube transcripts, ArXiv papers, webpage scraping. |
-| **System** | Open/close apps, volume/brightness control, screenshot, clipboard, lock/sleep PC. |
-| **Terminal & Code** | Stateful terminal execution, Python REPL with safety checks and user approval. |
-| **Proactive** | Email listener (Gmail Pub/Sub), WhatsApp listener, calendar reminder listener. |
-
-### 🎨 User Interface
-
-- **Agent Panel** – Floating, animated window showing real-time agent steps, thoughts, and actions.
-- **Typing Popup** – Markdown viewer with image previews, code highlighting, and auto-scroll.
-- **System Tray** – Quick access and background operation.
-- **Rich Terminal Logging** – Colour-coded, formatted logs via `rich`.
-
-### 🔊 Voice Features
-
-- **Wake Word** – "Jarvis" detected via Picovoice Porcupine.
-- **Speech-to-Text** – Deepgram Nova-2 with Hindi support and custom keywords.
-- **Text-to-Speech** – Edge TTS (fast, natural) with Groq Orpheus as primary.
-- **Interrupt Handling** – Wake word instantly stops TTS and ongoing processing.
+| Icon | Feature | Description |
+|:---:|:---|:---|
+| 🛡️ | **Proactive Watchdog** | Background Pub/Sub & event listeners for Gmail, WhatsApp, and Calendar with intelligent spam filtering. |
+| 🧠 | **Hybrid Intelligence** | Semantic routing switches between low-latency FastBrain and deep-reasoning AgenticBrain automatically. |
+| 🗣️ | **Human-in-the-Loop** | Never modifies critical calendars, files, or emails without voice/text confirmation from the user. |
+| 📚 | **Lifelong Episodic LTM** | Vector-backed persistent memory (ChromaDB) that learns user facts, preferences, and emotional context. |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
+
+Jarvis utilizes a modular, event-driven architecture that separates fast conversational inference from stateful, multi-tool agentic planning:
 
 ```mermaid
 graph TD
-    A[User Input] --> B{Input Type}
-    B -->|Voice| C[Wake Word Detection]
-    B -->|Text| D[Hotkey Popup]
-    C --> E[Deepgram STT]
-    E --> F[Smart Router]
-    D --> F
+    %% Input Layer
+    user_input[👤 User Input] --> input_router{Input Type}
+    input_router -->|Voice| wake_word[🎙️ Picovoice Wake Word]
+    input_router -->|Text / Hotkey| popup_ui[⌨️ Hotkey Popup UI]
+    wake_word --> stt_engine[⚡ Deepgram Nova-2 STT]
 
-    F --> G{Complexity Check}
-    G -->|Simple| H[FastBrain]
-    G -->|Complex| I[AgenticBrain]
+    %% Router Layer
+    stt_engine --> semantic_router[🚦 Hybrid Semantic Router]
+    popup_ui --> semantic_router
 
-    H --> J[Groq Llama 3.3]
-    I --> K[Gemini Gemma 4]
+    %% Intelligence Engine
+    semantic_router -->|Direct / Fast Command| fast_brain[⚡ FastBrain<br/>Groq Llama-3.3-70B]
+    semantic_router -->|Multi-step / File / Comms| agent_brain[🧠 AgenticBrain<br/>Gemini Gemma-4-31B]
 
-    J --> L[Tool Executor]
-    K --> L
+    %% Memory & Context Layer
+    subgraph Memory Ecosystem
+        ltm_db[(🗄️ ChromaDB LTM<br/>Episodic Memory)]
+        rag_db[(📚 ChromaDB RAG<br/>Workspace Documents)]
+        context_jsonl[📜 JSONL Rolling History<br/>15-Day Context]
+        profile_json[👤 User Profile & Mood]
+    end
 
-    L --> M[System Tools]
-    L --> N[Communication]
-    L --> O[Workspace]
-    L --> P[Search Tools]
+    agent_brain <--> Memory
+    fast_brain <--> Memory
 
-    Q[Proactive Listeners] --> R[Event Queue]
-    R --> S[Proactive Agent]
-    S --> T[TTS Notification]
+    %% Execution & Tools Layer
+    subgraph Native Tool Ecosystem
+        comms_tools[📨 Gmail / WhatsApp / Calendar]
+        fs_tools[📂 File CRUD & Workspace RAG]
+        sys_tools[💻 OS Control / Apps / Terminal]
+        search_tools[🌐 Tavily Web / ArXiv / Scraper]
+    end
 
-    U[Memory Systems] --> V[Context Memory]
-    U --> W[Lifetime Memory]
-    U --> X[RAG Engine]
+    agent_brain --> comms_tools
+    agent_brain --> fs_tools
+    agent_brain --> sys_tools
+    agent_brain --> search_tools
+
+    %% Proactive Background Layer
+    subgraph Proactive HITL Watchdog
+        listeners[📡 Gmail / WhatsApp / Reminders]
+        queue[📦 Thread-safe Event Queue]
+        scout[🛡️ Proactive Scout Agent]
+    end
+
+    listeners --> queue --> scout
+    scout -->|Informational FYI| tts_out[🔊 Edge TTS / Orpheus Audio]
+    scout -->|Action Suggested| agent_brain
 ```
 
-### Core Components
+---
 
-#### 1. **Processing Pipeline**
-- **FastBrain** – instant, stateless responses using Groq.
-- **AgenticBrain** – multi-step, stateful reasoning with Gemini and native tools.
-- **Smart Router** – decides which brain to use based on command keywords.
+## 🧠 Core Intelligence Modules
 
-#### 2. **Memory Architecture**
-- **Short-term** – JSONL chat history with a 15-day rolling window.
-- **Long-term** – ChromaDB + Gemini embeddings for semantic retrieval.
-- **User Context** – JSON stores for bio, preferences, and mood history.
+### 1. 🚦 Hybrid Semantic Router
 
-#### 3. **Proactive Intelligence**
-- **Listeners** – Gmail Pub/Sub, WhatsApp Baileys, Calendar reminders.
-- **Event Queue** – Thread-safe queue for event processing.
-- **Scout Agent** – Evaluates event importance before notification.
+* **Zero-Latency Routing:** Dynamically inspects user prompts to classify them as either **FAST** (stateless, casual chat, quick OS toggles) or **AGENTIC** (deep reasoning, file editing, API automation).
+* **Fallback Rule-Engine:** Built-in heuristics ensure guaranteed routing even during cloud API degradation.
+
+### 2. ⚡ FastBrain (Groq LPU)
+
+* Optimized for sub-second conversational responses using `llama-3.3-70b-versatile`.
+* Handles direct desktop controls, playback queries, and factual Q&A without tool overhead.
+
+### 3. 🧠 AgenticBrain (Gemini Reasoning)
+
+* Uses `gemma-4-31b-it` with native function-calling for complex multi-step execution.
+* Employs a strict **4-Pillar Reasoning Contract** (Fact Audit -> Missing Piece Check -> Safety Audit -> Pragmatic Exit) to prevent infinite loops and hallucinations.
+
+### 4. 🛡️ Proactive Scout & HITL Security
+
+* **Silent Background Execution:** Evaluates batched background notifications without hijacking active desktop UI or full-screen applications.
+* **Consent Gate:** Asks concise confirmation questions before executing permanent changes (e.g., *"Meeting reschedule request received. Should I update your Google Calendar?"*).
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Integrated Tool Ecosystem
 
-### 🤖 AI & ML
-
-| Technology | Purpose |
-|------------|---------|
-| **Groq API** | Fast inference for Router, FastBrain, and Summarization. |
-| **Gemini API** | Agentic reasoning, embeddings, and vision capabilities. |
-| **Gemma 4 (31B)** | Complex reasoning in AgenticBrain. |
-| **Llama 3.3 (70B)** | Fast responses in FastBrain. |
-| **Flux.1-Schnell** | High-speed image generation. |
-| **AI Horde** | Community-powered image editing. |
-| **Tavily** | Research and web search. |
-
-### 🎤 Voice & Audio
-
-| Technology | Purpose |
-|------------|---------|
-| **Deepgram Nova-2** | Real-time speech-to-text with Hindi support. |
-| **Picovoice Porcupine** | Wake word detection ("Jarvis"). |
-| **Edge TTS** | Fast, natural text-to-speech. |
-| **Pygame** | Audio playback engine. |
-
-### 🗄️ Storage & Databases
-
-| Technology | Purpose |
-|------------|---------|
-| **ChromaDB** | Vector database for embeddings (LTM & RAG). |
-| **SQLite** | Local message storage for WhatsApp. |
-| **JSON / JSONL** | Configuration, chat history, and user profile. |
-
-### 🔌 APIs & Services
-
-| Service | Purpose |
-|---------|---------|
-| **Gmail API** | Email sending and receiving. |
-| **Google Calendar API** | Event management. |
-| **WhatsApp Baileys** | WhatsApp messaging bridge. |
-| **Together AI** | Image generation. |
-| **Google Pub/Sub** | Email notifications. |
-
-### 🖥️ UI & Visualisation
-
-| Technology | Purpose |
-|------------|---------|
-| **PyQt5** | Agent panel and UI popups. |
-| **Pystray** | System tray integration. |
-| **Rich** | Terminal formatting and logging. |
-| **ZMQ** | Real-time inter-process communication. |
+| Category | Supported Capabilities | Tech / API Bridge |
+| --- | --- | --- |
+| 📨 **Communication** | Send/read Gmails, dispatch WhatsApp messages, manage Google Calendar events. | Gmail Pub/Sub, Baileys Node.js Server, Calendar OAuth |
+| 📂 **Workspace & File OS** | Single-file CRUD, directory scanning, code generation, local markdown RAG indexing. | Python `os`/`pathlib`, ChromaDB Vector Index |
+| 🌐 **Search & Deep Research** | Live web scraping, academic research (ArXiv), YouTube transcripts, synthesis reports. | Tavily Search, BeautifulSoup, ArXiv API |
+| 💻 **System Automation** | Launch/close desktop apps, hardware volume/brightness, screenshots, clipboard CRUD. | Python OS Bindings, Win32 API, Pygame |
+| 🎨 **Creative AI** | High-speed local/cloud image generation and editing. | Flux.1-Schnell, AI Horde |
 
 ---
 
-## 📦 Installation
+## 🚀 Getting Started
 
-### Prerequisites
+### 1. System Prerequisites
 
-- **Python** – 3.10 or higher
-- **Node.js** – 18.x or higher (for WhatsApp Baileys)
-- **Git** – for cloning the repository
-- **Windows** – recommended for full system integration (Linux/macOS support is partial)
+* **OS:** Windows 10/11 (Recommended for full native Win32/Registry protocol features)
+* **Python:** `>= 3.10`
+* **Node.js:** `>= 18.0` (Required for WhatsApp Baileys background service)
+* **Git:** Latest stable release
 
-### Step-by-Step Setup
+### 2. Quick Install
 
-#### 1. Clone the Repository
 ```bash
+# Clone the repository
 git clone https://github.com/thekaifansari01/jarvis-by-kaif-ansari.git
 cd jarvis-by-kaif-ansari
-```
 
-#### 2. Create Virtual Environment
-```bash
-# Windows
+# Create and activate a Python Virtual Environment
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate     # Windows
+# source venv/bin/activate  # Linux / macOS
 
-# Linux/macOS
-python3 -m venv venv
-source venv/bin/activate
-```
-
-#### 3. Install Python Dependencies
-```bash
+# Install required Python dependencies
 pip install -r requirements.txt
-```
 
-#### 4. Install Node.js Dependencies (for WhatsApp)
-```bash
+# Install Node.js dependencies for WhatsApp Service
 cd tools/Messanger/whatsapp/BaileysServer
 npm install
-cd ../../../..
+cd ../../..
 ```
 
-#### 5. Set Up Environment Variables
-Create a `.env` file in the root directory (see `.env.example`):
-```ini
-# API Keys
-GROQ_API_KEY=your_groq_api_key
-GEMINI_API_KEY=your_gemini_api_key
-TAVILY_API_KEY=your_tavily_api_key
-TOGETHER_AI=your_together_ai_key
+### 3. Register Desktop URI Protocol
 
-# Speech & Voice
-DEEPGRAM_API_KEY=your_deepgram_api_key
+To enable seamless OAuth web-authentication for Gmail and Google Calendar (`jarvis://` callback), run:
 
-# User Settings
-USER_NAME=YourName
-```
-
-#### 6. Register Custom URL Protocol (for Gmail/Calendar OAuth)
-Run this once to register the `jarvis://` protocol in Windows Registry:
 ```bash
-python core/JarvisProtocol/SetupRegistry.py
-```
-
-#### 7. Add Required Directories
-Create the following structure (auto-created on first run, but you can pre-create):
-```
-Data/
-├── Jarvis_Workspace/
-│   ├── Creations/
-│   ├── Vault/
-│   └── Temp/
-├── jarvis_memory/
-│   ├── lifetime_db/          # ChromaDB for LTM
-│   └── rag_chroma_db/        # ChromaDB for RAG
-├── SessionCookies/           # OAuth tokens (auto-generated)
-└── fonts/
-    ├── english.ttf
-    └── devangri.ttf
+python SetupRegistry.py
 ```
 
 ---
 
-## 🚀 Usage
+## ⚙️ Configuration & Security
 
-### Basic Modes
+Create a `.env` file in your root project directory by copying the provided example template:
 
-| Mode | Command | Description |
-|------|---------|-------------|
-| **Voice** (default) | `python main.py` | Starts with wake-word listening and voice interaction. |
-| **Text (Test)** | `python main.py test_jarvis` | Runs in text-only mode – type commands directly. |
-| **No Wake** | `python main.py no_wake` | Disables wake-word, useful for debugging. |
-
-### System Tray
-- Run normally: `python main.py`
-- The app minimises to the system tray.
-- Use `Ctrl+Shift+J` to open the text input popup.
-- Right-click the tray icon to show or exit.
-
-### Command Examples
-
-#### 🗣️ System Controls
-```
-open chrome and spotify
-close calculator
-volume increase by 20
-brightness set to 75
-lock the PC
-take a screenshot
+```bash
+cp .env.example .env
 ```
 
-#### 📧 Communication
-```
-send email to kaif@gmail.com subject "Meeting" body "Meeting at 3 PM"
-whatsapp rahul "Coming to the party!"
-check my calendar for tomorrow
-create a reminder for 5 PM today "Gym"
+### Full Environment Variables Example (`.env.example`)
+
+Copy and paste the following into your `.env` file, then fill in your API keys:
+
+```env
+# ============================================
+# API KEYS - Add your keys below
+# ============================================
+USER_NAME=
+GROQ_API_KEY=
+TOGETHER_AI=
+TAVILY_API_KEY=
+GEMINI_API_KEY=
+DEEPGRAM_API_KEY=
+
+# Regolo API (Pre-configured)
+REGOLO_API_KEY=sk-V4LWPrMvN1OmhDSF2_sMHg
+
+# ============================================
+# API ENDPOINTS & MODELS
+# ============================================
+API_BASE_URL=https://jarvis-oauth-server.vercel.app
+REGOLO_BASE_URL=https://api.regolo.ai/v1
+REGOLO_MODEL=gemma4-31b
+
+# ============================================
+# AGENT CONFIGURATION
+# ============================================
+AGENT_PRIMARY_PROVIDER=regolo
+AGENT_FALLBACK_PROVIDER=gemini
+REGOLO_THINKING_ENABLED=True
+
+# ============================================
+# ⚠️ DO NOT CHANGE THE FOLLOWING
+# ============================================
+# API_BASE_URL         - OAuth server endpoint
+# REGOLO_BASE_URL      - Regolo API endpoint
+# REGOLO_MODEL         - Default model for Regolo
 ```
 
-#### 📁 Workspace
-```
-write a file report.md with content "Q4 Results..."
-read the file report.md
-list all files in workspace
-open the image sunset.png
-generate an image of a flying dragon
-```
-
-#### 🌐 Search & Research
-```
-search web for "latest AI news 2026"
-read webpage https://example.com
-search arxiv for "quantum computing"
-deep research "future of renewable energy"
-```
-
-#### 🧠 Memory & Context
-```
-what did we talk about yesterday?
-remember that I like coffee
-what's my name?
-tell me about my previous projects
-```
-
-### Hotkeys
-| Hotkey | Action |
-|--------|--------|
-| `Ctrl+Shift+J` | Open text input popup. |
-| Voice | Say **"Jarvis"** to activate. |
+> **Security Note:** Never commit your `.env` or `Data/SessionCookies/` directory to public version control. They are excluded via `.gitignore` by default.
 
 ---
 
-## ⚙️ Configuration
+## 🎮 Execution Modes
 
-### Core Configuration (`core/brain/config.py`)
-```python
-# Models
-GROQ_FAST_MODEL = "llama-3.3-70b-versatile"
-GEMINI_AGENT_MODEL = "gemma-4-31b-it"
-GEMINI_EMBEDDING_MODEL = "gemini-embedding-2"
+Jarvis can be launched in multiple operational configurations depending on your workflow:
 
-# Agent Limits
-CONFIG = {
-    "AGENT_MAX_STEPS": 20,
-    "AGENT_TIMEOUT": 900,          # seconds
-    "AGENT_RETRY_LIMIT": 2,
-}
+```bash
+# 1. Full Autonomous Voice & Desktop Mode (Default)
+python main.py
 
-# Voice
-EDGE_TTS_VOICE = "hi-IN-MadhurNeural"
+# 2. Terminal Text-Only Testing Mode (No Microphone Required)
+python main.py test_jarvis
+
+# 3. Silent Mode (Wake Word Disabled, Trigger via Hotkeys Only)
+python main.py no_wake
 ```
 
-### Environment Variables
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `GROQ_API_KEY` | Groq API key | ✅ Yes |
-| `GEMINI_API_KEY` | Google Gemini API key | ✅ Yes |
-| `TAVILY_API_KEY` | Tavily API key | ✅ Yes |
-| `PICOVOICE_ACCESS_KEY` | Picovoice key | For Wake Word |
-| `DEEPGRAM_API_KEY` | Deepgram key | For STT |
-| `TOGETHER_AI` | Together AI key | For Image Gen |
-| `USER_NAME` | User's name | Recommended |
+### Keyboard Shortcuts
+
+* `Ctrl + Shift + J`: Open Floating Text Input & Markdown UI Popup.
 
 ---
 
-## 📁 Project Structure
+## 📁 Repository Anatomy
+
 ```
 jarvis-by-kaif-ansari/
 ├── core/
-│   ├── brain/
-│   │   ├── Memory/
-│   │   │   ├── Memory.py         # Context memory
-│   │   │   └── LifetimeMemory.py # Long-term memory
-│   │   ├── Processor/
-│   │   │   ├── Processor.py      # Smart router
-│   │   │   ├── FastBrain.py      # Fast responses
-│   │   │   ├── AgenticBrain.py   # Complex reasoning
-│   │   │   └── Prompts.py        # System prompts
-│   │   ├── executor.py           # Tool executor
-│   │   ├── RagEngine.py          # RAG for workspace
-│   │   └── config.py             # Configuration
-│   ├── voice/
-│   │   ├── stt.py                # Speech-to-text
-│   │   ├── tts.py                # Text-to-speech
-│   │   ├── stt_status.py         # STT UI updates
-│   │   └── interrupt.py          # Speech interruption
-│   ├── ui/
-│   │   ├── agent_panel.py        # Floating agent UI
-│   │   ├── agent_status.py       # ZMQ status updates
-│   │   └── typing_status.py      # Typing indicator
-│   ├── main/
-│   │   ├── main.py               # Entry point
-│   │   ├── CommandHandler.py     # Command processing
-│   │   ├── HotKeyManager.py      # Hotkey management
-│   │   ├── BackgroundServices.py # Service management
-│   │   └── ServiceWatchdog.py    # Service monitoring
-│   ├── JarvisProtocol/
-│   │   ├── JarvisProtocol.py     # OAuth protocol handler
-│   │   └── SetupRegistry.py      # Windows Registry setup
-│   ├── logger/
-│   │   └── logger.py             # Logging configuration
-│   └── utils/
-│       ├── ProcessManager.py     # Process management
-│       └── utils.py              # Utilities
+│   ├── brain/              # Neural engines (FastBrain, AgenticBrain, Smart Router)
+│   ├── voice/              # Deepgram STT, Picovoice Wake Word, Edge TTS engines
+│   ├── ui/                 # ZMQ-powered floating PyQt5 UI widgets & status panels
+│   └── logger/             # Thread-safe colored terminal loggers (Rich)
 ├── tools/
-│   ├── Messanger/
-│   │   ├── email_manager.py      # Gmail integration
-│   │   └── whatsapp/
-│   │       ├── whatsapp.py       # WhatsApp API
-│   │       └── BaileysServer/    # Node.js bridge
-│   ├── SystemTools/
-│   │   ├── SystemTools.py        # System controls
-│   │   └── clipboard_tool.py     # Clipboard operations
-│   ├── SearchTools/
-│   │   ├── WebSearch.py          # Tavily search
-│   │   ├── SearchHub.py          # Search aggregator
-│   │   ├── DeepResearch.py       # Tavily research
-│   │   ├── ArxivTool.py          # ArXiv search
-│   │   ├── YoutubeTranscriptFetcher.py
-│   │   └── Scraper.py            # Webpage scraper
-│   ├── workspace/
-│   │   └── workspace.py          # File management
-│   ├── ImageGeneration/
-│   │   └── generate_image.py     # Image generation
-│   ├── Calendar/
-│   │   └── CalendarTool.py       # Google Calendar
-│   └── OpenCloseApps/
-│       ├── open_any.py           # App opener
-│       └── close_any.py          # App closer
+│   ├── Messanger/          # Gmail Pub/Sub & Baileys WhatsApp bridges
+│   ├── SystemTools/        # Win32 OS controls, hardware toggles, and clipboard
+│   ├── SearchTools/        # Tavily deep research, ArXiv, and web scrapers
+│   └── workspace/          # Local filesystem RAG and file CRUD executor
 ├── Proactive/
-│   ├── proactive_agent.py        # Proactive intelligence
-│   ├── event_queue.py            # Event queue
-│   ├── prompts.py                # Proactive prompts
-│   ├── Email/
-│   │   └── EmailProactive.py     # Email listener
-│   ├── WhatsApp/
-│   │   └── WhatsappProactive.py  # WhatsApp listener
-│   └── Reminder/
-│       └── ReminderProactive.py  # Calendar listener
-├── Data/                         # User data (auto-created)
-├── Bin/                          # Compiled executables
-├── main.py                       # Application entry point
-├── requirements.txt              # Python dependencies
-├── .env.example                  # Environment template
-└── README.md                     # This file
+│   ├── proactive_agent.py  # Background Scout logic & HITL consent manager
+│   └── event_queue.py      # Thread-safe time-window event batching queue
+├── Data/                   # Local state (ChromaDB vectors, user profile, cookies)
+├── main.py                 # Primary entry point & service supervisor
+└── requirements.txt        # Verified Python production dependencies
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## 🛣️ Roadmap & Future Scope
 
-### Common Issues & Solutions
-
-#### 🔴 **API Key Errors**
-```
-Error: PICOVOICE_ACCESS_KEY missing in .env file.
-```
-**Solution**: Ensure all required API keys are set in `.env`.
-
-#### 🔴 **Deepgram Connection Timeout**
-```
-Deepgram Error: Connection timeout
-```
-**Solution**:
-- Verify internet connection.
-- Ensure `DEEPGRAM_API_KEY` is valid.
-- Try increasing timeout values in `stt.py`.
-
-#### 🔴 **Baileys WhatsApp Offline**
-```
-Node.js server is offline!
-```
-**Solution**:
-```bash
-cd tools/Messanger/whatsapp/BaileysServer
-npm install
-node baileys_service.js
-```
-
-#### 🔴 **OAuth Token Not Found (Gmail/Calendar)**
-```
-Credentials file not found
-```
-**Solution**:
-1. Run `python core/JarvisProtocol/SetupRegistry.py` once.
-2. The first time you use email/calendar, Jarvis will open a browser for OAuth login.
-3. Tokens are auto-saved in `Data/SessionCookies/`.
-
-#### 🔴 **ChromaDB Path Errors**
-```
-Failed to initialize LTM ChromaDB
-```
-**Solution**:
-```bash
-rm -rf Data/jarvis_memory/lifetime_db/*
-rm -rf Data/jarvis_memory/rag_chroma_db/*
-```
-Restart Jarvis to rebuild indexes.
-
-### Performance Tips
-1. **Reduce Memory Usage**:
-   - Lower `AGENT_MAX_STEPS` in config.
-   - Reduce `top_k` in LTM searches.
-2. **Improve Response Time**:
-   - Use FastBrain for simple commands.
-   - Use `test_jarvis` mode for faster debugging.
-3. **Voice Quality**:
-   - Use a good quality microphone.
-   - Adjust `ENERGY_THRESHOLD` for sensitivity.
+* [x] **Phase 1:** Real-time Voice Wake Word & Hybrid Semantic Routing.
+* [x] **Phase 2:** ChromaDB Episodic Memory & Local Workspace RAG Engine.
+* [x] **Phase 3:** Proactive HITL Watchdog for Gmail, WhatsApp, and Calendar.
+* [ ] **Phase 4:** Dockerized Sandbox Execution for running untrusted code safely.
+* [ ] **Phase 5:** Full Multi-platform macOS & Linux native system accessibility.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Here's how you can help:
+We welcome contributions from developers, researchers, and AI enthusiasts!
 
 1. **Fork** the repository.
-2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`).
-3. **Commit** your changes (`git commit -m 'Add some AmazingFeature'`).
-4. **Push** to the branch (`git push origin feature/AmazingFeature`).
-5. **Open** a Pull Request.
-
-### Development Guidelines
-- Follow PEP 8 style guidelines.
-- Add docstrings for all functions.
-- Update README for new features.
-- Test on Windows (primary), Linux/macOS (secondary).
-- Keep dependencies minimal.
-
-### Reporting Issues
-When reporting issues, please include:
-- Operating system and version.
-- Python version (`python --version`).
-- Error logs with traceback.
-- Steps to reproduce the issue.
+2. **Create** a feature branch (`git checkout -b feature/AdvancedTooling`).
+3. **Commit** your changes with clear, descriptive messages.
+4. **Push** to your fork (`git push origin feature/AdvancedTooling`).
+5. **Open** a Pull Request for review.
 
 ---
 
-## 📄 License
+## 📄 License & Attribution
 
-This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
+This project is open-source and licensed under the **MIT License** — see the [LICENSE](LICENSE) file for complete details.
 
----
+**Built with ❤️ and pragmatic engineering by Kaif Ansari**
 
-## 🙏 Acknowledgments
-
-- **Kaif Ansari** – Creator and Lead Developer.
-- **Picovoice** – For wake word detection.
-- **Deepgram** – For real-time speech recognition.
-- **Groq** – For fast inference capabilities.
-- **Google** – For Gemini, Gmail, and Calendar APIs.
-- **Baileys** – For WhatsApp integration.
-- **Tavily** – For research and web search.
-
----
-
-## 📞 Contact & Support
-
-- **GitHub**: [@thekaifansari01](https://github.com/thekaifansari01)
-- **Email**: [kaif.ansari.global@gmail.com](mailto:kaif.ansari.global@gmail.com)
-- **Issues**: [GitHub Issues](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/issues)
-
----
-
-### Made with ❤️ by Kaif Ansari
-
-**🌟 Star this repo if you find it useful!**
+*If this project inspired your own AI architecture, consider leaving a ⭐ on the repository!*

@@ -25,7 +25,7 @@ from core.voice.stt_status import hide_stt_popup
 from core.utils.ProcessManager import proc_manager
 from Proactive.proactive_agent import start_proactive_agent
 
-from core.main.BackgroundServices import start_agent_panel, start_stt_popup, start_baileys_server, stop_all_services
+from core.main.BackgroundServices import start_agent_panel, start_stt_popup, start_rag_engine, start_baileys_server, stop_all_services
 from core.main.CommandHandler import main_command_processor, is_jarvis_busy
 from core.main.HotKeyManager import setup_hotkeys
 from core.main.ServiceWatchdog import start_watchdog, stop_watchdog
@@ -69,6 +69,7 @@ def main() -> None:
     start_stt_popup()
     start_baileys_server()
     start_watchdog()
+    start_rag_engine()
 
     if not is_dev_mode:
         time.sleep(1)

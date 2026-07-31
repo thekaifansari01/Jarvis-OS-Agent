@@ -35,6 +35,7 @@ class ContextMemory:
         self.live_feedback_queue = []
         self.current_mode = "General Assistant"
         self.mode_timer = datetime.now()
+        self._confirmation_timer = None
         
         try:
             self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -42,6 +43,40 @@ class ContextMemory:
             self.groq_client = None
 
         self._start_background_pruning()
+
+    def set_pending_confirmation(self, task_data=None, ttl_seconds=60):
+        with self._lock:
+            if self._confirmation_timer:
+                try:
+                    self._confirmation_timer.cancel()
+                except Exception:
+                    pass
+                self._confirmation_timer = None
+            
+            self.ephemeral["waiting_for_confirmation"] = True
+            if task_data:
+                self.ephemeral["pending_task_data"] = task_data
+            
+            def _auto_expire():
+                with self._lock:
+                    self.ephemeral["waiting_for_confirmation"] = False
+                    self.ephemeral.pop("pending_task_data", None)
+                    self._confirmation_timer = None
+
+            self._confirmation_timer = threading.Timer(ttl_seconds, _auto_expire)
+            self._confirmation_timer.daemon = True
+            self._confirmation_timer.start()
+
+    def clear_pending_confirmation(self):
+        with self._lock:
+            if self._confirmation_timer:
+                try:
+                    self._confirmation_timer.cancel()
+                except Exception:
+                    pass
+                self._confirmation_timer = None
+            self.ephemeral["waiting_for_confirmation"] = False
+            self.ephemeral.pop("pending_task_data", None)
 
     def add_live_feedback(self, text):
         if text and text.strip():

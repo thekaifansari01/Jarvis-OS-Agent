@@ -18,7 +18,7 @@ from core.brain.config import (
 
 load_dotenv()
 
-CREATIONS_DIR = Path("C:/Documents/Jarvis/GeneratedImages")
+CREATIONS_DIR = Path.home() / "Documents" / "Jarvis" / "GeneratedImages"
 CREATIONS_DIR.mkdir(parents=True, exist_ok=True)
 REGOLO_IMAGE_MODEL = "Qwen-Image"
 

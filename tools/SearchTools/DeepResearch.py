@@ -19,7 +19,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-CREATIONS_DIR = Path("C:/Documents/Jarvis/Research")
+CREATIONS_DIR = Path.home() / "Documents" / "Jarvis" / "DeepResearch"
 CREATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 def generate_filename_from_ai(topic, report_content, client, model_name):

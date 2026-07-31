@@ -36,11 +36,11 @@ except ImportError:
 
 _stop_playback = False
 is_speaking = False
+_groq_limit_reached = False
 _audio_queue = queue.Queue()
 _start_time = 0
 
 def clean_text_for_speech(text: str) -> str:
-    """Prepares text for TTS but KEEPS the [emotion] tags for Groq, removes links/code."""
     if not text: 
         return ""
     try:
@@ -53,7 +53,6 @@ def clean_text_for_speech(text: str) -> str:
         return text.strip()
 
 def smart_split_into_sentences(text: str) -> list:
-    """Splits text to respect Groq character limits and avoid unnatural pauses."""
     try:
         regex_pattern = r'(?<!\bMr)(?<!\bDr)(?<!\bMs)(?<!\bMrs)(?<!\bProf)\s*[.!?\n]\s+'
         sentences = re.split(regex_pattern, text)
@@ -77,7 +76,6 @@ def smart_split_into_sentences(text: str) -> list:
         return [text[:180]]
 
 def stop_speaking():
-    """Instantly halts all TTS operations, stops audio playback, and clears queues."""
     global _stop_playback, is_speaking, _audio_queue
     _stop_playback = True
     is_speaking = False
@@ -94,7 +92,6 @@ def stop_speaking():
             break
 
 async def _fetch_edge_tts_fallback(sentence: str) -> bytes:
-    """Helper to stream Edge-TTS directly into memory bytes as a fallback."""
     try:
         clean_sentence = re.sub(r'\[.*?\]', '', sentence).strip()
         if not clean_sentence:
@@ -115,8 +112,7 @@ async def _fetch_edge_tts_fallback(sentence: str) -> bytes:
         return b""
 
 def _producer_thread(sentences: list):
-    """Fetches audio bytes from Groq API with an automatic fallback to Edge-TTS."""
-    global _stop_playback, _audio_queue
+    global _stop_playback, _audio_queue, _groq_limit_reached
     
     url = "https://api.groq.com/openai/v1/audio/speech"
     headers = {
@@ -130,7 +126,7 @@ def _producer_thread(sentences: list):
             
         audio_data = None
         
-        if GROQ_API_KEY:
+        if GROQ_API_KEY and not _groq_limit_reached:
             data = {
                 "model": MODEL_ID,
                 "input": sentence,
@@ -142,6 +138,8 @@ def _producer_thread(sentences: list):
                 if response.status_code == 200:
                     audio_data = response.content
                 else:
+                    if response.status_code == 429 or "limit" in response.text.lower() or "quota" in response.text.lower():
+                        _groq_limit_reached = True
                     logging.error(f"Groq API Error ({response.status_code}): {response.text}. Switching to Fallback.")
             except Exception as e:
                 logging.error(f"Groq fetch connection failed: {e}. Switching to Fallback.")
@@ -161,7 +159,6 @@ def _producer_thread(sentences: list):
         pass
 
 def _consumer_thread():
-    """Plays audio directly from memory queue via Pygame with minimal latency."""
     global _stop_playback, _audio_queue, _start_time
     first_chunk = True
     
@@ -234,10 +231,6 @@ def _consumer_thread():
         _audio_queue.task_done()
 
 def speak(text: str):
-    """
-    Entry point for the unified TTS Engine.
-    Cleans incoming text, stops any ongoing speech, and fires up parallel processing threads.
-    """
     global _stop_playback, is_speaking, _audio_queue, _start_time
 
     if not text:
@@ -274,9 +267,7 @@ def speak(text: str):
     is_speaking = False
 
 def cleanup_temp():
-    """Graceful termination handling."""
     stop_speaking()
-
 
 if __name__ == "__main__":
     print("System Online. Testing Unified Audio Engine...")

@@ -3,13 +3,14 @@ from concurrent.futures import ThreadPoolExecutor
 from core.logger.logger import logger
 from tools.OpenCloseApps.open_any import open_any_app
 from tools.OpenCloseApps.close_any import close_any_app
-from tools.ImageGeneration.generate_image import handle_image_command 
+from tools.ImageGeneration.generate_image import handle_image_command
 from tools.SearchTools.SearchHub import execute_search_actions
 from tools.Messanger.email_manager import send_email, delete_email
 from tools.Messanger.whatsapp.whatsapp import send_whatsapp_message, fetch_whatsapp_chats
 from core.voice.tts import speak
 from tools.SystemTools.clipboard_tool import read_clipboard, write_clipboard
 from tools.SystemTools.SystemTools import SystemController
+from tools.SystemTools.fileEditor import JarvisFileEditor
 from tools.SearchTools.DeepResearch import deep_research_as_tool
 from tools.Calendar.CalendarTool import create_event, check_events, delete_event
 from tools.Terminal.terminalTool import execute_terminal_command, run_python_code
@@ -22,6 +23,8 @@ import webbrowser
 import pywhatkit
 import traceback
 import tempfile
+
+file_editor = JarvisFileEditor()
 
 def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str:
     def log_action(message: str) -> None:
@@ -41,9 +44,9 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
         if youtube_query:
             def play_on_youtube(query):
                 log_action(f"▶️ Playing on YouTube: {query}")
-                try: 
+                try:
                     pywhatkit.playonyt(query)
-                except Exception as e: 
+                except Exception as e:
                     logger.error(f"❌ Failed to play on YouTube. Error: {e}\n{traceback.format_exc()}")
                     executor.submit(speak, "Sorry sir, YouTube par play karne mein error aa gaya.")
             executor.submit(play_on_youtube, youtube_query)
@@ -52,7 +55,7 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
             def thread_open(apps):
                 try:
                     opened = open_any_app(apps)
-                    if opened: 
+                    if opened:
                         log_action(f"✅ Opened Apps: {', '.join(opened)}")
                     else:
                         logger.warning(f"⚠️ Failed to open some/all apps: {', '.join(apps)}")
@@ -64,7 +67,7 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
             def thread_close(apps):
                 try:
                     closed = close_any_app(apps)
-                    if closed: 
+                    if closed:
                         log_action(f"✅ Closed Apps: {', '.join(closed)}")
                     else:
                         logger.warning(f"⚠️ Failed to close some/all apps: {', '.join(apps)}")
@@ -77,9 +80,9 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
                 for url in urls:
                     if url.startswith('http'):
                         log_action(f"🔗 Opening Dynamic Link: {url}")
-                        try: 
+                        try:
                             webbrowser.open(url)
-                        except Exception as e: 
+                        except Exception as e:
                             logger.error(f"❌ Failed to open link {url}. Error: {e}")
             executor.submit(thread_open_urls, result['urls_to_open'])
 
@@ -141,12 +144,67 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
                     logger.warning(f"❌ File not found for opening: {filepath}")
                     executor.submit(speak, "Sir, file nahi mili. Kripya pura absolute path dijiye.")
             executor.submit(open_workspace_file_fast, workspace_file_to_open.strip())
-            
+
     except Exception as e:
         logger.error(f"❌ CRITICAL ERROR in execute_actions (Fast Brain): {e}\n{traceback.format_exc()}")
-        
+
     return ""
 
+def execute_file_operation(action_dict: dict) -> str:
+    try:
+        action = action_dict.get('action')
+        file_path = action_dict.get('file_path')
+        if not file_path:
+            return "Observation: Missing 'file_path' for file operation."
+
+        if action == 'view':
+            start = action_dict.get('start_line')
+            end = action_dict.get('end_line')
+            result = file_editor.view(file_path, start, end)
+            return f"Observation: {result}"
+
+        elif action == 'replace_string':
+            old = action_dict.get('old_str')
+            new = action_dict.get('new_str')
+            if old is None or new is None:
+                return "Observation: Missing 'old_str' or 'new_str' for replace_string."
+            result = file_editor.replace_string(file_path, old, new)
+            return f"Observation: {result}"
+
+        elif action == 'replace_lines':
+            start = action_dict.get('start_line')
+            end = action_dict.get('end_line')
+            new_content = action_dict.get('new_content')
+            if start is None or end is None or new_content is None:
+                return "Observation: Missing start_line, end_line, or new_content for replace_lines."
+            result = file_editor.replace_lines(file_path, start, end, new_content)
+            return f"Observation: {result}"
+
+        elif action == 'insert':
+            line_num = action_dict.get('line_number')
+            text = action_dict.get('text')
+            if line_num is None or text is None:
+                return "Observation: Missing line_number or text for insert."
+            result = file_editor.insert(file_path, line_num, text)
+            return f"Observation: {result}"
+
+        elif action == 'delete_lines':
+            start = action_dict.get('start_line')
+            end = action_dict.get('end_line')
+            if start is None or end is None:
+                return "Observation: Missing start_line or end_line for delete_lines."
+            result = file_editor.delete_lines(file_path, start, end)
+            return f"Observation: {result}"
+
+        elif action == 'create':
+            content = action_dict.get('content', '')
+            result = file_editor.create(file_path, content)
+            return f"Observation: {result}"
+
+        else:
+            return f"Observation: Unknown file action '{action}'. Supported: view, replace_string, replace_lines, insert, delete_lines, create."
+    except Exception as e:
+        return f"Observation: File operation error: {e}"
 
 def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
     observation = "Observation: No valid action executed."
@@ -155,25 +213,46 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
     if search_actions and isinstance(search_actions, dict) and any(search_actions.values()):
         try:
             logger.info(f"🤖 Agent executing Search: {list(search_actions.keys())}")
-            
+
             if search_actions.get('vault'):
                 try:
                     from core.brain.RagEngine import rag_engine
                     vault_query = search_actions.get('vault')
-                    rag_hits = rag_engine.search_vault(vault_query)
-                    if rag_hits:
-                        vault_data = "\n\n".join([f"📄 [File: {hit['file_path']}]\nSnippet: {hit['content']}" for hit in rag_hits])
-                        return f"Observation: Vault Search successful. Found these snippets:\n{vault_data}\n💡 Hint: If you need to read the FULL file, use 'run_python_code' tool to open and read it."
-                    return "Observation: Vault Search found no matching documents."
+                    results = rag_engine.search_vault(vault_query)
+
+                    if results:
+                        observation_parts = []
+                        for hit in results:
+                            status = "✅ COMPLETE FILE" if hit['is_complete'] else "⚠️ PARTIAL FILE"
+                            file_size_kb = f"{hit['file_size_bytes'] / 1024:.1f} KB" if hit['file_size_bytes'] > 0 else "Unknown"
+
+                            obs = f"""
+            📁 FILE: {hit['file_name']}
+            📂 PATH: {hit['file_path']}
+            📊 SIZE: {file_size_kb} ({hit['file_size_bytes']} bytes)
+            📑 CHUNKS: {hit['chunks_found']} of {hit['total_chunks']}
+            ✅ STATUS: {status}
+
+            CONTENT:
+            {hit['content']}
+
+            {'✅ This is the complete file content. Use this directly. No need to read separately.' if hit['is_complete'] else '⚠️ Only partial content shown. Use file_operations to read full file if needed.'}
+            """
+                            observation_parts.append(obs)
+
+                        return "Observation: Vault Search Results:\n\n" + "\n" + "="*50 + "\n".join(observation_parts)
+                    else:
+                        return "Observation: Vault Search found no matching documents."
+
                 except Exception as e:
                     logger.error(f"❌ RAG/Vault Search error: {e}\n{traceback.format_exc()}")
                     return f"Observation: Vault Search failed internally due to {e}."
 
             search_output = execute_search_actions(search_actions)
-            
+
             if search_output:
                 return f"Observation: Search successful. Fetched Data -> {search_output[:15000]}..."
-                
+
             return "Observation: Search completed but NO data found. 💡 Tip: Try different keywords or a broader search."
         except Exception as e:
             logger.error(f"❌ Search Hub API failed: {e}\n{traceback.format_exc()}")
@@ -202,15 +281,15 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
         try:
             raw_requested_to = email_action.get('to', '').strip()
             requested_to_lower = raw_requested_to.lower()
-            
+
             subject = email_action.get('subject', 'Update')
             body = email_action.get('body', '')
             file_path_raw = email_action.get('file_path', '')
-            
+
             contact_book = {}
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             contact_file_path = os.path.join(base_dir, "tools", "Messanger", "contact_book.json")
-            
+
             try:
                 if os.path.exists(contact_file_path):
                     with open(contact_file_path, "r", encoding="utf-8") as f:
@@ -218,7 +297,7 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                         contact_book = {k.lower(): v for k, v in raw_contacts.items()}
             except Exception as e:
                 logger.warning(f"⚠️ Contact book load error: {e}")
-                
+
             if "@" in raw_requested_to:
                 to_address = raw_requested_to
             else:
@@ -237,16 +316,16 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                     return f"Observation: Failed to send email. Attachment '{file_path_raw}' not found at the given absolute path."
 
             logger.info(f"🤖 Agent Sending Email to: {to_address}")
-            
+
             success = send_email(to_address, subject, body, attachment_abs_path)
-            
-            if success: 
+
+            if success:
                 logger.info(f"✅ Email successfully sent to {to_address}")
                 return f"Observation: Email successfully sent to {to_address}."
             else:
                 logger.error(f"❌ send_email returned False for {to_address}. Check SMTP configurations.")
                 return f"Observation: Failed to send email to {to_address}. Please verify SMTP credentials and internet connection."
-                
+
         except Exception as e:
             logger.error(f"❌ CRITICAL ERROR in Email Action: {e}\n{traceback.format_exc()}")
             return f"Observation: Critical error while preparing or sending email -> {e}"
@@ -256,21 +335,21 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
         try:
             action_type = whatsapp_action.get('action', 'send')
             to_name = whatsapp_action.get('to')
-            
+
             if action_type == 'fetch':
                 start_date = whatsapp_action.get('start_date')
                 end_date = whatsapp_action.get('end_date')
                 if not start_date or not end_date:
                     return "Observation: Error -> 'start_date' and 'end_date' are required for fetching chats."
-                
+
                 logger.info(f"🤖 Agent Fetching WhatsApp chat for: {to_name} from {start_date} to {end_date}")
                 wa_result = fetch_whatsapp_chats(to_name, start_date, end_date)
                 return f"Observation: {wa_result}"
-                
-            else: 
+
+            else:
                 msg_body = whatsapp_action.get('message', '')
                 file_path_raw = whatsapp_action.get('file_path', '')
-                
+
                 attachment_abs_path = None
                 if file_path_raw:
                     if os.path.exists(file_path_raw):
@@ -278,15 +357,15 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                     else:
                         logger.warning(f"⚠️ WhatsApp attachment not found: {file_path_raw}")
                         return f"Observation: Failed to send WhatsApp. Attachment '{file_path_raw}' not found at the given absolute path."
-                
+
                 logger.info(f"🤖 Agent Sending WhatsApp to: {to_name}")
                 wa_result = send_whatsapp_message(to_name, msg_body, attachment_abs_path)
-                
+
                 if "Error" in wa_result or "failed" in wa_result.lower():
                     logger.error(f"❌ WhatsApp message failed: {wa_result}")
                 else:
                     logger.info(f"✅ WhatsApp result: {wa_result}")
-                    
+
                 return f"Observation: {wa_result}"
         except Exception as e:
             logger.error(f"❌ ERROR in WhatsApp action: {e}\n{traceback.format_exc()}")
@@ -300,13 +379,13 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
         if apps_to_open and isinstance(apps_to_open, list) and apps_to_open:
             try:
                 opened = open_any_app(apps_to_open)
-                if opened: 
+                if opened:
                     sys_observations.append(f"Opened Apps: {', '.join(opened)}")
                     logger.info(f"✅ System Controller opened apps: {opened}")
-                else: 
+                else:
                     sys_observations.append(f"Failed to open apps: {', '.join(apps_to_open)}")
                     logger.warning(f"⚠️ System Controller failed to open apps: {apps_to_open}")
-            except Exception as e: 
+            except Exception as e:
                 logger.error(f"❌ App open error: {e}")
                 sys_observations.append(f"App open error: {e}")
 
@@ -314,13 +393,13 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
         if apps_to_close and isinstance(apps_to_close, list) and apps_to_close:
             try:
                 closed = close_any_app(apps_to_close)
-                if closed: 
+                if closed:
                     sys_observations.append(f"Closed Apps: {', '.join(closed)}")
                     logger.info(f"✅ System Controller closed apps: {closed}")
-                else: 
+                else:
                     sys_observations.append(f"Failed to close apps: {', '.join(apps_to_close)}")
                     logger.warning(f"⚠️ System Controller failed to close apps: {apps_to_close}")
-            except Exception as e: 
+            except Exception as e:
                 logger.error(f"❌ App close error: {e}")
                 sys_observations.append(f"App close error: {e}")
 
@@ -331,7 +410,7 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                     if url.startswith('http'): webbrowser.open(url)
                 sys_observations.append(f"Opened URLs: {', '.join(urls_to_open)}")
                 logger.info(f"✅ System Controller opened URLs: {urls_to_open}")
-            except Exception as e: 
+            except Exception as e:
                 logger.error(f"❌ URL open error: {e}")
                 sys_observations.append(f"URL open error: {e}")
 
@@ -341,7 +420,7 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                 logger.info(f"🤖 Agent playing YouTube: {youtube_query}")
                 pywhatkit.playonyt(youtube_query)
                 sys_observations.append(f"Playing on YouTube: '{youtube_query}'")
-            except Exception as e: 
+            except Exception as e:
                 logger.error(f"❌ YouTube playback error: {e}")
                 sys_observations.append(f"YouTube error: {e}")
 
@@ -350,14 +429,14 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             if system_action == 'screenshot':
                 custom_filename = system_ctrl.get('screenshot_filename')
                 temp_dir = tempfile.gettempdir()
-                
+
                 msg = SystemController.capture_screenshot(filename=custom_filename, save_dir=temp_dir)
-                
+
                 if "error" in msg.lower():
                     sys_observations.append(msg)
                 else:
                     sys_observations.append(f"{msg}. Screenshot taken successfully.")
-            
+
             elif system_action == 'lock':
                 sys_observations.append(SystemController.lock_pc())
             elif system_action == 'sleep':
@@ -375,17 +454,17 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             prompt = image_cmd.get('prompt', '')
             filename = image_cmd.get('filename', 'agent_image')
             target_file = image_cmd.get('target_file')
-            
-            if not prompt: 
+
+            if not prompt:
                 return "Observation: Image action missing prompt."
-            
+
             logger.info(f"🤖 Agent executing image {action}: {prompt}")
             result_path = handle_image_command(action, prompt, filename, target_file)
-            
-            if result_path: 
+
+            if result_path:
                 logger.info(f"✅ Image {action} successful: {result_path}")
                 return f"Observation: Image successfully {action}d at absolute path: {result_path}."
-            else: 
+            else:
                 logger.error(f"❌ Image {action} failed. returned None.")
                 return f"Observation: Image {action} failed. API might be down or rejected the prompt."
         except Exception as e:
@@ -397,20 +476,20 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
         topic = deep_research_cmd.get('topic', '')
         if not topic: return "Observation: Deep research called without 'topic' parameter."
         logger.info(f"🤖 Agent initiating Deep Research on: {topic}")
-        try: 
+        try:
             result = deep_research_as_tool(topic)
             logger.info(f"✅ Deep Research completed for: {topic}")
             return f"Observation: {result}"
-        except Exception as e: 
+        except Exception as e:
             logger.error(f"❌ Deep Research crashed: {e}\n{traceback.format_exc()}")
             return f"Observation: Deep research error: {e}"
-        
+
     calendar_cmd = action_dict.get('calendar_action')
     if calendar_cmd and isinstance(calendar_cmd, dict) and calendar_cmd.get('action'):
         try:
             action = calendar_cmd.get('action')
             logger.info(f"🤖 Agent executing Calendar Action: {action}")
-            
+
             if action == 'create':
                 summary = calendar_cmd.get('summary', 'Reminder')
                 start = calendar_cmd.get('start_time')
@@ -419,22 +498,27 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
                 if not start or not end:
                     return "Observation: Error -> 'create' action requires start_time and end_time."
                 return create_event(summary, start, end, desc)
-                
+
             elif action == 'check':
                 start = calendar_cmd.get('start_time')
                 end = calendar_cmd.get('end_time')
                 return check_events(start, end)
-                
+
             elif action == 'delete':
                 event_id = calendar_cmd.get('event_id')
                 summary_query = calendar_cmd.get('summary_query')
                 return delete_event(event_id, summary_query)
-                
+
             else:
                 return f"Observation: Unknown calendar action '{action}'."
         except Exception as e:
             logger.error(f"❌ Calendar tool crashed: {e}\n{traceback.format_exc()}")
             return f"Observation: Calendar tool error -> {e}"
+
+    file_ops = action_dict.get('file_operations')
+    if file_ops and isinstance(file_ops, dict):
+        logger.info("🤖 Agent executing File Operation")
+        return execute_file_operation(file_ops)
 
     clipboard_cmd = action_dict.get('clipboard_action')
     if clipboard_cmd and isinstance(clipboard_cmd, dict) and clipboard_cmd.get('action'):
@@ -443,19 +527,19 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             if action_type == 'read':
                 logger.info("🤖 Agent executing Clipboard: READ")
                 content = read_clipboard()
-                if content: 
+                if content:
                     return f"Observation: Clipboard currently contains this text -> {content}"
-                else: 
+                else:
                     return "Observation: Clipboard is empty right now."
             elif action_type == 'write':
                 content_to_write = clipboard_cmd.get('content', '')
-                if not content_to_write: 
+                if not content_to_write:
                     return "Observation: Missing 'content' to write to clipboard."
                 logger.info("🤖 Agent executing Clipboard: WRITE")
                 success = write_clipboard(content_to_write)
-                if success: 
+                if success:
                     return f"Observation: Successfully copied text to clipboard. (Length: {len(content_to_write)} characters)."
-                else: 
+                else:
                     logger.error("❌ Failed to write to clipboard via OS.")
                     return "Observation: Failed to write text to OS clipboard."
         except Exception as e:

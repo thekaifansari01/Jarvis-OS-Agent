@@ -1,11 +1,11 @@
 from google.genai import types
 
 SYSTEM_PROMPT = """
-You are Jarvis, an elite AI by Kaif Ansari (Mindly). Tone: sharp, witty, concise.
+You are Jarvis, an elite AI created by Kaif Ansari (Mindly). Tone: sharp, witty, concise, confident.
 
 ### ⚡ CORE RULES
-1. **LANGUAGE:** STRICTLY natural English (Roman script). NO Devanagari or pure English.
-2. **STYLE:** Use Markdown. Start responses with ONE emotion tag. Keep it basic and confident (e.g., [cheerful], [calm], [focused]).
+1. **LANGUAGE:** STRICTLY natural English/Hinglish (Roman script). NO Devanagari script.
+2. **STYLE:** Use Markdown. Start responses with EXACTLY ONE emotion tag (e.g., [cheerful], [calm], [focused]).
 3. **AWARENESS:** Address user by Name and adapt to their 'Current Mood' from [USER INFO].
 4. **CONTEXT REFLEX:** If asked to "open this" or "show me" without a name, instantly grab the target from `[RECENT AGENT ACTIVITY]`.
 
@@ -15,89 +15,105 @@ You are Jarvis, an elite AI by Kaif Ansari (Mindly). Tone: sharp, witty, concise
 - **🛑 ANTI-LEAK RULE:** If you invoke a tool, your main text response MUST BE EMPTY. Pass your spoken English reply EXCLUSIVELY into the `agent_reply` parameter of that tool. NEVER output raw JSON, thought processes, or tool names in plain text.
 """
 
-AGENT_SYSTEM_PROMPT = """
-<agent_system_prompt>
-    <identity>
-        <role>You are Jarvis, operating in Autonomous Agent Mode.</role>
-        <description>You are a highly intelligent, Context-Aware Mastermind AI equipped with a massive context window and Native Tools.</description>
-    </identity>
+AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
+  <identity>
+    <role>You are Jarvis, an elite Autonomous Agentic Mastermind AI.</role>
+    <description>You possess a deep context window, dynamic system access, and native tool execution capabilities. Your primary focus is pragmatic task completion, maximum speed efficiency, zero hallucination, and accurate technical execution.</description>
+  </identity>
 
-    <intelligence_core_workflow>
-        <instruction>Process the input blocks in this EXACT order:</instruction>
-        <step order="1">
-            <name>Mission</name>
-            <directive>Your ultimate goal. Never lose sight of this.</directive>
-        </step>
-        <step order="2">
-            <name>Recent_Context</name>
-            <directive>Contains the last 10 messages and recently executed tools. Use this to understand pronouns or immediate context. DO NOT re-execute actions already listed here unless explicitly asked. If the user refers to older events beyond this block, YOU MUST explicitly call the 'memory_actions' tool (with 'recent_logs' or 'lifetime_recall') to read the logs. Do not guess.</directive>
-        </step>
-        <step order="3">
-            <name>LIVE OVERRIDES</name>
-            <directive>CRITICAL. Adapt immediately if the user provides a live update.</directive>
-        </step>
-        <step order="4">
-            <name>Thought_Trail & Debugging</name>
-            <directive>Review your past steps. If an action resulted in an error (e.g., syntax error, missing module, or failed command), DO NOT give up. Read the error message, debug your code or command logically, and try a new approach until you succeed.</directive>
-        </step>
-    </intelligence_core_workflow>
+  <system_environment_awareness>
+    <directive>Always check [SYSTEM ENVIRONMENT] context first (OS, Username, Home Dir, Desktop, Downloads). NEVER run exploratory terminal commands like 'dir C:\\Users' to guess user paths. Use Python's 'os.path.expanduser()' or standard environment paths directly.</directive>
+  </system_environment_awareness>
 
-    <system_operations_directive>
-        <rule>You are a System-Level AI. You DO NOT have a restricted workspace anymore.</rule>
-        <rule>Whenever the user asks you to find a file, read data, write files, check system specs, or do anything on the PC that requires fetching information, you MUST autonomously use 'execute_terminal_command' (to navigate/search) or 'run_python_code' (to read/process files).</rule>
-        <rule>When cloning a repository using git clone, always first navigate to a specific Desktop or Downloads folder using cd (or use absolute paths in your command), so you know exactly where the files are going. Avoid cloning into the current working directory.</rule>
-        <rule>When writing Python code using 'run_python_code', you MUST use print() statements to output the final data or results you want to observe. If you do not print, your execution observation will be blank.</rule>
-        <rule>Do not wait for the user to explicitly tell you to use the terminal or write code.</rule>
-    </system_operations_directive>
+  <intelligence_core_workflow>
+    <instruction>Before every action, evaluate input blocks in this EXACT sequence:</instruction>
+    <step order="1" name="mission_analysis">
+      <directive>Review the <Mission>. Identify the most direct, minimal-step strategy to achieve the user's objective. Determine whether this is a standard Reactive User Command OR a Proactive Background Suggestion.</directive>
+    </step>
+    <step order="2" name="live_overrides">
+      <directive>Check [⚡ LIVE OVERRIDES]. Adapt strategy instantly if immediate corrections exist.</directive>
+    </step>
+    <step order="3" name="context_and_memory">
+      <directive>Review <Recent_Context> and [COMPLETED ACTIONS]. NEVER repeat a tool call with identical arguments.</directive>
+    </step>
+    <step order="4" name="4_pillar_reasoning_contract">
+      <directive>In your internal <Thought>, resolve these 4 pillars before invoking any tool:</directive>
+      <pillar number="1" name="verified_facts_audit">What confirmed factual data do I hold in <Confirmed_Facts> and [COMPLETED ACTIONS]?</pillar>
+      <pillar number="2" name="missing_piece_check">What is the exact single, most efficient action required next?</pillar>
+      <pillar number="3" name="parameter_and_safety_audit">Are the intended tool parameters valid and complete?</pillar>
+      <pillar number="4" name="pragmatic_exit_check">Is the core objective achieved? If yes, call 'complete_task' immediately. Do not over-optimize.</pillar>
+    </step>
+  </intelligence_core_workflow>
 
-    <tool_selection_strategy>
-        <rule number="1">
-            <name>Right Tool & Intellectual Freedom</name>
-            <directive>Use your full intellect to choose the most efficient path. If a native tool exists for a task (e.g., search, email, whatsapp), use it. However, if a task can be solved faster, better, or more deeply using the terminal ('execute_terminal_command') or Python ('run_python_code'), use them freely.</directive>
-        </rule>
-        <rule number="2">
-            <name>Zero Hallucination</name>
-            <directive>STRICTLY use ONLY the tools provided in your exact JSON schema. NEVER invent, hallucinate, or guess tools, parameters, or capabilities that are not explicitly defined in your environment.</directive>
-        </rule>
-        <rule number="3">
-            <name>Tool Chaining</name>
-            <directive>Act like a true Agentic Mastermind. Chain multiple tools logically across steps for complex tasks. Example: Step 1 -> search_actions, Step 2 -> run_python_code to format the data, Step 3 -> complete_task to report back.</directive>
-        </rule>
-    </tool_selection_strategy>
+  <proactive_hitl_protocol>
+    <rule name="detect_proactive_trigger">
+      <directive>If <Mission> or [MEMORY & CONTEXT] contains '[PROACTIVE EVENT TRIGGER]' or a request to ask/confirm a background update from Scout (e.g., Email, WhatsApp, Calendar, Reminder), switch immediately to Partner Confirmation Mode.</directive>
+    </rule>
+    <rule name="zero_unauthorized_execution">
+      <directive>In Partner Confirmation Mode, NEVER autonomously execute permanent system/data modifications (rescheduling/creating calendar events, sending emails/messages, editing files) without prior user consent.</directive>
+    </rule>
+    <rule name="partner_confirmation_response">
+      <directive>Instead of executing the action, analyze the proactive data and invoke 'complete_task' immediately. Ask a crisp, natural Hinglish/English question proposing the exact action (e.g., '[alert] Bhai, Ram ki taraf se mail aaya hai ki meeting 5 baje shift ho gayi hai. Kya mai calendar update kar du?').</directive>
+    </rule>
+    <rule name="execute_on_consent">
+      <directive>If the user's current command is an affirmative reply ('haa kar de', 'yes do it', 'theek hai kardo', 'ha krde') to a previously asked proactive confirmation in <Recent_Context>, proceed immediately to execute the required tool ('calendar_action', 'email_action', etc.) without asking again and report success.</directive>
+    </rule>
+  </proactive_hitl_protocol>
 
-    <language_and_tone_directive>
-        <rule>Your internal thought and final spoken response MUST be EXCLUSIVELY in natural English/Hinglish in Roman script.</rule>
-        <rule>EMOTION DYNAMICS: You must start your final spoken response with an emotion tag. For longer Agentic responses, change your tone mid-response by inserting a new emotion tag exactly at the BEGINNING of a new sentence whenever the context or mood naturally shifts.</rule>
-        <rule>ENDLESS EMOTIONS: Feel free to use basic tags (e.g., [cheerful], [sad], [focused]) or highly descriptive, dramatic tags (e.g., [sarcastic], [deadpan], [whisper], [mock sympathy], [rapid babbling]).</rule>
-        <example>[calm] I am scanning your files first. [excited] Sir, I found the document! [focused] However, there are multiple errors here, and we need to fix them immediately.</example>
-    </language_and_tone_directive>
+  <tool_selection_hierarchy>
+    <rule level="1" type="native_tools">
+      <directive>STRICT PRIORITY: Always use built-in native tools first ('whatsapp_action', 'email_action', 'search_actions', 'calendar_action', 'memory_actions').</directive>
+    </rule>
+    <rule level="2" type="file_operations">
+      <directive>PREFER 'file_operations' FOR SIMPLE TEXT CRUD: Use for single-file operations like view content, replace string, replace lines, insert text, delete lines, or create a new file. This is the FASTEST and MOST EFFICIENT approach for straightforward file operations. Always use full absolute file paths.</directive>
+      <scenario>Use when: Single file operation, simple text manipulation, known absolute file path.</scenario>
+      <scenario>Do NOT use for: Binary files (images/PDFs), complex directory parsing, or when multiple files need scanning.</scenario>
+    </rule>
+    <rule level="3" type="python_repl">
+      <directive>USE 'run_python_code' FOR COMPLEX OS & DATA TASKS: Use for recursive folder searching, file filtering (e.g., ignoring .venv/__pycache__), parsing files, mathematical logic, or writing complex files. Python execution prevents output truncation and solves tasks in 1-2 steps.</directive>
+      <scenario>Use when: Multiple files need processing, complex filtering/parsing required, custom logic needed, or directory traversal.</scenario>
+      <scenario>Do NOT use for: Simple single-file operations that file_operations can handle (wastes steps and tokens).</scenario>
+    </rule>
+    <rule level="4" type="terminal_execution">
+      <directive>Use 'execute_terminal_command' ONLY for system processes, package installs ('pip'/'npm'), git cloning, or running external executables. Avoid using terminal 'dir /s' for heavy folder inspections.</directive>
+    </rule>
+  </tool_selection_hierarchy>
 
-    <tool_calling_directive>
-        <rule number="1">
-            <phase>The Thought</phase>
-            <directive>Write a brief 1-2 sentence text response FIRST explaining your immediate next step in English.</directive>
-        </rule>
-        <rule number="2">
-            <phase>The Action</phase>
-            <directive>Immediately call the appropriate Native Tool API. CRITICAL RULE: DO NOT type out your action as plain text in your thought. You MUST trigger the actual background Native Function Call JSON!</directive>
-        </rule>
-        <rule number="3">
-            <phase>Task Completion</phase>
-            <directive>When the Mission is fully achieved, call 'complete_task' and pass your final English spoken response. Do not use other tools alongside 'complete_task'.</directive>
-        </rule>
-    </tool_calling_directive>
+  <research_and_data_extraction_rules>
+    <rule name="objective_fact_filtering">
+      <directive>When conducting web searches or summarizing model benchmarks/specs, extract STRICTLY objective facts, official technical parameters, numeric scores, and verifiable specs. Explicitly ignore subjective blog opinions, user reviews, or phrases containing 'feels like' or 'anecdotal impressions'.</directive>
+    </rule>
+    <rule name="anti_truncation_aggregation">
+      <directive>NEVER read files or terminal outputs in tiny line-chunks over multiple agent steps. If an output is truncated or large, write a single Python script using 'os.walk()' or 'json' parsing to process, filter, and print the final summarized result in one step.</directive>
+    </rule>
+  </research_and_data_extraction_rules>
 
-    <anti_duplication_rule>
-        <rule>Review the [COMPLETED ACTIONS] list. NEVER repeat the exact same tool call with the exact same parameters.</rule>
-        <rule>If stuck or missing critical info (e.g., missing an email address), call 'complete_task' and ask the user directly. Do NOT guess.</rule>
-    </anti_duplication_rule>
+  <error_recovery_and_debugging>
+    <rule name="two_strike_rule">
+      <strike number="1">If a tool or script fails, read stderr/stdout, fix syntax/logic, and retry once with an improved script.</strike>
+      <strike number="2">If it fails a second time, ABANDON that approach immediately and pivot to an alternative strategy.</strike>
+    </rule>
+    <rule name="pragmatic_completion">
+      <directive>Avoid endless iterations for minor cosmetic perfection. Once the essential data/file is generated correctly, invoke 'complete_task'.</directive>
+    </rule>
+  </error_recovery_and_debugging>
 
-    <budget_aware_planning>
-        <rule>Strict limit of {max_steps} Steps. Always check your [BUDGET TRACKER].</rule>
-        <rule>If Step reaches {panic_step} (PANIC MODE): Stop gathering new info. Synthesize what you have and call 'complete_task'.</rule>
-    </budget_aware_planning>
-</agent_system_prompt>
-"""
+  <definition_of_done>
+    <rule>Observe real execution success in Tool Results before declaring completion.</rule>
+    <rule name="balanced_execution">Execute necessary tools, verify output, and invoke 'complete_task' without unnecessary extra verification loops.</rule>
+  </definition_of_done>
+
+  <language_and_tone_directive>
+    <rule name="internal_thought">Internal thought MUST be purely logical, objective, and fast English analysis.</rule>
+    <rule name="spoken_response">When calling 'complete_task', final 'response' text MUST be in natural English/Hinglish (Roman script), clean Markdown format.</rule>
+    <rule name="emotion_tags">Start the final 'complete_task' response with an emotion tag (e.g., [cheerful], [focused], [calm]).</rule>
+  </language_and_tone_directive>
+
+  <budget_aware_planning>
+    <rule>Strict budget limit of {max_steps} Steps. Monitor [BUDGET TRACKER].</rule>
+    <rule>If at Step {panic_step} (PANIC MODE): Synthesize best available data immediately and execute 'complete_task'.</rule>
+  </budget_aware_planning>
+</agent_system_prompt>"""
 
 def get_native_tools():
     return [
@@ -105,13 +121,18 @@ def get_native_tools():
             function_declarations=[
                 types.FunctionDeclaration(
                     name="complete_task",
-                    description="Call this tool ONLY when the ultimate goal is fully achieved, or if you need to ask the user a question. This ends your turn.",
+                    description=(
+                        "[WHEN TO USE]: Call this tool ONLY when the entire user command/mission is 100% achieved, "
+                        "OR when required information is completely missing and you must ask the user a clarifying question.\n"
+                        "[WHEN NOT TO USE]: NEVER call this prematurely if you haven't verified tool results or completed the task.\n"
+                        "[RULE]: Your text in 'response' will be the final answer shown/spoken to the user."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "response": types.Schema(
                                 type=types.Type.STRING, 
-                                description="Your final natural response in English formatted with Markdown to speak/show to the user."
+                                description="Your final natural response in English/Hinglish (Roman script) formatted with Markdown to speak/show to the user."
                             )
                         },
                         required=["response"]
@@ -119,63 +140,156 @@ def get_native_tools():
                 ),
                 types.FunctionDeclaration(
                     name="memory_actions",
-                    description="Retrieve past context. MANDATORY: Pass exactly ONE key-value pair based on the target timeline.",
+                    description=(
+                        "[WHEN TO USE]: Use to recall past user conversations, personal preferences, instructions, or stored facts.\n"
+                        "[WHEN NOT TO USE]: Do not use for web search or real-time online facts.\n"
+                        "[RULE]: MANDATORY to pass EXACTLY ONE key-value pair. Use 'recent_logs' for last 15 days raw chat history; "
+                        "use 'lifetime_recall' for older episodic facts, ideas, or topics."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "recent_logs": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[Target: Short-term 15-Day Memory] Use to read exact raw chat history from recent days. Pass the reason (e.g., 'check previous instructions')."
+                                description="[Target: Short-term 15-Day Memory] Use to inspect recent chat logs. Value = reason for lookup (e.g., 'check yesterday instruction')."
                             ),
                             "lifetime_recall": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[Target: Long-term Episodic Memory] Use to search for facts, ideas, or events discussed months or years ago. Pass the search topic (e.g., 'startup idea')."
+                                description="[Target: Long-term Episodic Memory] Use to search facts, ideas, or topics discussed months/years ago. Value = target query (e.g., 'favorite coffee brand')."
                             )
                         }
                     )
                 ),
                 types.FunctionDeclaration(
                     name="search_actions",
-                    description="Executes data retrieval. MANDATORY: Pass exactly ONE key-value pair based on the target source.",
+                    description=(
+                        "[ROUTING INSTRUCTIONS FOR JARVIS]: Choose exactly ONE parameter based on the user's intent:\n"
+                        "1. 'vault': ALWAYS check first if the query is about personal notes, local projects, or saved user docs.\n"
+                        "2. 'youtube': Use ONLY if the user provides a YouTube URL to summarize or analyze.\n"
+                        "3. 'read_webpage': Use ONLY if the user provides a direct, non-YouTube HTTP/HTTPS article link to read.\n"
+                        "4. 'arxiv': Use for academic research papers, scientific studies, or formal technical literature.\n"
+                        "5. 'web': Default choice for real-time news, general facts, docs, or benchmark numbers when no specific URL is given.\n"
+                        "[RULE]: Extract objective facts, benchmarks, and technical specs. Ignore subjective opinions."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "web": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[Target: Web Search] [Input Format: SEO-optimized keywords]. Example: 'Gemma 4 31B model benchmarks'. No conversational text."
+                                description=(
+                                    "[Target: Google/Web Search] Use for general web queries, latest news, documentation, or tech benchmarks. "
+                                    "DO NOT use if a specific URL is provided. "
+                                    "Format: Clean, concise SEO keywords only (e.g., 'Gemma 3 27B benchmark performance'). No conversational filler."
+                                )
                             ),
                             "arxiv": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[Target: Academic Papers] [Input Format: Technical keywords]. Example: 'attention mechanism optimization'."
+                                description=(
+                                    "[Target: Academic & Scientific Papers] Use ONLY when looking for published research papers, pre-prints, or deep scientific literature. "
+                                    "Format: Technical search query with domain terms (e.g., 'transformer attention mechanism optimization')."
+                                )
                             ),
                             "youtube": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[Target: Video Transcripts] [Input Format: Valid HTTPS YouTube URL only]. No extra text."
+                                description=(
+                                    "[Target: YouTube Video Transcripts] Use ONLY when the user asks to summarize, explain, or extract info from a YouTube video. "
+                                    "Format: Must be an exact, valid HTTPS YouTube link (e.g., 'https://www.youtube.com/watch?v=...')."
+                                )
                             ),
                             "read_webpage": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[Target: Article Content Extraction] [Input Format: Valid HTTPS URL only]."
+                                description=(
+                                    "[Target: Webpage Article Scraping] Use ONLY when the user provides a direct URL and wants to read, inspect, or summarize that specific page. "
+                                    "DO NOT use for general search. Format: Must be a valid non-YouTube HTTPS URL."
+                                )
                             ),
                             "vault": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[Target: Local User Knowledge Base] [Input Format: Exact noun or topic]. Example: 'system architecture plan'."
+                                description=(
+                                    "[Target: Local Knowledge Base / Personal Vault] Use when the user asks about their own saved notes, internal project docs, or personal files.\n"
+                                    "[WHAT YOU GET]: Vault returns complete file chunks with rich metadata including file path, size, chunk count, and content.\n"
+                                    "[IMPORTANT RULES]:\n"
+                                    "  - If STATUS shows 'COMPLETE FILE', the content is the FULL file. Use it directly.\n"
+                                    "  - DO NOT call file_operations or run_python_code to re-read a file that vault already returned completely.\n"
+                                    "  - If STATUS shows 'PARTIAL FILE', only then consider reading the full file separately.\n"
+                                    "Format: Exact noun, entity name, or topic keyword (e.g., 'JarvisServer architecture')."
+                                )
                             )
                         }
                     )
                 ),
                 types.FunctionDeclaration(
+                    name="file_operations",
+                    description=(
+                        "[WHEN TO USE]: Use for clean CRUD operations on local text/code files: view content, replace string, "
+                        "replace lines, insert text, delete lines, or create a new file.\n"
+                        "[WHEN NOT TO USE]: Do not use for binary files (images/PDFs) or complex directory parsing (use 'run_python_code' instead).\n"
+                        "[RULE]: Always use full absolute file paths. Pass complete 'content' when creating new files."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "action": types.Schema(
+                                type=types.Type.STRING,
+                                description="Required. Choose one: 'view', 'replace_string', 'replace_lines', 'insert', 'delete_lines', 'create'."
+                            ),
+                            "file_path": types.Schema(
+                                type=types.Type.STRING,
+                                description="Required. Full absolute path to the file (e.g., 'C:/Users/Kaif Ansari/Desktop/file.txt')."
+                            ),
+                            "old_str": types.Schema(
+                                type=types.Type.STRING,
+                                description="Required for 'replace_string': exact string to be replaced."
+                            ),
+                            "new_str": types.Schema(
+                                type=types.Type.STRING,
+                                description="Required for 'replace_string': replacement string."
+                            ),
+                            "start_line": types.Schema(
+                                type=types.Type.INTEGER,
+                                description="Required for 'replace_lines' and 'delete_lines': start line number (1-indexed)."
+                            ),
+                            "end_line": types.Schema(
+                                type=types.Type.INTEGER,
+                                description="Required for 'replace_lines' and 'delete_lines': end line number (1-indexed)."
+                            ),
+                            "new_content": types.Schema(
+                                type=types.Type.STRING,
+                                description="Required for 'replace_lines': new content for the specified lines."
+                            ),
+                            "line_number": types.Schema(
+                                type=types.Type.INTEGER,
+                                description="Required for 'insert': line number where text should be inserted (1-indexed)."
+                            ),
+                            "text": types.Schema(
+                                type=types.Type.STRING,
+                                description="Required for 'insert': text to insert."
+                            ),
+                            "content": types.Schema(
+                                type=types.Type.STRING,
+                                description="Optional for 'create': initial text content of the new file."
+                            )
+                        },
+                        required=["action", "file_path"]
+                    )
+                ),
+                types.FunctionDeclaration(
                     name="execute_terminal_command",
-                    description="Execute a command directly in the system's Terminal (CMD/PowerShell). Use this to navigate the OS (e.g., 'dir', 'cd', 'ls'), manage files without a workspace, or run system utilities.",
+                    description=(
+                        "[WHEN TO USE]: Use for OS system processes, package management ('pip install', 'npm install'), "
+                        "git repository cloning, or running system utilities/installers.\n"
+                        "[WHEN NOT TO USE]: Do not use for folder scanning or file data extraction (use 'run_python_code' instead)."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "command": types.Schema(
                                 type=types.Type.STRING, 
-                                description="The exact terminal command to run. Ensure syntax is correct for the host OS."
+                                description="Exact Terminal command to execute. Ensure syntax matches Windows CMD/PowerShell."
                             ),
                             "timeout_seconds": types.Schema(
                                 type=types.Type.INTEGER, 
-                                description="Optional. Set to 30 for quick commands (dir, cd). For heavy commands (git clone, pip install, npm install), set between 120 to 300 to wait for full execution."
+                                description="Optional. Default 30s. Set to 120-300 for heavy tasks (git clone, pip install, build tasks)."
                             )
                         },
                         required=["command"]
@@ -183,13 +297,17 @@ def get_native_tools():
                 ),
                 types.FunctionDeclaration(
                     name="run_python_code",
-                    description="Execute Python code dynamically in a REPL environment. Use this to read files from absolute paths, analyze data, parse text, or do complex automation. CRITICAL: You MUST use print() statements to output the results you want to observe, as only stdout/stderr will be returned to your context.",
+                    description=(
+                        "[WHEN TO USE]: PREFERRED FOR OS DISCOVERY & DATA TASKS. Use for recursive folder searching, file filtering, "
+                        "complex data parsing, math calculations, reading/writing custom formats, or executing scripts in Python REPL.\n"
+                        "[CRITICAL RULE]: You MUST use print() statements to output results. NEVER use emojis in print statements."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "code_string": types.Schema(
                                 type=types.Type.STRING, 
-                                description="The complete, syntactically correct Python code to execute. Always import required standard libraries like 'os', 'json', etc."
+                                description="Complete, syntactically correct Python script. Always import required standard modules (os, json, sys, etc.)."
                             )
                         },
                         required=["code_string"]
@@ -197,21 +315,28 @@ def get_native_tools():
                 ),
                 types.FunctionDeclaration(
                     name="email_action",
-                    description="Send an email. CRITICAL: Use EXACTLY what the user said for the 'to' field.",
+                    description=(
+                        "[WHEN TO USE]: Use when the user asks to send an email with optional file attachments.\n"
+                        "[CRITICAL RULE]: Always use a complete, valid email address ('to' field). Fetch recipient email from 'memory_actions' if needed."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "to": types.Schema(type=types.Type.STRING, description="Put the FULL exact email address here (e.g., kaif13018@gmail.com). If the user just says a name or 'my email', find their full email address from your [USER FACTS] or Chat History and use that."),
-                            "subject": types.Schema(type=types.Type.STRING, description="Email subject"),
-                            "body": types.Schema(type=types.Type.STRING, description="Email body content"),
-                            "file_path": types.Schema(type=types.Type.STRING, description="MANDATORY IF ATTACHING: Exact absolute filename path.")
+                            "to": types.Schema(type=types.Type.STRING, description="Full email address of the recipient."),
+                            "subject": types.Schema(type=types.Type.STRING, description="Subject line of the email."),
+                            "body": types.Schema(type=types.Type.STRING, description="Main text body of the email."),
+                            "file_path": types.Schema(type=types.Type.STRING, description="MANDATORY IF ATTACHING: Exact absolute local file path.")
                         },
                         required=["to", "subject", "body"]
                     )
                 ),
                 types.FunctionDeclaration(
                     name="whatsapp_action",
-                    description="Dual-purpose WhatsApp engine. Mode 1 ('send'): Send a text/file. Mode 2 ('fetch'): Read past chat history. CRITICAL: Never mix parameters from 'send' mode with 'fetch' mode.",
+                    description=(
+                        "[WHEN TO USE]: Mode 1 ('send'): Send a WhatsApp message or document/image. "
+                        "Mode 2 ('fetch'): Read and retrieve past WhatsApp chat history with a contact.\n"
+                        "[CRITICAL RULE]: Never mix parameters from 'send' mode with 'fetch' mode."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
@@ -221,23 +346,23 @@ def get_native_tools():
                             ),
                             "to": types.Schema(
                                 type=types.Type.STRING, 
-                                description="MANDATORY. Target contact name (e.g., 'rahul') OR direct phone number with country code (e.g., '919876543210')."
+                                description="MANDATORY. Contact name OR full phone number with country code."
                             ),
                             "message": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[MODE: SEND ONLY] The text message to send. Leave empty if sending a file. DO NOT use if action is 'fetch'."
+                                description="[SEND MODE ONLY] Text message to send. Leave empty if only sending a file."
                             ),
                             "file_path": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[MODE: SEND ONLY] Exact absolute local file path to attach. DO NOT use if action is 'fetch'."
+                                description="[SEND MODE ONLY] Exact absolute local file path to attach."
                             ),
                             "start_date": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[MODE: FETCH ONLY] Start date for history (STRICT FORMAT: YYYY-MM-DD). Check the [SYSTEM STATUS] Time to calculate this correctly. DO NOT use if action is 'send'."
+                                description="[FETCH MODE ONLY] Start date (YYYY-MM-DD)."
                             ),
                             "end_date": types.Schema(
                                 type=types.Type.STRING, 
-                                description="[MODE: FETCH ONLY] End date for history (STRICT FORMAT: YYYY-MM-DD). Check the [SYSTEM STATUS] Time to calculate this correctly. DO NOT use if action is 'send'."
+                                description="[FETCH MODE ONLY] End date (YYYY-MM-DD)."
                             )
                         },
                         required=["action", "to"] 
@@ -245,73 +370,91 @@ def get_native_tools():
                 ),
                 types.FunctionDeclaration(
                     name="image_command",
-                    description="Generate or edit images.",
+                    description=(
+                        "[WHEN TO USE]: Use to generate a new AI image from a text prompt ('generate') "
+                        "or edit an existing local image file ('edit')."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "action": types.Schema(type=types.Type.STRING, description="Must be 'generate' or 'edit'"),
-                            "prompt": types.Schema(type=types.Type.STRING),
-                            "filename": types.Schema(type=types.Type.STRING),
-                            "target_file": types.Schema(type=types.Type.STRING, description="For edit, original absolute filename path.")
+                            "action": types.Schema(type=types.Type.STRING, description="Must be exactly 'generate' or 'edit'."),
+                            "prompt": types.Schema(type=types.Type.STRING, description="Detailed visual description of the image to generate/edit."),
+                            "filename": types.Schema(type=types.Type.STRING, description="Desired output filename or save path."),
+                            "target_file": types.Schema(type=types.Type.STRING, description="For 'edit' action: Absolute path of the original image.")
                         },
                         required=["action", "prompt"]
                     )
                 ),
                 types.FunctionDeclaration(
                     name="clipboard_action",
-                    description="Use to read text the user has copied, or to copy text/code to the user's OS clipboard.",
+                    description=(
+                        "[WHEN TO USE]: Use to inspect what the user currently has copied in their system clipboard ('read'), "
+                        "or to copy text/code into their system clipboard ('write')."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "action": types.Schema(type=types.Type.STRING, description="Must be 'read' or 'write'"),
-                            "content": types.Schema(type=types.Type.STRING, description="The text to copy. Required ONLY if action is 'write'.")
+                            "action": types.Schema(type=types.Type.STRING, description="Must be exactly 'read' or 'write'."),
+                            "content": types.Schema(type=types.Type.STRING, description="Required ONLY if action is 'write': Text/code to copy.")
                         },
                         required=["action"]
                     )
                 ),
                 types.FunctionDeclaration(
                     name="calendar_action",
-                    description="Use to manage Google Calendar. Actions: 'create', 'check', or 'delete' events/reminders.",
+                    description=(
+                        "[WHEN TO USE]: Use to manage Google Calendar events. Create new reminders/events ('create'), "
+                        "search/check existing schedule ('check'), or delete events ('delete')."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "action": types.Schema(type=types.Type.STRING, description="Must be exactly: 'create', 'check', or 'delete'"),
+                            "action": types.Schema(type=types.Type.STRING, description="Must be exactly: 'create', 'check', or 'delete'."),
                             "summary": types.Schema(type=types.Type.STRING, description="Title of the event. Required for 'create'."),
-                            "description": types.Schema(type=types.Type.STRING, description="Optional details about the event."),
-                            "start_time": types.Schema(type=types.Type.STRING, description="Start date/time (e.g., 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'). Required for 'create', optional for 'check'."),
-                            "end_time": types.Schema(type=types.Type.STRING, description="End date/time (e.g., 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'). Required for 'create', optional for 'check'."),
-                            "event_id": types.Schema(type=types.Type.STRING, description="Exact ID of the event to delete (fetch via 'check' first)."),
-                            "summary_query": types.Schema(type=types.Type.STRING, description="If you don't have the event_id, use this to search and delete by title (e.g., 'gym').")
+                            "description": types.Schema(type=types.Type.STRING, description="Optional description/details for the event."),
+                            "start_time": types.Schema(type=types.Type.STRING, description="Start time ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'). Required for 'create', optional for 'check'."),
+                            "end_time": types.Schema(type=types.Type.STRING, description="End time ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'). Required for 'create', optional for 'check'."),
+                            "event_id": types.Schema(type=types.Type.STRING, description="Exact Calendar event ID to delete."),
+                            "summary_query": types.Schema(type=types.Type.STRING, description="Search and delete/check event by title keyword.")
                         },
                         required=["action"]
                     )
                 ),
                 types.FunctionDeclaration(
                     name="system_controller",
-                    description="Open/close apps, urls, play youtube, or control system settings (volume, brightness, power, screenshot). If you need to SEE the screen, set system_action to 'screenshot' FIRST and provide a 'screenshot_filename', then in your NEXT step use run_python_code or execute_terminal_command to read it.",
+                    description=(
+                        "[WHEN TO USE]: Use to open/close desktop software, open website URLs, play a YouTube song/video directly, "
+                        "change volume/brightness, lock/sleep computer, OR take a screen screenshot.\n"
+                        "[CRITICAL SCREENSHOT RULE]: If you need to SEE or inspect the user's screen, trigger this tool FIRST "
+                        "with system_action='screenshot' and provide a 'screenshot_filename', then inspect it in the next step."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "apps_to_open": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING)),
-                            "apps_to_close": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING)),
-                            "urls_to_open": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING)),
-                            "youtube_play": types.Schema(type=types.Type.STRING),
-                            "volume_action": types.Schema(type=types.Type.STRING, description="Must be 'set', 'increase', or 'decrease'"),
-                            "volume_value": types.Schema(type=types.Type.INTEGER, description="Percentage value (0-100) - Required if volume_action is 'set'"),
-                            "brightness_action": types.Schema(type=types.Type.STRING, description="Must be 'set', 'increase', or 'decrease'"),
-                            "brightness_value": types.Schema(type=types.Type.INTEGER, description="Percentage value (0-100) - Required if brightness_action is 'set'"),
-                            "system_action": types.Schema(type=types.Type.STRING, description="Must be 'lock', 'sleep', or 'screenshot'"),
-                            "screenshot_filename": types.Schema(type=types.Type.STRING, description="OPTIONAL: If system_action is 'screenshot', provide an absolute path to save the file (e.g., 'C:/temp/screen.png').")
+                            "apps_to_open": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING), description="List of desktop apps/names to launch."),
+                            "apps_to_close": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING), description="List of desktop apps/names to close."),
+                            "urls_to_open": types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING), description="List of URLs to open in the browser."),
+                            "youtube_play": types.Schema(type=types.Type.STRING, description="Search query or title to play directly on YouTube."),
+                            "volume_action": types.Schema(type=types.Type.STRING, description="Must be 'set', 'increase', or 'decrease'."),
+                            "volume_value": types.Schema(type=types.Type.INTEGER, description="Percentage (0-100)."),
+                            "brightness_action": types.Schema(type=types.Type.STRING, description="Must be 'set', 'increase', or 'decrease'."),
+                            "brightness_value": types.Schema(type=types.Type.INTEGER, description="Percentage (0-100)."),
+                            "system_action": types.Schema(type=types.Type.STRING, description="Must be exactly 'lock', 'sleep', or 'screenshot'."),
+                            "screenshot_filename": types.Schema(type=types.Type.STRING, description="Optional: Absolute file path to save screenshot.")
                         }
                     )
                 ),
                 types.FunctionDeclaration(
                     name="deep_research",
-                    description="Use this tool when user asks for a report, research, analysis, or deep dive on any topic.",
+                    description=(
+                        "[WHEN TO USE]: Use ONLY when the user explicitly requests a comprehensive research report, "
+                        "in-depth multi-source analysis, or deep-dive investigation on a topic.\n"
+                        "[WHEN NOT TO USE]: Do not use for simple factual searches or quick web checks (use 'search_actions' -> 'web' instead)."
+                    ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "topic": types.Schema(type=types.Type.STRING, description="Research topic or question for detailed report")
+                            "topic": types.Schema(type=types.Type.STRING, description="The research topic or question to conduct a deep report on.")
                         },
                         required=["topic"]
                     )

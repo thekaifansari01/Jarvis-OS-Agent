@@ -32,7 +32,6 @@ class RegoloProvider(BaseLLMProvider):
         logger.info(f"✅ RegoloProvider initialized with model: {self.model}")
     
     def _convert_tools_to_openai(self, tools_list: List[Any]) -> List[Dict[str, Any]]:
-        """Convert Gemini tools format to OpenAI function calling format."""
         if not tools_list:
             return []
         
@@ -154,6 +153,7 @@ class RegoloProvider(BaseLLMProvider):
                 message = data["choices"][0]["message"]
                 
                 content = message.get("content") or ""
+                reasoning_content = message.get("reasoning_content") or message.get("reasoning") or ""
                 tool_calls = message.get("tool_calls", [])
                 
                 formatted_tool_calls = []
@@ -167,6 +167,7 @@ class RegoloProvider(BaseLLMProvider):
                 
                 return {
                     "content": content,
+                    "reasoning_content": reasoning_content,
                     "tool_calls": formatted_tool_calls,
                     "provider": "regolo",
                     "error": None
@@ -176,6 +177,7 @@ class RegoloProvider(BaseLLMProvider):
                 logger.error(f"❌ Regolo API Error: {response.status_code} - {error_text}")
                 return {
                     "content": "",
+                    "reasoning_content": "",
                     "tool_calls": [],
                     "provider": "regolo",
                     "error": f"HTTP {response.status_code}: {error_text}"
@@ -185,6 +187,7 @@ class RegoloProvider(BaseLLMProvider):
             logger.error(f"❌ RegoloProvider error: {e}")
             return {
                 "content": "",
+                "reasoning_content": "",
                 "tool_calls": [],
                 "provider": "regolo",
                 "error": str(e)
@@ -231,6 +234,8 @@ class RegoloProvider(BaseLLMProvider):
                 timeout=120
             )
             
+            accumulated_tool_calls = {}
+
             if response.status_code == 200:
                 for line in response.iter_lines():
                     if line:
@@ -243,36 +248,65 @@ class RegoloProvider(BaseLLMProvider):
                                     if chunk.get('choices'):
                                         delta = chunk['choices'][0].get('delta', {})
                                         
+                                        rc = delta.get('reasoning_content') or delta.get('reasoning')
+                                        if rc:
+                                            yield {
+                                                "content": "",
+                                                "reasoning_content": rc,
+                                                "tool_calls": [],
+                                                "provider": "regolo",
+                                                "error": None
+                                            }
+                                        
                                         if delta.get('content'):
                                             yield {
                                                 "content": delta['content'],
+                                                "reasoning_content": "",
                                                 "tool_calls": [],
                                                 "provider": "regolo",
                                                 "error": None
                                             }
                                         
                                         if delta.get('tool_calls'):
-                                            tool_calls = []
                                             for tc in delta['tool_calls']:
-                                                tool_calls.append({
-                                                    "function": {
-                                                        "name": tc["function"]["name"],
-                                                        "arguments": json.loads(tc["function"]["arguments"]) if isinstance(tc["function"]["arguments"], str) else tc["function"]["arguments"]
-                                                    }
-                                                })
-                                            if tool_calls:
-                                                yield {
-                                                    "content": "",
-                                                    "tool_calls": tool_calls,
-                                                    "provider": "regolo",
-                                                    "error": None
-                                                }
+                                                idx = tc.get('index', 0)
+                                                if idx not in accumulated_tool_calls:
+                                                    accumulated_tool_calls[idx] = {"name": "", "arguments": ""}
+                                                fn = tc.get('function', {})
+                                                if fn.get('name'):
+                                                    accumulated_tool_calls[idx]["name"] += fn['name']
+                                                if fn.get('arguments'):
+                                                    accumulated_tool_calls[idx]["arguments"] += fn['arguments']
                                                 
                                 except json.JSONDecodeError:
                                     pass
+                
+                if accumulated_tool_calls:
+                    formatted_tool_calls = []
+                    for idx in sorted(accumulated_tool_calls.keys()):
+                        tc_data = accumulated_tool_calls[idx]
+                        raw_args = tc_data["arguments"]
+                        try:
+                            parsed_args = json.loads(raw_args) if isinstance(raw_args, str) and raw_args else raw_args
+                        except Exception:
+                            parsed_args = {}
+                        formatted_tool_calls.append({
+                            "function": {
+                                "name": tc_data["name"],
+                                "arguments": parsed_args
+                            }
+                        })
+                    yield {
+                        "content": "",
+                        "reasoning_content": "",
+                        "tool_calls": formatted_tool_calls,
+                        "provider": "regolo",
+                        "error": None
+                    }
             else:
                 yield {
                     "content": "",
+                    "reasoning_content": "",
                     "tool_calls": [],
                     "provider": "regolo",
                     "error": f"HTTP {response.status_code}: {response.text}"
@@ -282,6 +316,7 @@ class RegoloProvider(BaseLLMProvider):
             logger.error(f"❌ RegoloProvider stream error: {e}")
             yield {
                 "content": "",
+                "reasoning_content": "",
                 "tool_calls": [],
                 "provider": "regolo",
                 "error": str(e)

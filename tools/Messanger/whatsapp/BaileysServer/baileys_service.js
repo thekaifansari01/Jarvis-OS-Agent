@@ -6,7 +6,13 @@ console.log = function (...args) {
     originalLog.apply(console, args);
 };
 
-const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { 
+    makeWASocket, 
+    useMultiFileAuthState, 
+    DisconnectReason,
+    fetchLatestBaileysVersion, 
+    Browsers                     
+} = require('@whiskeysockets/baileys');
 const express = require('express');
 const qrcode = require('qrcode');
 const fs = require('fs');

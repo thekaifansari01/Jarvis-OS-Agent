@@ -10,6 +10,7 @@ from core.voice.stt_status import exit_stt_popup
 _panel_process = None
 _stt_popup_process = None
 _baileys_process = None
+_rag_engine_initialized = False
 
 def start_agent_panel():
     global _panel_process
@@ -122,8 +123,29 @@ def is_baileys_running() -> bool:
         return False
     return _baileys_process.poll() is None
 
+def start_rag_engine():
+    try:
+        from core.brain.RagEngine import rag_engine
+        logging.info("🚀 RAG Engine initialized successfully. Folder created & indexing started in background.")
+    except Exception as e:
+        logging.error(f"❌ RAG Engine initialization failed: {e}")
+
+def stop_rag_engine():
+    global _rag_engine_initialized
+    if _rag_engine_initialized:
+        try:
+            pass
+        except Exception as e:
+            logging.error(f"⚠️ RAG Engine stop error: {e}")
+        finally:
+            _rag_engine_initialized = False
+            logging.info("🛑 RAG Engine stopped successfully.")
+    else:
+        logging.debug("RAG Engine was not running, nothing to stop.")
+    
 def stop_all_services():
     logging.info("Initiating shutdown of all background services.")
     stop_agent_panel()
     stop_stt_popup()
     stop_baileys_server()
+    stop_rag_engine()

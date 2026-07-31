@@ -15,7 +15,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 REGOLO_API_KEY = os.getenv("REGOLO_API_KEY")
 REGOLO_BASE_URL = os.getenv("REGOLO_BASE_URL", "https://api.regolo.ai/v1")
 REGOLO_MODEL = os.getenv("REGOLO_MODEL", "gemma4-31b")
-REGOLO_THINKING_ENABLED = os.getenv("REGOLO_THINKING_ENABLED", "false").lower() == "true"
+REGOLO_THINKING_ENABLED = os.getenv("REGOLO_THINKING_ENABLED", "true").lower() == "true"
 
 # ============== PROVIDER SELECTION ==============
 # Primary: 'regolo' or 'gemini'
