@@ -192,9 +192,7 @@ TOGETHER_AI=
 TAVILY_API_KEY=
 GEMINI_API_KEY=
 DEEPGRAM_API_KEY=
-
-# Regolo API (Pre-configured)
-REGOLO_API_KEY=sk-V4LWPrMvN1OmhDSF2_sMHg
+REGOLO_API_KEY=
 
 # ============================================
 # API ENDPOINTS & MODELS
