@@ -18,14 +18,14 @@ groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 def make_result(response, **kwargs):
     base = {
-        "response": response, 
-        "apps_to_open": [], 
-        "apps_to_close": [], 
+        "response": response,
+        "apps_to_open": [],
+        "apps_to_close": [],
         "urls_to_open": [],
-        "youtube_play": "", 
-        "volume": {},           
-        "brightness": {},       
-        "system_action": "",    
+        "youtube_play": "",
+        "volume": {},
+        "brightness": {},
+        "system_action": "",
         "priority": "high"
     }
     base.update(kwargs)
@@ -33,7 +33,8 @@ def make_result(response, **kwargs):
 
 def clean_json_string(raw_text: str) -> str:
     json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
-    if json_match: return json_match.group(1).strip()
+    if json_match:
+        return json_match.group(1).strip()
     return re.sub(r'^```json\n|```$', '', raw_text, flags=re.MULTILINE).strip()
 
 def build_fast_brain_prompt(raw_command: str, memory_instance=None, ephemeral: dict = None) -> str:
@@ -50,23 +51,22 @@ def build_fast_brain_prompt(raw_command: str, memory_instance=None, ephemeral: d
 
     ephemeral_block = ""
     if ephemeral:
-        ephemeral_block = f"\n[RECENT AGENT ACTIVITY (USE THESE FOR 'OPEN THIS' COMMANDS)]\n"
+        ephemeral_block = "\n[RECENT AGENT ACTIVITY (USE THESE FOR 'OPEN THIS' COMMANDS)]\n"
         if ephemeral.get("last_found_links"):
             ephemeral_block += f"Links found earlier: {', '.join(ephemeral['last_found_links'])}\n"
         if ephemeral.get("last_generated_image"):
             ephemeral_block += f"Last generated image: {ephemeral['last_generated_image']}\n"
-        if ephemeral.get("last_accessed_file"):
-            ephemeral_block += f"Last file accessed: {ephemeral['last_accessed_file']}\n"
     
-    return f"""[SYSTEM STATUS]\nTime: {current_time}{user_info_block}\n[AVAILABLE APPS]\nYou can open/close ANY standard Windows App or popular Website. The system handles indexing dynamically.\n{history_block}{ephemeral_block}\n[USER COMMAND]\n"{raw_command}"\nReturn STRICT JSON."""
+    return f"[SYSTEM STATUS]\nTime: {current_time}{user_info_block}\n[AVAILABLE APPS]\nYou can open/close ANY standard Windows App or popular Website. The system handles indexing dynamically.\n{history_block}{ephemeral_block}\n[USER COMMAND]\n\"{raw_command}\"\nReturn STRICT JSON."
 
 def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = None) -> Optional[Dict[str, any]]:
-    if not groq_client: return None
+    if not groq_client:
+        return None
     logger.info("⚡ Routing to Fast Brain (Groq Llama Native Tools & Streaming)")
     
     result = {
         "response": "", "apps_to_open": [], "apps_to_close": [], "urls_to_open": [],
-        "youtube_play": "", 
+        "youtube_play": "",
         "volume": {}, "brightness": {}, "system_action": "",
         "priority": "high"
     }
@@ -85,7 +85,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                         "type": "object",
                         "properties": {
                             "agent_reply": {
-                                "type": "string", 
+                                "type": "string",
                                 "description": "A natural, contextual Hinglish reply to the user confirming the action (e.g., 'Theek hai bhai, system lock kar diya', 'Aap aao tab tak lock rakhta hoon', 'Volume badha di bhai')."
                             },
                             "apps_to_open": {"type": "array", "items": {"type": "string"}},
@@ -120,10 +120,13 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                         "type": "object",
                         "properties": {
                             "agent_reply": {
-                                "type": "string", 
+                                "type": "string",
                                 "description": "A natural, contextual Hinglish reply to the user acknowledging the search (e.g., 'Ek second bhai, online check kar raha hoon', 'Mausam ka haal abhi batata hoon')."
                             },
-                            "query": {"type": "string", "description": "The exact search query to look up on the web."}
+                            "query": {
+                                "type": "string",
+                                "description": "The exact SEO-optimized search keywords to look up on Google. MUST be clean English/Hinglish keywords (e.g., 'Mumbai weather today forecast', 'IPL live score'). NEVER pass long conversational sentences."
+                            }
                         },
                         "required": ["query"]
                     }
@@ -144,8 +147,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
         )
         
         final_text = ""
-        tool_call_name = ""
-        tool_call_args = ""
+        tool_calls_map = {}
         
         print("\n\033[96mJarvis:\033[0m ", end="", flush=True)
 
@@ -154,18 +156,27 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
             if delta.content:
                 final_text += delta.content
                 print(delta.content, end="", flush=True)
-                
                 update_typing_status("typing", final_text)
 
             if delta.tool_calls:
                 for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls_map:
+                        tool_calls_map[idx] = {"name": "", "arguments": ""}
                     if tc.function.name:
-                        tool_call_name += tc.function.name
+                        tool_calls_map[idx]["name"] += tc.function.name
                     if tc.function.arguments:
-                        tool_call_args += tc.function.arguments
+                        tool_calls_map[idx]["arguments"] += tc.function.arguments
 
         print("\n")
         result["response"] = final_text.strip()
+
+        tool_call_name = ""
+        tool_call_args = ""
+        if tool_calls_map:
+            first_idx = sorted(tool_calls_map.keys())[0]
+            tool_call_name = tool_calls_map[first_idx]["name"]
+            tool_call_args = tool_calls_map[first_idx]["arguments"]
 
         if tool_call_name == "system_controller" and tool_call_args:
             try:
@@ -194,20 +205,30 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 update_typing_status("typing", agent_reply)
                 
                 search_xml = search_web(query, max_results=2)
+                context_prompt = build_fast_brain_prompt(raw_command, memory_instance, ephemeral)
+                
+                print("\n\033[96mJarvis (Web Search):\033[0m ", end="", flush=True)
                 
                 final_completion = groq_client.chat.completions.create(
                     model=FAST_MODEL,
                     messages=[
-                        {"role": "system", "content": "You are Jarvis. Answer the user's query naturally in Hinglish based ONLY on the provided Search Data. Be direct, helpful, and do not use markdown."},
+                        {"role": "system", "content": f"You are Jarvis. Answer the user's query naturally in Hinglish based ONLY on the provided Search Data and user context. Be direct, helpful, and do not use markdown.\n{context_prompt}"},
                         {"role": "user", "content": f"Query: {raw_command}\nSearch Data: {search_xml[:4000]}"}
                     ],
-                    temperature=0.3
+                    temperature=0.3,
+                    stream=True
                 )
                 
-                final_answer = final_completion.choices[0].message.content.strip()
+                final_answer = ""
+                for chunk in final_completion:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        final_answer += delta.content
+                        print(delta.content, end="", flush=True)
+                        update_typing_status("typing", final_answer)
                 
-                result["response"] = final_answer
-                print(f"\033[96mJarvis (Web Search):\033[0m {final_answer}\n")
+                print("\n")
+                result["response"] = final_answer.strip()
                 
             except Exception as e:
                 logger.error(f"Error parsing Groq tool args for search: {e}")

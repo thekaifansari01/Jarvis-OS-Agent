@@ -123,28 +123,6 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
                     log_action(f"📸 {msg}")
                     executor.submit(speak, "Screenshot save ho gaya sir.")
             executor.submit(sys_act)
-
-        workspace_file_to_open = result.get('workspace_file_to_open')
-        if workspace_file_to_open and isinstance(workspace_file_to_open, str) and workspace_file_to_open.strip():
-            def open_workspace_file_fast(filepath):
-                if os.path.exists(filepath):
-                    log_action(f"📂 Fast Brain: Opening file: {filepath}")
-                    try:
-                        if platform.system() == 'Windows':
-                            os.startfile(filepath)
-                        elif platform.system() == 'Darwin':
-                            subprocess.call(('open', filepath))
-                        else:
-                            subprocess.call(('xdg-open', filepath))
-                        executor.submit(speak, "Sir, file khol di.")
-                    except Exception as e:
-                        logger.error(f"❌ OS Failed to open file {filepath}. Error: {e}\n{traceback.format_exc()}")
-                        executor.submit(speak, "Sir, file system error ki wajah se file nahi khul rahi.")
-                else:
-                    logger.warning(f"❌ File not found for opening: {filepath}")
-                    executor.submit(speak, "Sir, file nahi mili. Kripya pura absolute path dijiye.")
-            executor.submit(open_workspace_file_fast, workspace_file_to_open.strip())
-
     except Exception as e:
         logger.error(f"❌ CRITICAL ERROR in execute_actions (Fast Brain): {e}\n{traceback.format_exc()}")
 
