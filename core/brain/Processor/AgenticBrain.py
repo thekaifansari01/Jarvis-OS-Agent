@@ -271,7 +271,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                     )
                     messages = [{"role": "user", "content": full_prompt}]
 
-                    if "regolo" in current_provider.__class__.__name__.lower():
+                    if any(name in current_provider.__class__.__name__.lower() for name in ["regolo", "openrouter"]):
                         thought_text = ""
                         content_text = ""
                         tool_calls = []
