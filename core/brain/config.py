@@ -32,7 +32,7 @@ GEMINI_AGENT_MODEL = ModelConfig("gemma-4-31b-it", vision=True, tools=True, reas
 GEMINI_EMBEDDING_MODEL = ModelConfig("gemini-embedding-2", vision=False, tools=False, reasoning=False)
 
 REGOLO_BASE_URL = "https://api.regolo.ai/v1"
-REGOLO_MODEL = ModelConfig("qwen3.6-27b", vision=True, tools=True, reasoning=True)
+REGOLO_MODEL = ModelConfig("qwen3.5-122b", vision=True, tools=True, reasoning=True)
 REGOLO_THINKING_ENABLED = True
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
