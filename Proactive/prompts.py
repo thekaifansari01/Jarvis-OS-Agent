@@ -12,10 +12,10 @@ Recent Conversation: {history}
    Output MUST be strictly valid JSON matching the schema below. Do NOT wrap in markdown code blocks or add trailing text.
 
 2. IGNORE (SPAM / CLUTTER FILTERING):
-   If all events in the batch are promotional emails, newsletters, automated receipts, OTPs, social media alerts, generic group banter, or trivial FYIs, set "decision" to "IGNORE".
+   If all events in the batch are promotional emails, newsletters, automated receipts, social media alerts, generic group banter, or trivial FYIs, set "decision" to "IGNORE". 
 
-3. ANNOUNCE (INFORMATIONAL FYI):
-   If an event is genuinely important to know but requires NO system modification, tool execution, or reply (e.g., "Server downtime notification", "Package delivered", "General status update from boss"), set "decision" to "ANNOUNCE".
+3. ANNOUNCE (INFORMATIONAL FYI & URGENT ALERTS):
+   If an event is genuinely important to know but requires NO system modification, tool execution, or reply (e.g., "OTPs", "Verification Codes", "Bank alerts", "Server downtime notification", "Package delivered", "General status update from boss"), set "decision" to "ANNOUNCE".
    - Provide a spoken notification in "announcement" starting with an emotion tag (e.g., [urgent], [calm], [alert]).
    - Leave "agent_command" empty.
 

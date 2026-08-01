@@ -12,7 +12,8 @@ from PyQt5.QtCore import (Qt, QTimer, QPropertyAnimation, QEasingCurve,
                           pyqtProperty, QSize, qInstallMessageHandler,
                           QThread, pyqtSignal)
 from PyQt5.QtWidgets import (QWidget, QLabel, QVBoxLayout, QHBoxLayout, QApplication, 
-                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QFrame, QSizePolicy)
+                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QFrame, QSizePolicy,
+                             QScrollArea)
 from PyQt5.QtGui import QFont, QColor, QFontDatabase, QFontMetrics
 
 def qt_message_handler(mode, context, message):
@@ -20,27 +21,22 @@ def qt_message_handler(mode, context, message):
         return
 
 class AgentZmqListener(QThread):
-    """Background ZMQ Subscriber Thread for zero-latency UI updates"""
     status_received = pyqtSignal(dict)
     
     def run(self):
         context = zmq.Context()
         socket = context.socket(zmq.SUB)
         socket.connect("tcp://127.0.0.1:5555")
-        
         socket.setsockopt_string(zmq.SUBSCRIBE, "AGENT_UPDATE")
         
         while True:
             try:
                 message = socket.recv_string()
-
                 topic, json_data = message.split(" ", 1)
                 data = json.loads(json_data)
-
                 self.status_received.emit(data)
-            except Exception as e:
+            except Exception:
                 pass
-
 
 class AgentPanel(QWidget):
     def __init__(self):
@@ -50,6 +46,8 @@ class AgentPanel(QWidget):
         
         self.MIN_WIDTH = 380
         self.MAX_WIDTH = 750
+        self.MAX_HEIGHT = 320
+        self.MAX_THOUGHT_CHARS = 800
         
         eng_id = QFontDatabase.addApplicationFont("Data/fonts/english.ttf")
         eng_fams = QFontDatabase.applicationFontFamilies(eng_id)
@@ -68,7 +66,7 @@ class AgentPanel(QWidget):
         self.target_geometry = None
         self.resize_anim = QPropertyAnimation(self, b"anim_geometry")
         self.resize_anim.setEasingCurve(QEasingCurve.InOutCubic) 
-        self.resize_anim.setDuration(400)
+        self.resize_anim.setDuration(300)
 
         self.initUI()
         
@@ -127,8 +125,7 @@ class AgentPanel(QWidget):
         self.inner_island.setAttribute(Qt.WA_StyledBackground, True)
         self.inner_island.setStyleSheet("""
             #Island {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                                  stop:0 #151518, stop:1 #0A0A0C);
+                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #151518, stop:1 #0A0A0C);
                 border-radius: 27px;
             }
         """)
@@ -172,10 +169,19 @@ class AgentPanel(QWidget):
         header_layout.addWidget(self.phase_label)
         self.layout.addLayout(header_layout)
         
+        self.thought_scroll = QScrollArea()
+        self.thought_scroll.setWidgetResizable(True)
+        self.thought_scroll.setStyleSheet("background: transparent; border: none;")
+        self.thought_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.thought_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        self.thought_scroll.setMinimumHeight(35)
+        self.thought_scroll.setMaximumHeight(85)
+        
         self.thought_label = QLabel("")
         self.thought_label.setMinimumSize(0, 0) 
         self.thought_label.setWordWrap(True)
-        self.thought_label.setAlignment(Qt.AlignCenter)
+        self.thought_label.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
         
         thought_font = QFont(self.font_eng, 13, QFont.Medium)
         thought_font.setLetterSpacing(QFont.PercentageSpacing, 102) 
@@ -198,7 +204,8 @@ class AgentPanel(QWidget):
         self.thought_shadow.setOffset(0, 2)
         self.thought_label.setGraphicsEffect(self.thought_shadow)
 
-        self.layout.addWidget(self.thought_label)
+        self.thought_scroll.setWidget(self.thought_label)
+        self.layout.addWidget(self.thought_scroll)
 
         self.separator = QFrame()
         self.separator.setFixedHeight(1)
@@ -292,9 +299,13 @@ class AgentPanel(QWidget):
         self.p_anim.setEasingCurve(QEasingCurve.InOutSine) 
         self.p_anim.start()
 
+    def snap_scroll_to_bottom(self):
+        vbar = self.thought_scroll.verticalScrollBar()
+        vbar.setValue(vbar.maximum())
+
     def calculate_target_geometry(self):
-        self.thought_label.setMinimumWidth(self.MIN_WIDTH - 120)
-        self.thought_label.setMaximumWidth(self.MAX_WIDTH - 120)
+        self.thought_scroll.setMinimumWidth(self.MIN_WIDTH - 120)
+        self.thought_scroll.setMaximumWidth(self.MAX_WIDTH - 120)
         
         self.obs_label.setMinimumWidth(self.MIN_WIDTH - 120)
         self.obs_label.setMaximumWidth(self.MAX_WIDTH - 120)
@@ -304,10 +315,8 @@ class AgentPanel(QWidget):
         natural_size = self.container.sizeHint()
         
         ideal_width = max(self.MIN_WIDTH, min(natural_size.width() + 120, self.MAX_WIDTH))
-        ideal_height = natural_size.height() + 120
+        ideal_height = min(natural_size.height() + 120, self.MAX_HEIGHT)
         
-        self.thought_label.setMinimumSize(0, 0)
-        self.thought_label.setMaximumSize(16777215, 16777215)
         self.obs_label.setMinimumSize(0, 0)
         self.obs_label.setMaximumSize(16777215, 16777215)
         
@@ -322,20 +331,21 @@ class AgentPanel(QWidget):
         
         if hasattr(self, 'hide_anim_group') and self.hide_anim_group.state() == QPropertyAnimation.Running:
             self.hide_anim_group.stop()
-        if hasattr(self, 'show_anim_group') and self.show_anim_group.state() == QPropertyAnimation.Running:
-            self.show_anim_group.stop()
-        if self.resize_anim.state() == QPropertyAnimation.Running:
-            self.resize_anim.stop()
                 
         new_geometry = self.calculate_target_geometry()
+        is_fading_in = hasattr(self, 'show_anim_group') and self.show_anim_group.state() == QPropertyAnimation.Running
             
-        if not self.isVisible() or self.windowOpacity() < 1.0:
+        if not self.isVisible() or (self.windowOpacity() < 1.0 and not is_fading_in):
+            if self.resize_anim.state() == QPropertyAnimation.Running:
+                self.resize_anim.stop()
+            
             self.target_geometry = new_geometry
-            start_y = self.target_geometry.y() - 35 
             
-            self.setGeometry(self.target_geometry.x(), start_y, self.target_geometry.width(), self.target_geometry.height())
+            if not self.isVisible():
+                start_y = self.target_geometry.y() - 35 
+                self.setGeometry(self.target_geometry.x(), start_y, self.target_geometry.width(), self.target_geometry.height())
+                self.setWindowOpacity(0.0)
             
-            self.setWindowOpacity(0.0)
             self.show()
             self.raise_()
 
@@ -343,7 +353,7 @@ class AgentPanel(QWidget):
             
             fade_in = QPropertyAnimation(self, b"windowOpacity")
             fade_in.setDuration(400)
-            fade_in.setStartValue(0.0)
+            fade_in.setStartValue(self.windowOpacity())
             fade_in.setEndValue(1.0)
             fade_in.setEasingCurve(QEasingCurve.InOutQuad)
             
@@ -358,12 +368,17 @@ class AgentPanel(QWidget):
             self.show_anim_group.start()
             
         else:
-            if self.target_geometry != new_geometry:
-                self.target_geometry = new_geometry
+            if self.target_geometry:
+                width_diff = abs(self.target_geometry.width() - new_geometry.width())
+                height_diff = abs(self.target_geometry.height() - new_geometry.height())
                 
-                self.resize_anim.setStartValue(self.geometry())
-                self.resize_anim.setEndValue(new_geometry)
-                self.resize_anim.start()
+                if width_diff > 4 or height_diff > 4:
+                    self.target_geometry = new_geometry
+                    if self.resize_anim.state() == QPropertyAnimation.Running:
+                        self.resize_anim.stop()
+                    self.resize_anim.setStartValue(self.geometry())
+                    self.resize_anim.setEndValue(new_geometry)
+                    self.resize_anim.start()
 
     def hide_panel(self):
         if not self.isVisible(): return
@@ -441,21 +456,29 @@ class AgentPanel(QWidget):
         
         if thought:
             clean_thought = thought.strip()
+            
+            if len(clean_thought) > self.MAX_THOUGHT_CHARS:
+                cutoff_idx = len(clean_thought) - self.MAX_THOUGHT_CHARS
+                space_pos = clean_thought.find(' ', cutoff_idx)
+                if space_pos != -1:
+                    clean_thought = "... " + clean_thought[space_pos:].strip()
+                else:
+                    clean_thought = "... " + clean_thought[-self.MAX_THOUGHT_CHARS:]
+
             self.set_label_font(self.thought_label, clean_thought, 13)
             self.thought_label.setText(clean_thought)
+            QTimer.singleShot(5, self.snap_scroll_to_bottom)
         else:
             self.thought_label.setText("")
 
         if observation: 
             clean_obs = observation.replace("Observation:", "").strip()
-            
             if len(clean_obs) > 140:
                 clean_obs = clean_obs[:137] + "..."
                 
             if self.obs_label.text() != clean_obs:
                 self.set_label_font(self.obs_label, clean_obs, 10)
                 self.obs_label.setText(f"Data: {clean_obs}")
-                
                 self.separator.show()
                 self.obs_label.show()
         else:
@@ -471,10 +494,8 @@ class AgentPanel(QWidget):
         else:
             self.hide_timer.stop()
 
-
 def run_panel():
     qInstallMessageHandler(qt_message_handler)
-    
     app = QApplication(sys.argv)
     panel = AgentPanel()
     sys.exit(app.exec_())

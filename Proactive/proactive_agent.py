@@ -25,27 +25,27 @@ CACHE_DIR = "Data"
 PROCESSED_EVENTS_FILE = os.path.join(CACHE_DIR, "processed_events.json")
 
 SPAM_KEYWORDS = [
-    "otp", "one time password", "verification code", "no-reply", 
-    "donotreply", "newsletter", "unsubscribe", "promotions", 
+    "newsletter", "unsubscribe", "promotions", 
     "50% off", "sale starts", "cashback", "advertisement"
 ]
 
-def _get_event_hash(text: str) -> str:
+def _get_event_hash(source: str, text: str) -> str:
     clean_text = re.sub(r'\s+', ' ', text.strip().lower())
-    return hashlib.md5(clean_text.encode('utf-8')).hexdigest()
+    time_context = time.strftime("%Y-%m-%d_%H")
+    return hashlib.md5(f"{source}_{time_context}_{clean_text}".encode('utf-8')).hexdigest()
 
-def is_event_already_processed(text: str) -> bool:
+def is_event_already_processed(source: str, text: str) -> bool:
     try:
         if not os.path.exists(PROCESSED_EVENTS_FILE):
             return False
         with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
             processed_hashes = json.load(f)
-        return _get_event_hash(text) in processed_hashes
+        return _get_event_hash(source, text) in processed_hashes
     except Exception as e:
         logger.warning(f"Deduplication check error: {e}")
         return False
 
-def mark_event_as_processed(text: str):
+def mark_event_as_processed(source: str, text: str):
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
         processed_hashes = []
@@ -53,7 +53,7 @@ def mark_event_as_processed(text: str):
             with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
                 processed_hashes = json.load(f)
         
-        event_hash = _get_event_hash(text)
+        event_hash = _get_event_hash(source, text)
         if event_hash not in processed_hashes:
             processed_hashes.append(event_hash)
             processed_hashes = processed_hashes[-100:]
@@ -184,7 +184,7 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
             if events:
                 valid_events = []
                 for ev in events:
-                    if not is_instant_spam(ev.data) and not is_event_already_processed(ev.data):
+                    if not is_instant_spam(ev.data) and not is_event_already_processed(ev.source, ev.data):
                         valid_events.append(ev)
 
                 if valid_events:
@@ -209,7 +209,7 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                     handle_proactive_decision(decision_data, batched_data, memory_instance, is_jarvis_busy_callback)
 
                     for ev in valid_events:
-                        mark_event_as_processed(ev.data)
+                        mark_event_as_processed(ev.source, ev.data)
 
         except Exception as e:
             logger.error(f"Error in Proactive Loop: {e}")
