@@ -11,18 +11,13 @@ GEMINI_AGENT_MODEL = "gemma-4-31b-it"
 GEMINI_EMBEDDING_MODEL = "gemini-embedding-2"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# ============== REGOLO.AI CONFIGURATION ==============
 REGOLO_API_KEY = os.getenv("REGOLO_API_KEY")
 REGOLO_BASE_URL = os.getenv("REGOLO_BASE_URL", "https://api.regolo.ai/v1")
 REGOLO_MODEL = os.getenv("REGOLO_MODEL", "gemma4-31b")
 REGOLO_THINKING_ENABLED = os.getenv("REGOLO_THINKING_ENABLED", "true").lower() == "true"
 
-# ============== PROVIDER SELECTION ==============
-# Primary: 'regolo' or 'gemini'
 AGENT_PRIMARY_PROVIDER = os.getenv("AGENT_PRIMARY_PROVIDER", "regolo")
-# Fallback: 'gemini' or 'regolo'
 AGENT_FALLBACK_PROVIDER = os.getenv("AGENT_FALLBACK_PROVIDER", "gemini")
-# =================================================
 
 FLUX_IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell"
 TOGETHER_API_KEY = os.getenv("TOGETHER_AI")
@@ -41,7 +36,7 @@ EMAIL_SUMMARY_MAX_TOKENS = 40
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 CONFIG = {
-    "AGENT_MAX_STEPS": 999,
+    "AGENT_MAX_STEPS": 30,
     "AGENT_TIMEOUT": 1800,
     "AGENT_RETRY_LIMIT": 2,
     "AGENT_SCRATCHPAD_MAX_CHARS": 500000,
