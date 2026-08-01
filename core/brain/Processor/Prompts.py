@@ -233,7 +233,7 @@ def get_native_tools():
                         "[WHEN TO USE]: Use for clean, Claude-Code style CRUD operations on local files.\n"
                         "Supported actions:\n"
                         "1. 'repo_map': Get an architectural tree overview of files in the workspace.\n"
-                        "2. 'view': Read full file or specific line ranges.\n"
+                        "2. 'view': Read files. [CRITICAL]: To read the ENTIRE file, completely OMIT 'start_line' and 'end_line'. Use start/end lines ONLY if you specifically need a small line range.\n"
                         "3. 'replace_block': EXACT diff search-replace. ALWAYS prefer this over line numbers to avoid line-drift bugs.\n"
                         "4. 'create': Create a new file with initial content.\n"
                         "5. 'create_many': Simultaneously create 2 to 4 small files in one step.\n"

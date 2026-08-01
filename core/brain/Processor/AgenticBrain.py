@@ -22,7 +22,7 @@ from core.ui.typing_status import launch_popup, update_typing_status
 FAST_MODEL = GROQ_FAST_MODEL
 
 
-def optimize_observation(text: str, max_chars: int = 800) -> str:
+def optimize_observation(text: str, max_chars: int = 10000) -> str:
     if not text:
         return "Observation: Empty result."
     text_str = str(text)
@@ -688,7 +688,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                 if action_key
                 else "None (Missed Tool Call)"
             )
-            optimized_obs = optimize_observation(observation, max_chars=800)
+            optimized_obs = optimize_observation(observation, max_chars=10000)
 
             scratchpad += f"""
 <Step number="{step+1}">

@@ -57,9 +57,12 @@ class StatefulTerminal:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             bufsize=1,
             shell=False,
-            cwd=user_home
+            cwd=user_home,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"}
         )
         self.output_queue = queue.Queue()
         self.reader_thread = threading.Thread(target=self._read_output, daemon=True)
@@ -84,10 +87,7 @@ class StatefulTerminal:
 
     def execute(self, command: str, timeout: int = 30) -> str:
         marker = f"__CMD_END_{time.time()}__"
-        if platform.system() == "Windows":
-            full_command = f"{command}\necho {marker}\n"
-        else:
-            full_command = f"{command}\necho {marker}\n"
+        full_command = f"{command}\necho {marker}\n"
             
         self.process.stdin.write(full_command)
         self.process.stdin.flush()
@@ -140,10 +140,16 @@ def run_python_code(code_string: str) -> str:
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write(code_string)
             
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+            
         result = subprocess.run(
             ["python", temp_path], 
             capture_output=True, 
             text=True, 
+            encoding='utf-8',
+            errors='replace',
+            env=env,
             timeout=120
         )
         
