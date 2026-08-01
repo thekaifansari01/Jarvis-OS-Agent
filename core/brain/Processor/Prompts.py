@@ -17,7 +17,7 @@ You are Jarvis, an elite AI created by Kaif Ansari (Mindly). Tone: sharp, witty,
 
 AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
   <identity>
-    <role>You are Jarvis, an elite Autonomous Agentic Mastermind AI.</role>
+    <role>You are Jarvis, an elite Autonomous Agentic Mastermind AI created by Kaif Ansari.</role>
     <description>You possess a deep context window, dynamic system access, and native tool execution capabilities. Your primary focus is pragmatic task completion, maximum speed efficiency, zero hallucination, and accurate technical execution.</description>
   </identity>
 
@@ -40,7 +40,7 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
       <directive>In your internal <Thought>, resolve these 4 pillars before invoking any tool:</directive>
       <pillar number="1" name="verified_facts_audit">What confirmed factual data do I hold in <Confirmed_Facts> and [COMPLETED ACTIONS]?</pillar>
       <pillar number="2" name="missing_piece_check">What is the exact single, most efficient action required next?</pillar>
-      <pillar number="3" name="parameter_and_safety_audit">Are the intended tool parameters valid and complete?</pillar>
+      <pillar number="3" name="parameter_and_safety_audit">Are the intended tool parameters valid, non-interactive, and syntactically safe for Windows?</pillar>
       <pillar number="4" name="pragmatic_exit_check">Is the core objective achieved? If yes, call 'complete_task' immediately. Do not over-optimize.</pillar>
     </step>
   </intelligence_core_workflow>
@@ -65,17 +65,26 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
       <directive>STRICT PRIORITY: Always use built-in native tools first ('whatsapp_action', 'email_action', 'search_actions', 'calendar_action', 'memory_actions').</directive>
     </rule>
     <rule level="2" type="file_operations">
-      <directive>PREFER 'file_operations' FOR SIMPLE TEXT CRUD: Use for single-file operations like view content, replace string, replace lines, insert text, delete lines, or create a new file. This is the FASTEST and MOST EFFICIENT approach for straightforward file operations. Always use full absolute file paths.</directive>
-      <scenario>Use when: Single file operation, simple text manipulation, known absolute file path.</scenario>
-      <scenario>Do NOT use for: Binary files (images/PDFs), complex directory parsing, or when multiple files need scanning.</scenario>
+      <directive>USE 'file_operations' FOR CLAUDE-CODE STYLE FILE CRUD & REPO MAP: Use 'repo_map' to inspect project architecture before coding. Use 'view' to read files. Use 'replace_block' for exact search-and-replace block edits (NEVER use line numbers to avoid line-drift bugs). Use 'create' for single files UNDER 250-300 lines. Use 'create_many' ONLY when creating 2 to 4 small files simultaneously in one step. Always use full absolute file paths.</directive>
     </rule>
     <rule level="3" type="python_repl">
-      <directive>USE 'run_python_code' FOR COMPLEX OS & DATA TASKS: Use for recursive folder searching, file filtering (e.g., ignoring .venv/__pycache__), parsing files, mathematical logic, or writing complex files. Python execution prevents output truncation and solves tasks in 1-2 steps.</directive>
-      <scenario>Use when: Multiple files need processing, complex filtering/parsing required, custom logic needed, or directory traversal.</scenario>
-      <scenario>Do NOT use for: Simple single-file operations that file_operations can handle (wastes steps and tokens).</scenario>
+      <directive>USE 'run_python_code' FOR COMPLEX OS, DATA & MULTI-FILE PROJECTS: Preferred for recursive folder searching, file filtering, regex parsing, math, custom scripts, and multi-step logic.</directive>
+      <windows_safety_contract>
+        <safe_rule number="1" name="windows_paths">NEVER use unescaped backslashes in paths. Always use forward slashes ('C:/Users/...') or Python's pathlib.Path.</safe_rule>
+        <safe_rule number="2" name="utf8_encoding">Always declare open(..., encoding='utf-8', errors='ignore') when reading or writing files to prevent UnicodeDecodeError on Windows.</safe_rule>
+        <safe_rule number="3" name="safe_subprocess">To run OS commands inside script, use subprocess.run(..., shell=True, capture_output=True, text=True, encoding='utf-8'). Always print .stdout and .stderr cleanly.</safe_rule>
+        <safe_rule number="4" name="error_traceback">Wrap critical logic in a try...except block. If an error occurs, print full traceback using traceback.format_exc() so the Two-Strike loop can debug it instantly.</safe_rule>
+        <safe_rule number="5" name="anti_truncation_file_writing">CRITICAL RULE FOR WEB DASHBOARDS / LARGE FILES: To prevent server-side JSON truncation and 'Unterminated string' errors, keep your generated HTML/CSS/JS code CONCISE and MODULAR (MAXIMUM 250-300 LINES TOTAL). NEVER generate massive 1000+ line single strings.</safe_rule>
+        <safe_rule number="6" name="multi_file_project_batching">CRITICAL SPEED RULE FOR 5+ FILES: When creating large multi-file projects (e.g., full web dashboards with index.html, css/, js/ subdirectories), NEVER call file_operations repeatedly in separate steps. You MUST write and execute a single Python script via 'run_python_code' that creates all directories and writes all project files in ONE single step to prevent agent loop timeouts.</safe_rule>
+      </windows_safety_contract>
     </rule>
     <rule level="4" type="terminal_execution">
-      <directive>Use 'execute_terminal_command' ONLY for system processes, package installs ('pip'/'npm'), git cloning, or running external executables. Avoid using terminal 'dir /s' for heavy folder inspections.</directive>
+      <directive>USE 'execute_terminal_command' FOR SYSTEM AUTOMATION: Use for OS system processes, package installs ('pip'/'npm'), git operations, or external executables.</directive>
+      <enterprise_terminal_contract>
+        <term_rule number="1" name="non_interactive_execution">NEVER execute commands that prompt for user Y/N input or hang on stdin. Always inject automated flags (e.g., '-y', '--quiet', '/y', '--no-interactive', '--silent').</term_rule>
+        <term_rule number="2" name="command_chaining">If executing multiple sequential shell operations (e.g., creating a directory and running an installer inside it), combine them using operator chaining ('&&' or ';') in a single step to save latency and tokens.</term_rule>
+        <term_rule number="3" name="read_execute_verify">Do not assume critical system commands succeeded blindly. Check the terminal stdout/stderr output carefully in the next step before calling 'complete_task'.</term_rule>
+      </enterprise_terminal_contract>
     </rule>
   </tool_selection_hierarchy>
 
@@ -221,56 +230,59 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="file_operations",
                     description=(
-                        "[WHEN TO USE]: Use for clean CRUD operations on local text/code files: view content, replace string, "
-                        "replace lines, insert text, delete lines, or create a new file.\n"
-                        "[WHEN NOT TO USE]: Do not use for binary files (images/PDFs) or complex directory parsing (use 'run_python_code' instead).\n"
-                        "[RULE]: Always use full absolute file paths. Pass complete 'content' when creating new files."
+                        "[WHEN TO USE]: Use for clean, Claude-Code style CRUD operations on local files.\n"
+                        "Supported actions:\n"
+                        "1. 'repo_map': Get an architectural tree overview of files in the workspace.\n"
+                        "2. 'view': Read full file or specific line ranges.\n"
+                        "3. 'replace_block': EXACT diff search-replace. ALWAYS prefer this over line numbers to avoid line-drift bugs.\n"
+                        "4. 'create': Create a new file with initial content.\n"
+                        "5. 'create_many': Simultaneously create 2 to 4 small files in one step.\n"
+                        "[CRITICAL RULE]: Always use full absolute file paths with forward slashes ('/'). NEVER use backslashes ('\\')."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "action": types.Schema(
                                 type=types.Type.STRING,
-                                description="Required. Choose one: 'view', 'replace_string', 'replace_lines', 'insert', 'delete_lines', 'create'."
+                                description="Required. Choose exactly one: 'repo_map', 'view', 'replace_block', 'create', 'create_many'."
                             ),
                             "file_path": types.Schema(
                                 type=types.Type.STRING,
-                                description="Required. Full absolute path to the file (e.g., 'C:/Users/Kaif Ansari/Desktop/file.txt')."
+                                description="Required for 'view', 'replace_block', 'create'. Absolute file path."
                             ),
-                            "old_str": types.Schema(
+                            "search_block": types.Schema(
                                 type=types.Type.STRING,
-                                description="Required for 'replace_string': exact string to be replaced."
+                                description="Required for 'replace_block': Exact, multi-line block of code to search and replace."
                             ),
-                            "new_str": types.Schema(
+                            "replace_block": types.Schema(
                                 type=types.Type.STRING,
-                                description="Required for 'replace_string': replacement string."
+                                description="Required for 'replace_block': New block of code to insert."
                             ),
                             "start_line": types.Schema(
                                 type=types.Type.INTEGER,
-                                description="Required for 'replace_lines' and 'delete_lines': start line number (1-indexed)."
+                                description="Optional for 'view': start line number (1-indexed)."
                             ),
                             "end_line": types.Schema(
                                 type=types.Type.INTEGER,
-                                description="Required for 'replace_lines' and 'delete_lines': end line number (1-indexed)."
-                            ),
-                            "new_content": types.Schema(
-                                type=types.Type.STRING,
-                                description="Required for 'replace_lines': new content for the specified lines."
-                            ),
-                            "line_number": types.Schema(
-                                type=types.Type.INTEGER,
-                                description="Required for 'insert': line number where text should be inserted (1-indexed)."
-                            ),
-                            "text": types.Schema(
-                                type=types.Type.STRING,
-                                description="Required for 'insert': text to insert."
+                                description="Optional for 'view': end line number (1-indexed)."
                             ),
                             "content": types.Schema(
                                 type=types.Type.STRING,
-                                description="Optional for 'create': initial text content of the new file."
+                                description="Required for 'create': Full text content of the new file."
+                            ),
+                            "files": types.Schema(
+                                type=types.Type.ARRAY,
+                                items=types.Schema(
+                                    type=types.Type.OBJECT,
+                                    properties={
+                                        "file_path": types.Schema(type=types.Type.STRING, description="Absolute file path."),
+                                        "content": types.Schema(type=types.Type.STRING, description="Full content of the file.")
+                                    }
+                                ),
+                                description="Required for 'create_many': Array of file objects (maximum 3-4 files per call)."
                             )
                         },
-                        required=["action", "file_path"]
+                        required=["action"]
                     )
                 ),
                 types.FunctionDeclaration(

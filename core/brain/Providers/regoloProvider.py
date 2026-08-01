@@ -107,13 +107,37 @@ class RegoloProvider(BaseLLMProvider):
             logger.error(f"❌ Error converting tools for Regolo: {e}")
             return []
     
+    def _safe_parse_arguments(self, raw_args: Any) -> Dict[str, Any]:
+        if isinstance(raw_args, dict):
+            return raw_args
+        if not isinstance(raw_args, str) or not raw_args.strip():
+            return {}
+        try:
+            return json.loads(raw_args)
+        except Exception as e:
+            logger.warning(f"⚠️ Tool arguments JSON decode failed, attempting safe cleanup: {e}")
+            try:
+                cleaned = raw_args.replace('\n', '\\n').replace('\r', '')
+                return json.loads(cleaned)
+            except Exception:
+                try:
+                    repaired = raw_args.rstrip()
+                    if not repaired.endswith('"'):
+                        repaired += '"'
+                    if not repaired.endswith('}'):
+                        repaired += '}'
+                    return json.loads(repaired)
+                except Exception:
+                    logger.error("❌ Failed to parse tool arguments completely after emergency repair.")
+                    return {}
+
     def generate(
         self,
         messages: List[Dict[str, str]],
         tools: Optional[List[Any]] = None,
         tool_choice: str = "auto",
         temperature: float = 0.7,
-        max_tokens: int = 4096,
+        max_tokens: int = 32768,
         stream: bool = False,
         **kwargs
     ) -> Dict[str, Any]:
@@ -133,7 +157,7 @@ class RegoloProvider(BaseLLMProvider):
                 "stream": stream,
                 "reasoning": {
                     "enabled": self.thinking_enabled,
-                    "max_tokens": 2048
+                    "max_tokens": 4096
                 }
             }
             
@@ -145,7 +169,7 @@ class RegoloProvider(BaseLLMProvider):
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=120
+                timeout=300
             )
             
             if response.status_code == 200:
@@ -161,7 +185,7 @@ class RegoloProvider(BaseLLMProvider):
                     formatted_tool_calls.append({
                         "function": {
                             "name": tc["function"]["name"],
-                            "arguments": json.loads(tc["function"]["arguments"]) if isinstance(tc["function"]["arguments"], str) else tc["function"]["arguments"]
+                            "arguments": self._safe_parse_arguments(tc["function"]["arguments"])
                         }
                     })
                 
@@ -199,7 +223,7 @@ class RegoloProvider(BaseLLMProvider):
         tools: Optional[List[Any]] = None,
         tool_choice: str = "auto",
         temperature: float = 0.7,
-        max_tokens: int = 4096,
+        max_tokens: int = 32768,
         **kwargs
     ) -> Generator[Dict[str, Any], None, None]:
         try:
@@ -218,7 +242,7 @@ class RegoloProvider(BaseLLMProvider):
                 "stream": True,
                 "reasoning": {
                     "enabled": self.thinking_enabled,
-                    "max_tokens": 2048
+                    "max_tokens": 4096
                 }
             }
             
@@ -231,7 +255,7 @@ class RegoloProvider(BaseLLMProvider):
                 headers=headers,
                 json=payload,
                 stream=True,
-                timeout=120
+                timeout=300
             )
             
             accumulated_tool_calls = {}
@@ -285,15 +309,10 @@ class RegoloProvider(BaseLLMProvider):
                     formatted_tool_calls = []
                     for idx in sorted(accumulated_tool_calls.keys()):
                         tc_data = accumulated_tool_calls[idx]
-                        raw_args = tc_data["arguments"]
-                        try:
-                            parsed_args = json.loads(raw_args) if isinstance(raw_args, str) and raw_args else raw_args
-                        except Exception:
-                            parsed_args = {}
                         formatted_tool_calls.append({
                             "function": {
                                 "name": tc_data["name"],
-                                "arguments": parsed_args
+                                "arguments": self._safe_parse_arguments(tc_data["arguments"])
                             }
                         })
                     yield {

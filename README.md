@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🧠 JARVIS — Autonomous OS Mastermind & Proactive AI Assistant
+# 🧠 JARVIS — Autonomous OS Mastermind & AI Software Engineer
 
-**An Elite, Voice-First, Hybrid Intelligence System with Human-in-the-Loop (HITL) Safety & Local Workspace Mastery.**
+**An Elite, Voice-First, Hybrid Intelligence System & Autonomous Coding Agent with Human-in-the-Loop (HITL) Safety & Local Workspace Mastery.**
 
 [![GitHub license](https://img.shields.io/github/license/thekaifansari01/jarvis-by-kaif-ansari?style=for-the-badge&color=2b3137)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/blob/main/LICENSE)
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
@@ -11,7 +11,7 @@
 [![Gemini API](https://img.shields.io/badge/Reasoning-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/pulls)
 
-[**Key Features**](#-key-features) • [**Architecture**](#-system-architecture) • [**Installation**](#-getting-started) • [**Configuration**](#-configuration--security) • [**Tool Ecosystem**](#-integrated-tool-ecosystem) • [**Contributing**](#-contributing)
+[**Key Features**](#-why-jarvis-stands-out) • [**Architecture**](#-system-architecture) • [**Autonomous Coding**](#-level-4-autonomous-software-engineering) • [**Installation**](#-getting-started) • [**Configuration**](#-configuration--security) • [**Tool Ecosystem**](#-integrated-tool-ecosystem)
 
 </div>
 
@@ -19,9 +19,9 @@
 
 ## 🌟 Executive Summary
 
-**Jarvis** is a state-of-the-art, desktop-native AI Operating System designed to bridge the gap between low-latency conversational assistance and complex, multi-step autonomous task execution. Built with an emphasis on **Human-in-the-Loop (HITL) safety**, Jarvis monitors your digital environment proactively while never executing irreversible system actions without explicit user consent.
+**Jarvis** is a cutting-edge, desktop-native AI Operating System and **Autonomous Software Engineer** designed to bridge the gap between low-latency conversational assistance and complex, multi-step engineering execution. Built with an emphasis on **Human-in-the-Loop (HITL) safety**, Jarvis monitors your digital environment proactively while never executing irreversible system actions without explicit user consent.
 
-Unlike conventional chatbots, Jarvis operates directly on your local system — combining **real-time speech recognition**, **vector-based long-term memory**, **retrieval-augmented generation (RAG)**, and **native OS control** into a unified, highly extensible personal assistant.
+Unlike conventional chatbots, Jarvis operates directly on your local system — combining **Claude-Code style codebase mapping**, **precision diff-block editing**, **automatic compiler linter self-correction**, **real-time speech recognition**, **vector-backed episodic memory**, and **native OS automation** into a unified, highly extensible mastermind.
 
 ---
 
@@ -29,16 +29,17 @@ Unlike conventional chatbots, Jarvis operates directly on your local system — 
 
 | Icon | Feature | Description |
 |:---:|:---|:---|
+| 💻 | **AI Coding Engineer** | Claude-Code style `repo_map` architecture reading, Zero-Drift exact block diffs (`replace_block`), and instant Python linter self-correction. |
 | 🛡️ | **Proactive Watchdog** | Background Pub/Sub & event listeners for Gmail, WhatsApp, and Calendar with intelligent spam filtering. |
 | 🧠 | **Hybrid Intelligence** | Semantic routing switches between low-latency FastBrain and deep-reasoning AgenticBrain automatically. |
 | 🗣️ | **Human-in-the-Loop** | Never modifies critical calendars, files, or emails without voice/text confirmation from the user. |
-| 📚 | **Lifelong Episodic LTM** | Vector-backed persistent memory (ChromaDB) that learns user facts, preferences, and emotional context. |
+| 📚 | **Lifelong Episodic LTM** | Vector-backed persistent memory (ChromaDB) that learns user facts, preferences, and technical workflows. |
 
 ---
 
 ## 🏗️ System Architecture
 
-Jarvis utilizes a modular, event-driven architecture that separates fast conversational inference from stateful, multi-tool agentic planning:
+Jarvis utilizes a modular, event-driven architecture that separates fast conversational inference from stateful, multi-tool agentic engineering:
 
 ```mermaid
 graph TD
@@ -54,7 +55,7 @@ graph TD
 
     %% Intelligence Engine
     semantic_router -->|Direct / Fast Command| fast_brain[⚡ FastBrain<br/>Groq Llama-3.3-70B]
-    semantic_router -->|Multi-step / File / Comms| agent_brain[🧠 AgenticBrain<br/>Gemini Gemma-4-31B]
+    semantic_router -->|Multi-step / Code / Comms| agent_brain[🧠 AgenticBrain<br/>Gemini / Regolo MoE]
 
     %% Memory & Context Layer
     subgraph Memory Ecosystem
@@ -70,13 +71,13 @@ graph TD
     %% Execution & Tools Layer
     subgraph Native Tool Ecosystem
         comms_tools[📨 Gmail / WhatsApp / Calendar]
-        fs_tools[📂 File CRUD & Workspace RAG]
-        sys_tools[💻 OS Control / Apps / Terminal]
+        code_tools[💻 Repo-Map / Replace-Block / Linter]
+        sys_tools[⚙️ OS Control / Apps / Terminal]
         search_tools[🌐 Tavily Web / ArXiv / Scraper]
     end
 
     agent_brain --> comms_tools
-    agent_brain --> fs_tools
+    agent_brain --> code_tools
     agent_brain --> sys_tools
     agent_brain --> search_tools
 
@@ -90,7 +91,33 @@ graph TD
     listeners --> queue --> scout
     scout -->|Informational FYI| tts_out[🔊 Edge TTS / Orpheus Audio]
     scout -->|Action Suggested| agent_brain
+
 ```
+
+---
+
+## 💻 Autonomous Software Engineering
+
+Jarvis features a built-in software engineering engine inspired by **Claude Code** and **Devin**, enabling autonomous project scaffolding, bug hunting, and safe code refactoring:
+
+### 1. 📂 Codebase Architecture Mapping (`repo_map`)
+
+* Inspects project structures natively before writing a single line of code.
+* Automatically filters out heavy dependency directories (`node_modules`, `.venv`, `__pycache__`) to feed a clean, token-efficient ASCII tree into the LLM context window.
+
+### 2. 🎯 Zero Line-Drift Block Editing (`replace_block`)
+
+* Eliminates the classic "Line Drift Bug" common in naive AI agents by replacing exact multi-line code diff blocks (`<<<<<<< SEARCH ======= >>>>>>>`) instead of fragile line numbers.
+* Normalizes Windows (`\r\n`) and POSIX (`\n`) line endings automatically for safe cross-platform matching.
+
+### 3. 🛡️ Instant Linter & Self-Correcting Loop (`_validate_syntax`)
+
+* Embeds an automated post-write linter hook (`py_compile`) that validates syntax instantly upon file creation or modification.
+* If a syntax or indentation error occurs, Jarvis catches the compiler traceback and **autonomously self-corrects** the code in the very next step without requiring human intervention.
+
+### 4. ⚡ Multi-File Batching & Anti-Truncation
+
+* Dynamically routes small boilerplate tasks to native `create_many` CRUD tools while leveraging batched Python scripting (`run_python_code`) to build entire modular web applications (`index.html`, `css/`, `js/`) in a single execution step (~15 seconds).
 
 ---
 
@@ -106,10 +133,10 @@ graph TD
 * Optimized for sub-second conversational responses using `llama-3.3-70b-versatile`.
 * Handles direct desktop controls, playback queries, and factual Q&A without tool overhead.
 
-### 3. 🧠 AgenticBrain (Gemini Reasoning)
+### 3. 🧠 AgenticBrain (Regolo MoE / Gemini Reasoning)
 
-* Uses `gemma-4-31b-it` with native function-calling for complex multi-step execution.
 * Employs a strict **4-Pillar Reasoning Contract** (Fact Audit -> Missing Piece Check -> Safety Audit -> Pragmatic Exit) to prevent infinite loops and hallucinations.
+* Equipped with resilient error keyword detection to catch runtime exceptions and trigger immediate AI self-repair.
 
 ### 4. 🛡️ Proactive Scout & HITL Security
 
@@ -122,11 +149,11 @@ graph TD
 
 | Category | Supported Capabilities | Tech / API Bridge |
 | --- | --- | --- |
+| 💻 **Software Engineering** | Project tree mapping (`repo_map`), exact diff block replacement (`replace_block`), post-edit syntax linting, multi-file batch creation. | Python AST / `py_compile` / `file_operations` |
 | 📨 **Communication** | Send/read Gmails, dispatch WhatsApp messages, manage Google Calendar events. | Gmail Pub/Sub, Baileys Node.js Server, Calendar OAuth |
-| 📂 **Workspace & File OS** | Single-file CRUD, directory scanning, code generation, local markdown RAG indexing. | Python `os`/`pathlib`, ChromaDB Vector Index |
-| 🌐 **Search & Deep Research** | Live web scraping, academic research (ArXiv), YouTube transcripts, synthesis reports. | Tavily Search, BeautifulSoup, ArXiv API |
-| 💻 **System Automation** | Launch/close desktop apps, hardware volume/brightness, screenshots, clipboard CRUD. | Python OS Bindings, Win32 API, Pygame |
-| 🎨 **Creative AI** | High-speed local/cloud image generation and editing. | Flux.1-Schnell, AI Horde |
+| 📂 **Workspace & RAG** | Single-file CRUD, recursive directory scanning, local markdown RAG indexing. | Python `os`/`pathlib`, ChromaDB Vector Index |
+| 🌐 **Search & Research** | Live web scraping, academic research (ArXiv), YouTube transcripts, synthesis reports. | Tavily Search, BeautifulSoup, ArXiv API |
+| ⚙️ **System Automation** | Launch/close desktop apps, hardware volume/brightness, screenshots, clipboard CRUD. | Python OS Bindings, Win32 API, Pygame |
 
 ---
 
@@ -143,7 +170,7 @@ graph TD
 
 ```bash
 # Clone the repository
-git clone https://github.com/thekaifansari01/jarvis-by-kaif-ansari.git
+git clone [https://github.com/thekaifansari01/jarvis-by-kaif-ansari.git](https://github.com/thekaifansari01/jarvis-by-kaif-ansari.git)
 cd jarvis-by-kaif-ansari
 
 # Create and activate a Python Virtual Environment
@@ -158,6 +185,7 @@ pip install -r requirements.txt
 cd tools/Messanger/whatsapp/BaileysServer
 npm install
 cd ../../..
+
 ```
 
 ### 3. Register Desktop URI Protocol
@@ -166,6 +194,7 @@ To enable seamless OAuth web-authentication for Gmail and Google Calendar (`jarv
 
 ```bash
 python SetupRegistry.py
+
 ```
 
 ---
@@ -176,11 +205,10 @@ Create a `.env` file in your root project directory by copying the provided exam
 
 ```bash
 cp .env.example .env
+
 ```
 
 ### Full Environment Variables Example (`.env.example`)
-
-Copy and paste the following into your `.env` file, then fill in your API keys:
 
 ```env
 # ============================================
@@ -197,8 +225,8 @@ REGOLO_API_KEY=
 # ============================================
 # API ENDPOINTS & MODELS
 # ============================================
-API_BASE_URL=https://jarvis-oauth-server.vercel.app
-REGOLO_BASE_URL=https://api.regolo.ai/v1
+API_BASE_URL=[https://jarvis-oauth-server.vercel.app](https://jarvis-oauth-server.vercel.app)
+REGOLO_BASE_URL=[https://api.regolo.ai/v1](https://api.regolo.ai/v1)
 REGOLO_MODEL=gemma4-31b
 
 # ============================================
@@ -208,12 +236,6 @@ AGENT_PRIMARY_PROVIDER=regolo
 AGENT_FALLBACK_PROVIDER=gemini
 REGOLO_THINKING_ENABLED=True
 
-# ============================================
-# ⚠️ DO NOT CHANGE THE FOLLOWING
-# ============================================
-# API_BASE_URL         - OAuth server endpoint
-# REGOLO_BASE_URL      - Regolo API endpoint
-# REGOLO_MODEL         - Default model for Regolo
 ```
 
 > **Security Note:** Never commit your `.env` or `Data/SessionCookies/` directory to public version control. They are excluded via `.gitignore` by default.
@@ -233,6 +255,7 @@ python main.py test_jarvis
 
 # 3. Silent Mode (Wake Word Disabled, Trigger via Hotkeys Only)
 python main.py no_wake
+
 ```
 
 ### Keyboard Shortcuts
@@ -252,7 +275,7 @@ jarvis-by-kaif-ansari/
 │   └── logger/             # Thread-safe colored terminal loggers (Rich)
 ├── tools/
 │   ├── Messanger/          # Gmail Pub/Sub & Baileys WhatsApp bridges
-│   ├── SystemTools/        # Win32 OS controls, hardware toggles, and clipboard
+│   ├── SystemTools/        # Win32 OS controls, hardware toggles, clipboard, & File Editor
 │   ├── SearchTools/        # Tavily deep research, ArXiv, and web scrapers
 │   └── workspace/          # Local filesystem RAG and file CRUD executor
 ├── Proactive/
@@ -261,6 +284,7 @@ jarvis-by-kaif-ansari/
 ├── Data/                   # Local state (ChromaDB vectors, user profile, cookies)
 ├── main.py                 # Primary entry point & service supervisor
 └── requirements.txt        # Verified Python production dependencies
+
 ```
 
 ---
@@ -270,8 +294,9 @@ jarvis-by-kaif-ansari/
 * [x] **Phase 1:** Real-time Voice Wake Word & Hybrid Semantic Routing.
 * [x] **Phase 2:** ChromaDB Episodic Memory & Local Workspace RAG Engine.
 * [x] **Phase 3:** Proactive HITL Watchdog for Gmail, WhatsApp, and Calendar.
-* [ ] **Phase 4:** Dockerized Sandbox Execution for running untrusted code safely.
-* [ ] **Phase 5:** Full Multi-platform macOS & Linux native system accessibility.
+* [x] **Phase 4:** Level 4 Autonomous Software Engineering (AST Repo-Map, Zero-Drift Diffs, Auto-Linter).
+* [ ] **Phase 5:** Dockerized Sandbox Execution for running untrusted code safely.
+* [ ] **Phase 6:** Full Multi-platform macOS & Linux native system accessibility.
 
 ---
 

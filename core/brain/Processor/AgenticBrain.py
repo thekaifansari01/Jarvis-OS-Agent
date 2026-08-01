@@ -17,7 +17,6 @@ from core.brain.config import (
 from core.brain.Providers import get_provider
 from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
 from core.brain.Processor.FastBrain import make_result, clean_json_string
-
 from core.ui.typing_status import launch_popup, update_typing_status
 
 FAST_MODEL = GROQ_FAST_MODEL
@@ -547,113 +546,125 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         observation = execute_single_tool_sync(ai_response)
 
                     if observation:
-                        if action_key in ["email_action", "whatsapp_action"]:
-                            ephemeral["last_contact"] = ai_response.get(
-                                action_key, {}
-                            ).get("to", "")
+                        obs_lower = str(observation).lower()
+                        error_keywords = [
+                            "[error]",
+                            "traceback (most recent call last)",
+                            "syntaxerror",
+                            "pycompileerror",
+                            "critical syntax error",
+                            "failed to ",
+                            "error ->",
+                            "exception:",
+                        ]
+                        is_failure = any(kw in obs_lower for kw in error_keywords)
 
-                        if "http" in observation and "link" in observation.lower():
-                            urls = re.findall(r"https?://[^\s]+", observation)
-                            if urls:
-                                ephemeral["last_found_links"] = urls[:3]
-                        if (
-                            "file" in observation.lower()
-                            and (
-                                ".png" in observation
-                                or ".md" in observation
-                                or ".txt" in observation
-                                or ".jpg" in observation
+                        if not is_failure:
+                            action_fingerprint = f"{action_key}:{str(ai_response.get(action_key, ''))[:100]}"
+                            completed_actions.add(
+                                f"{action_fingerprint} -> [SUCCESS]"
                             )
-                        ):
-                            file_match = re.search(
-                                r"([\w\-:\\/.]+\.(png|md|txt|jpg))", observation
+                            update_confirmed_facts(
+                                confirmed_facts,
+                                action_key,
+                                action_detail,
+                                observation,
                             )
-                            if file_match:
-                                ephemeral["last_accessed_file"] = (
-                                    file_match.group(1)
+
+                            if action_key in ["email_action", "whatsapp_action"]:
+                                ephemeral["last_contact"] = ai_response.get(
+                                    action_key, {}
+                                ).get("to", "")
+
+                            if "http" in observation and "link" in observation.lower():
+                                urls = re.findall(r"https?://[^\s]+", observation)
+                                if urls:
+                                    ephemeral["last_found_links"] = urls[:3]
+                            if (
+                                "file" in observation.lower()
+                                and (
+                                    ".png" in observation
+                                    or ".md" in observation
+                                    or ".txt" in observation
+                                    or ".jpg" in observation
                                 )
-
-                    obs_prefix = str(observation).lower()[:50]
-                    action_fingerprint = f"{action_key}:{str(ai_response.get(action_key, ''))[:100]}"
-
-                    if observation and (
-                        "error" not in obs_prefix
-                        and "❌" not in obs_prefix
-                        and "failed" not in obs_prefix
-                    ):
-                        completed_actions.add(
-                            f"{action_fingerprint} -> [SUCCESS]"
-                        )
-                        update_confirmed_facts(
-                            confirmed_facts,
-                            action_key,
-                            action_detail,
-                            observation,
-                        )
-
-                        try:
-                            if action_key == "system_controller":
-                                sys_data = ai_response.get(
-                                    "system_controller", {}
+                            ):
+                                file_match = re.search(
+                                    r"([\w\-:\\/.]+\.(png|md|txt|jpg))", observation
                                 )
-                                if sys_data.get("apps_to_open"):
-                                    metadata_tracker["apps_opened"].extend(
-                                        sys_data["apps_to_open"]
+                                if file_match:
+                                    ephemeral["last_accessed_file"] = (
+                                        file_match.group(1)
                                     )
-                                if sys_data.get("apps_to_close"):
-                                    metadata_tracker["apps_closed"].extend(
-                                        sys_data["apps_to_close"]
+
+                            try:
+                                if action_key == "system_controller":
+                                    sys_data = ai_response.get(
+                                        "system_controller", {}
                                     )
-                                if sys_data.get("urls_to_open"):
+                                    if sys_data.get("apps_to_open"):
+                                        metadata_tracker["apps_opened"].extend(
+                                            sys_data["apps_to_open"]
+                                        )
+                                    if sys_data.get("apps_to_close"):
+                                        metadata_tracker["apps_closed"].extend(
+                                            sys_data["apps_to_close"]
+                                        )
+                                    if sys_data.get("urls_to_open"):
+                                        metadata_tracker["system_events"].append(
+                                            f"Opened URLs: {', '.join(sys_data['urls_to_open'])}"
+                                        )
+                                    if sys_data.get("system_action"):
+                                        metadata_tracker["system_events"].append(
+                                            f"System Action: {sys_data['system_action']}"
+                                        )
+
+                                    if (
+                                        sys_data.get("system_action") == "screenshot"
+                                        and sys_data.get("screenshot_filename")
+                                    ):
+                                        ephemeral["last_screenshot"] = (
+                                            sys_data.get("screenshot_filename")
+                                        )
+
+                                elif action_key == "execute_terminal_command":
+                                    cmd_data = ai_response.get(
+                                        "execute_terminal_command", {}
+                                    )
                                     metadata_tracker["system_events"].append(
-                                        f"Opened URLs: {', '.join(sys_data['urls_to_open'])}"
+                                        f"Terminal Command: {cmd_data.get('command', '')}"
                                     )
-                                if sys_data.get("system_action"):
+
+                                elif action_key == "run_python_code":
                                     metadata_tracker["system_events"].append(
-                                        f"System Action: {sys_data['system_action']}"
+                                        "Executed Python Code Script"
                                     )
 
-                                if (
-                                    sys_data.get("system_action") == "screenshot"
-                                    and sys_data.get("screenshot_filename")
-                                ):
-                                    ephemeral["last_screenshot"] = (
-                                        sys_data.get("screenshot_filename")
+                                else:
+                                    metadata_tracker["system_events"].append(
+                                        f"Executed {action_key}: {action_detail}"
                                     )
 
-                            elif action_key == "execute_terminal_command":
-                                cmd_data = ai_response.get(
-                                    "execute_terminal_command", {}
-                                )
-                                metadata_tracker["system_events"].append(
-                                    f"Terminal Command: {cmd_data.get('command', '')}"
+                            except Exception as meta_err:
+                                logger.error(
+                                    f"⚠️ Error tracking metadata: {meta_err}"
                                 )
 
-                            elif action_key == "run_python_code":
-                                metadata_tracker["system_events"].append(
-                                    "Executed Python Code Script"
+                            if not silent:
+                                update_agent_status(
+                                    step=step + 1,
+                                    total_steps=max_steps,
+                                    thought=ai_response.get("thought", ""),
+                                    action=action_key,
+                                    action_detail=action_detail,
+                                    observation=str(observation)[:200],
                                 )
-
-                            else:
-                                metadata_tracker["system_events"].append(
-                                    f"Executed {action_key}: {action_detail}"
-                                )
-
-                        except Exception as meta_err:
-                            logger.error(
-                                f"⚠️ Error tracking metadata: {meta_err}"
+                            break
+                        else:
+                            logger.warning(
+                                f"⚠️ Tool execution error detected: {str(observation)[:100]}. Sending to AI for self-correction..."
                             )
-
-                        if not silent:
-                            update_agent_status(
-                                step=step + 1,
-                                total_steps=max_steps,
-                                thought=ai_response.get("thought", ""),
-                                action=action_key,
-                                action_detail=action_detail,
-                                observation=str(observation)[:200],
-                            )
-                        break
+                            break
                     elif attempt < retry_limit - 1:
                         logger.warning(
                             f"⚠️ Tool attempt {attempt+1} failed: {observation}. Retrying in 2s..."
@@ -663,8 +674,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                     observation = (
                         f"Observation: Tool execution error - {tool_err}"
                     )
-                    if attempt < retry_limit - 1:
-                        time.sleep(2)
+                    break
             else:
                 action_fingerprint = f"{action_key}:{str(ai_response.get(action_key, ''))[:100]}"
                 completed_actions.add(

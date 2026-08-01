@@ -1,6 +1,8 @@
+import os
 import time
 import json
 import re
+import hashlib
 import threading
 from typing import Dict, Any
 from groq import Groq, GroqError
@@ -19,11 +21,46 @@ PROACTIVE_AGENT = AGENT_PROACTIVE
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 _stop_proactive = threading.Event()
 
+CACHE_DIR = "Data"
+PROCESSED_EVENTS_FILE = os.path.join(CACHE_DIR, "processed_events.json")
+
 SPAM_KEYWORDS = [
     "otp", "one time password", "verification code", "no-reply", 
     "donotreply", "newsletter", "unsubscribe", "promotions", 
     "50% off", "sale starts", "cashback", "advertisement"
 ]
+
+def _get_event_hash(text: str) -> str:
+    clean_text = re.sub(r'\s+', ' ', text.strip().lower())
+    return hashlib.md5(clean_text.encode('utf-8')).hexdigest()
+
+def is_event_already_processed(text: str) -> bool:
+    try:
+        if not os.path.exists(PROCESSED_EVENTS_FILE):
+            return False
+        with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
+            processed_hashes = json.load(f)
+        return _get_event_hash(text) in processed_hashes
+    except Exception as e:
+        logger.warning(f"Deduplication check error: {e}")
+        return False
+
+def mark_event_as_processed(text: str):
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        processed_hashes = []
+        if os.path.exists(PROCESSED_EVENTS_FILE):
+            with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
+                processed_hashes = json.load(f)
+        
+        event_hash = _get_event_hash(text)
+        if event_hash not in processed_hashes:
+            processed_hashes.append(event_hash)
+            processed_hashes = processed_hashes[-100:]
+            with open(PROCESSED_EVENTS_FILE, "w", encoding="utf-8") as f:
+                json.dump(processed_hashes, f)
+    except Exception as e:
+        logger.warning(f"Failed to save processed event hash: {e}")
 
 def stop_proactive_agent():
     _stop_proactive.set()
@@ -147,7 +184,7 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
             if events:
                 valid_events = []
                 for ev in events:
-                    if not is_instant_spam(ev.data):
+                    if not is_instant_spam(ev.data) and not is_event_already_processed(ev.data):
                         valid_events.append(ev)
 
                 if valid_events:
@@ -170,6 +207,10 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
 
                     decision_data = evaluate_events_batch(batched_data, recent_history, current_mood)
                     handle_proactive_decision(decision_data, batched_data, memory_instance, is_jarvis_busy_callback)
+
+                    for ev in valid_events:
+                        mark_event_as_processed(ev.data)
+
         except Exception as e:
             logger.error(f"Error in Proactive Loop: {e}")
         time.sleep(2)

@@ -150,62 +150,60 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
 
     return ""
 
+def _safe_int(val, default=None):
+    if val is None:
+        return default
+    try:
+        return max(1, int(val))
+    except (ValueError, TypeError):
+        return default
+
 def execute_file_operation(action_dict: dict) -> str:
     try:
-        action = action_dict.get('action')
-        file_path = action_dict.get('file_path')
-        if not file_path:
-            return "Observation: Missing 'file_path' for file operation."
+        action = action_dict.get("action")
+        
+        if action == "repo_map":
+            result = file_editor.get_repo_map()
+            return f"Observation: {result}"
 
-        if action == 'view':
-            start = action_dict.get('start_line')
-            end = action_dict.get('end_line')
+        if action == "create_many":
+            files_list = action_dict.get("files", [])
+            if not files_list:
+                return "Observation: [ERROR] Missing 'files' array for create_many action."
+            result = file_editor.create_many(files_list)
+            return f"Observation: {result}"
+
+        file_path = action_dict.get("file_path")
+        if not file_path:
+            return "Observation: [ERROR] Missing 'file_path' for file operation."
+
+        file_path = os.path.abspath(file_path.replace("\\", "/"))
+
+        if action == "view":
+            start = _safe_int(action_dict.get("start_line"))
+            end = _safe_int(action_dict.get("end_line"))
             result = file_editor.view(file_path, start, end)
             return f"Observation: {result}"
 
-        elif action == 'replace_string':
-            old = action_dict.get('old_str')
-            new = action_dict.get('new_str')
-            if old is None or new is None:
-                return "Observation: Missing 'old_str' or 'new_str' for replace_string."
-            result = file_editor.replace_string(file_path, old, new)
+        elif action == "replace_block":
+            search_block = action_dict.get("search_block")
+            replace_block = action_dict.get("replace_block")
+            if not search_block or replace_block is None:
+                return "Observation: [ERROR] Missing 'search_block' or 'replace_block' for replace_block action."
+            result = file_editor.replace_block(file_path, str(search_block), str(replace_block))
             return f"Observation: {result}"
 
-        elif action == 'replace_lines':
-            start = action_dict.get('start_line')
-            end = action_dict.get('end_line')
-            new_content = action_dict.get('new_content')
-            if start is None or end is None or new_content is None:
-                return "Observation: Missing start_line, end_line, or new_content for replace_lines."
-            result = file_editor.replace_lines(file_path, start, end, new_content)
-            return f"Observation: {result}"
-
-        elif action == 'insert':
-            line_num = action_dict.get('line_number')
-            text = action_dict.get('text')
-            if line_num is None or text is None:
-                return "Observation: Missing line_number or text for insert."
-            result = file_editor.insert(file_path, line_num, text)
-            return f"Observation: {result}"
-
-        elif action == 'delete_lines':
-            start = action_dict.get('start_line')
-            end = action_dict.get('end_line')
-            if start is None or end is None:
-                return "Observation: Missing start_line or end_line for delete_lines."
-            result = file_editor.delete_lines(file_path, start, end)
-            return f"Observation: {result}"
-
-        elif action == 'create':
-            content = action_dict.get('content', '')
-            result = file_editor.create(file_path, content)
+        elif action == "create":
+            content = action_dict.get("content", "")
+            result = file_editor.create(file_path, str(content))
             return f"Observation: {result}"
 
         else:
-            return f"Observation: Unknown file action '{action}'. Supported: view, replace_string, replace_lines, insert, delete_lines, create."
+            return f"Observation: [ERROR] Unknown file action '{action}'. Supported: view, replace_block, create, create_many, repo_map."
+            
     except Exception as e:
-        return f"Observation: File operation error: {e}"
-
+        return f"Observation: [ERROR] File operation runtime crash: {str(e)}"
+    
 def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
     observation = "Observation: No valid action executed."
 

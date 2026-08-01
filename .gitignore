@@ -9,6 +9,7 @@ Data/island_response.json
 Data/jarvis_memory/
 Data/Jarvis_Workspace/
 Data/tavily_search.log
+Data/processed_events.json
 Data/typing_status.json
 Data/UserProfile/
 Data/RAG/
