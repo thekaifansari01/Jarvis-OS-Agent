@@ -11,7 +11,8 @@ const {
     useMultiFileAuthState, 
     DisconnectReason,
     fetchLatestBaileysVersion, 
-    Browsers                     
+    Browsers,
+    downloadMediaMessage                     
 } = require('@whiskeysockets/baileys');
 const express = require('express');
 const qrcode = require('qrcode');
@@ -43,13 +44,17 @@ const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
 const binDir = path.join(__dirname, '..', '..', '..', '..', 'Bin');
+const mediaVaultDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'MediaVault', 'WhatsApp_Media');
 
 try {
     if (!fs.existsSync(sessionDir)) {
         fs.mkdirSync(sessionDir, { recursive: true });
     }
+    if (!fs.existsSync(mediaVaultDir)) {
+        fs.mkdirSync(mediaVaultDir, { recursive: true });
+    }
 } catch (fsErr) {
-    console.error("🚨 [FS ERROR] Cannot create session directory:", fsErr.message);
+    console.error("🚨 [FS ERROR] Cannot create session/media directory:", fsErr.message);
 }
 
 const dbPath = path.join(sessionDir, 'chats.db');
@@ -97,7 +102,7 @@ const store = {
                 let validMessageCount = 0;
                 let uniqueChats = new Set();
 
-                messages.forEach(msg => {
+                messages.forEach(async (msg) => {
                     try {
                         if (!msg || !msg.key || !msg.key.remoteJid) return;
 
@@ -110,11 +115,41 @@ const store = {
                         const id = msg.key.id;
                         const timestamp = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
                         const fromMe = msg.key.fromMe ? 1 : 0;
-                        let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "[Media/Non-text message]";
+                        
+                        let text = msg.message?.conversation || 
+                                   msg.message?.extendedTextMessage?.text || 
+                                   msg.message?.imageMessage?.caption || 
+                                   msg.message?.videoMessage?.caption || 
+                                   msg.message?.documentMessage?.caption || 
+                                   "[Media Message]";
+
+                        let mediaTag = "";
+                        const isMedia = msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.documentMessage || msg.message?.audioMessage;
+
+                        if (isMedia && !fromMe && !isBulkSync && timestamp >= SCRIPT_START_TIME) {
+                            try {
+                                const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+                                let ext = 'bin';
+                                if (msg.message?.imageMessage) ext = 'jpg';
+                                else if (msg.message?.videoMessage) ext = 'mp4';
+                                else if (msg.message?.audioMessage) ext = 'mp3';
+                                else if (msg.message?.documentMessage) {
+                                    const fname = msg.message.documentMessage.fileName || 'doc.pdf';
+                                    ext = fname.split('.').pop() || 'pdf';
+                                }
+                                const filename = `${Date.now()}_wa.${ext}`;
+                                const savePath = path.join(mediaVaultDir, filename).replace(/\\/g, '/');
+                                fs.writeFileSync(savePath, buffer);
+                                mediaTag = `\n[Media Attachment Saved]: ${savePath}`;
+                                console.log(`📎 [WA MEDIA SAVED]: ${savePath}`);
+                            } catch (dlErr) {
+                                console.error("⚠️ Failed to download WhatsApp media:", dlErr.message);
+                            }
+                        }
 
                         if (!fromMe && !isBulkSync && timestamp >= SCRIPT_START_TIME) {
                             let senderName = msg.pushName || `Unknown ${jid.split('@')[0]}`;
-                            unreadAlerts.push(`${senderName}: ${text}`);
+                            unreadAlerts.push(`${senderName}: ${text}${mediaTag}`);
                         }
 
                         validMessageCount++;

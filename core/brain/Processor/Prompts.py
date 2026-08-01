@@ -228,6 +228,29 @@ def get_native_tools():
                     )
                 ),
                 types.FunctionDeclaration(
+                    name="inspect_media",
+                    description=(
+                        "[WHEN TO USE]: Use ONLY when the user asks a question about an image, photo, video, or document attachment, "
+                        "OR when you need to inspect the visual contents of a file saved in the local workspace/MediaVault.\n"
+                        "[RULE]: Pass absolute local file paths in 'file_paths' and the exact question to answer in 'query'."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "file_paths": types.Schema(
+                                type=types.Type.ARRAY,
+                                items=types.Schema(type=types.Type.STRING),
+                                description="List of absolute local file paths to images/media to inspect."
+                            ),
+                            "query": types.Schema(
+                                type=types.Type.STRING,
+                                description="Exact question or extraction instruction about the media (e.g., 'What is the total amount on this bill?')."
+                            )
+                        },
+                        required=["file_paths", "query"]
+                    )
+                ),
+                types.FunctionDeclaration(
                     name="file_operations",
                     description=(
                         "[WHEN TO USE]: Use for clean, Claude-Code style CRUD operations on local files.\n"

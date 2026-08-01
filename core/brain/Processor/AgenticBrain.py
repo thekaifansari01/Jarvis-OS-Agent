@@ -133,6 +133,7 @@ User Command: "{raw_command}"
 
     completed_actions = set()
     confirmed_facts = {}
+    pending_image_payloads = []
 
     metadata_tracker = {
         "apps_opened": [],
@@ -269,7 +270,12 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         + "\n\n"
                         + prompt
                     )
-                    messages = [{"role": "user", "content": full_prompt}]
+                    if pending_image_payloads:
+                        content_block = [{"type": "text", "text": full_prompt}] + pending_image_payloads
+                        messages = [{"role": "user", "content": content_block}]
+                        pending_image_payloads = []
+                    else:
+                        messages = [{"role": "user", "content": full_prompt}]
 
                     if any(name in current_provider.__class__.__name__.lower() for name in ["regolo", "openrouter"]):
                         thought_text = ""
@@ -546,6 +552,14 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         observation = execute_single_tool_sync(ai_response)
 
                     if observation:
+                        if isinstance(observation, dict) and observation.get("type") == "image_payload":
+                            for img in observation.get("data", []):
+                                pending_image_payloads.append({
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:{img['mime_type']};base64,{img['data']}"}
+                                })
+                            observation = observation.get("observation", "Observation: [Media Loaded Inline] -> Images ready for inspection.")
+
                         obs_lower = str(observation).lower()
                         error_keywords = [
                             "[error]",

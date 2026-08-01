@@ -31,6 +31,8 @@ class RegoloSemanticRouter:
         if not self.api_key:
             return None
         
+        trimmed_history = history_context[-500:].strip() if history_context else "No recent history."
+
         system_prompt = (
             "You are an enterprise AI semantic router. Your task is to classify user commands into strict JSON "
             "with a single key 'route' having value either 'FAST' or 'AGENTIC'.\n\n"
@@ -59,7 +61,7 @@ class RegoloSemanticRouter:
             "User: 'System lock kar do' -> {\"route\": \"FAST\"}"
         )
 
-        user_content = f"[RECENT CONVERSATION HISTORY]\n{history_context if history_context else 'No recent history.'}\n\n[USER COMMAND]\n\"{command}\""
+        user_content = f"[RECENT CONVERSATION HISTORY]\n{trimmed_history}\n\n[USER COMMAND]\n\"{command}\""
 
         payload = {
             "model": "brick-complexity-pro",
@@ -83,11 +85,13 @@ class RegoloSemanticRouter:
                 route = data.get("route", "FAST").strip().upper()
                 logger.info(f"⚡ Regolo Semantic Router [{latency_ms:.1f}ms] | Decision -> {route}")
                 return "AGENTIC" if route == "AGENTIC" else "FAST"
+            else:
+                logger.warning(f"⚠️ Regolo Router API returned non-200 status ({response.status_code}): {response.text[:100]}")
+                
         except Exception as e:
             logger.warning(f"⚠️ Regolo Router API failed ({e}). Switching to local fallback router.")
             
         return None
-
 
 router_engine = RegoloSemanticRouter()
 

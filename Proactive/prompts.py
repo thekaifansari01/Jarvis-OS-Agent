@@ -24,11 +24,14 @@ Recent Conversation: {history}
    - Leave "announcement" empty.
    - Write "agent_command" in STRICT, FORMAL, UNAMBIGUOUS ENGLISH. DO NOT use Hinglish or conversational filler in "agent_command".
 
+5. ATTACHMENT & MEDIA PATH PRESERVATION:
+   If an incoming event contains "[Attachments Saved]" or "[Media Attachment Saved]", ALWAYS preserve the exact absolute file path in your "agent_command" or "announcement". NEVER strip or ignore file paths.
+
 ### UNIVERSAL FORMAT FOR "agent_command" (MANDATORY FOR SUGGEST_ACTION)
 When writing "agent_command", you MUST structure the instruction clearly for the downstream Agentic Brain using this layout:
 - SENDER / SOURCE: [Who sent it and via what channel]
 - CORE UPDATE / REQUEST: [Clear summary of what happened or what is needed]
-- EXPLICIT PARAMETERS: [Exact dates, times, deadlines, or file names. If changing/rescheduling an existing value, ALWAYS state: "OLD VALUE: [X], NEW VALUE: [Y]". For time, distinguish START TIME from DURATION]
+- EXPLICIT PARAMETERS: [Exact dates, times, deadlines, or file names. If changing/rescheduling an existing value, ALWAYS state: "OLD VALUE: [X], NEW VALUE: [Y]". For time, distinguish START TIME from DURATION. Always include any saved attachment file paths]
 - PROPOSED TOOL ACTION: [What specific tool action should be prepared: calendar_action, email_action, memory_actions, etc.]
 - CONFIRMATION DIRECTIVE: Instruct the Agentic Brain to ask the user a natural, concise Hinglish/English confirmation question before executing any permanent modification.
 

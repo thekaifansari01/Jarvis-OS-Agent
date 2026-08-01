@@ -82,7 +82,7 @@ def decode_base64(data_str):
     except Exception:
         return ""
 
-def extract_email_content(msg):
+def extract_email_content(service, msg_id, msg):
     payload = msg.get('payload', {})
     headers = payload.get('headers', [])
     sender_name, sender_email, subject = "Unknown", "Unknown", "No Subject"
@@ -99,22 +99,52 @@ def extract_email_content(msg):
 
     plain_text = ""
     html_text = ""
+    saved_attachments = []
+
+    media_vault_dir = os.path.join(project_root, 'Data', 'MediaVault', 'Email_Attachments')
+    os.makedirs(media_vault_dir, exist_ok=True)
+
+    def download_attachment(att_id, filename):
+        try:
+            att_res = service.users().messages().attachments().get(
+                userId='me', messageId=msg_id, id=att_id
+            ).execute()
+            file_data = base64.urlsafe_b64decode(att_res.get('data', '').encode('UTF-8'))
+            safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename)
+            timestamp_str = str(int(time.time()))
+            final_filename = f"{timestamp_str}_{safe_filename}"
+            save_path = os.path.join(media_vault_dir, final_filename)
+            with open(save_path, "wb") as f:
+                f.write(file_data)
+            saved_attachments.append(os.path.abspath(save_path).replace("\\", "/"))
+        except Exception as e:
+            print(f"⚠️ Attachment download error: {e}")
 
     def traverse_parts(parts):
         nonlocal plain_text, html_text
         for part in parts:
             mime_type = part.get('mimeType', '')
             data = part.get('body', {}).get('data', '')
-            if mime_type == 'text/plain' and data:
+            filename = part.get('filename', '')
+            att_id = part.get('body', {}).get('attachmentId', '')
+
+            if filename and att_id:
+                download_attachment(att_id, filename)
+            elif mime_type == 'text/plain' and data and not filename:
                 plain_text += decode_base64(data) + "\n"
-            elif mime_type == 'text/html' and data:
+            elif mime_type == 'text/html' and data and not filename:
                 html_text += decode_base64(data) + "\n"
             elif 'parts' in part:
                 traverse_parts(part['parts'])
 
     top_mime_type = payload.get('mimeType', '')
     top_data = payload.get('body', {}).get('data', '')
-    if top_mime_type == 'text/plain' and top_data:
+    top_filename = payload.get('filename', '')
+    top_att_id = payload.get('body', {}).get('attachmentId', '')
+
+    if top_filename and top_att_id:
+        download_attachment(top_att_id, top_filename)
+    elif top_mime_type == 'text/plain' and top_data:
         plain_text += decode_base64(top_data)
     elif top_mime_type == 'text/html' and top_data:
         html_text += decode_base64(top_data)
@@ -133,7 +163,7 @@ def extract_email_content(msg):
     if not final_body:
         final_body = msg.get('snippet', 'No readable text found in this email.')
 
-    return sender_name, sender_email, subject, final_body
+    return sender_name, sender_email, subject, final_body, saved_attachments
 
 def get_all_unread_emails(service, start_time_ms, max_results=10):
     try:
@@ -146,8 +176,8 @@ def get_all_unread_emails(service, start_time_ms, max_results=10):
             internal_date = int(full_msg.get('internalDate', 0))
             if internal_date < start_time_ms:
                 continue
-            name, email, sub, body = extract_email_content(full_msg)
-            emails.append((name, email, sub, body, msg_id))
+            name, email, sub, body, saved_attachments = extract_email_content(service, msg_id, full_msg)
+            emails.append((name, email, sub, body, saved_attachments, msg_id))
         return emails
     except Exception as e:
         print(f"⚠️ Error fetching unread emails: {e}")
@@ -192,7 +222,7 @@ def listen_for_emails():
             message.ack()
             with _email_lock:
                 emails = get_all_unread_emails(service, _START_TIME_MS)
-            for name, email, sub, body, msg_id in emails:
+            for name, email, sub, body, saved_attachments, msg_id in emails:
                 if _stop_event.is_set():
                     break
                 with _processed_ids_lock:
@@ -204,10 +234,15 @@ def listen_for_emails():
                 print(f"👤 Name    : {name}")
                 print(f"📧 Email   : {email}")
                 print(f"📌 Subject : {sub}")
+                if saved_attachments:
+                    print(f"📎 Files   : {', '.join(saved_attachments)}")
                 print("-" * 80)
                 print(f"📝 Body    :\n{body}")
                 print("="*80 + "\n")
                 event_data = f"Email from: {name} ({email})\nSubject: {sub}\nBody: {body}"
+                if saved_attachments:
+                    att_str = ", ".join(saved_attachments)
+                    event_data += f"\n[Attachments Saved]: {att_str}"
                 push_proactive_event("Gmail", event_data)
         except Exception as e:
             print(f"⚠️ Error processing notification: {e}")
