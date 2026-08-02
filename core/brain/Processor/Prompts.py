@@ -228,11 +228,18 @@ def get_native_tools():
                     )
                 ),
                 types.FunctionDeclaration(
-                    name="inspect_media",
+                    name="vision",
                     description=(
-                        "[WHEN TO USE]: Use ONLY when the user asks a question about an image, photo, video, or document attachment, "
-                        "OR when you need to inspect the visual contents of a file saved in the local workspace/MediaVault.\n"
-                        "[RULE]: Pass absolute local file paths in 'file_paths' and the exact question to answer in 'query'."
+                        "[WHEN TO USE]: Use when the user asks to analyze, describe, extract information from, or answer questions about an image, photo, screenshot, or video file.\n"
+                        "[CAPABILITIES]: This tool uses multimodal AI vision to inspect visual content including:\n"
+                        "  - Object detection and recognition\n"
+                        "  - Text extraction from images (OCR)\n"
+                        "  - Scene description and analysis\n"
+                        "  - Visual question answering\n"
+                        "  - Document understanding (scanned PDFs, forms, bills)\n"
+                        "  - Video frame analysis\n"
+                        "[WHEN NOT TO USE]: Do not use for text-based documents that can be read directly (TXT, JSON, CSV, etc.). For those, use 'file_operations'.\n"
+                        "[RULE]: Always pass absolute local file paths and a clear, specific query about what to extract or analyze."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
@@ -240,11 +247,11 @@ def get_native_tools():
                             "file_paths": types.Schema(
                                 type=types.Type.ARRAY,
                                 items=types.Schema(type=types.Type.STRING),
-                                description="List of absolute local file paths to images/media to inspect."
+                                description="List of absolute local file paths to images, photos, screenshots, or videos to inspect. Supported formats: JPG, PNG, WEBP, GIF, MP4, AVI, MOV, MKV, PDF (scanned documents)."
                             ),
                             "query": types.Schema(
                                 type=types.Type.STRING,
-                                description="Exact question or extraction instruction about the media (e.g., 'What is the total amount on this bill?')."
+                                description="Exact question or extraction instruction about the visual media (e.g., 'What objects are in this image?', 'Extract all text from this bill', 'Describe what is happening in this video')."
                             )
                         },
                         required=["file_paths", "query"]

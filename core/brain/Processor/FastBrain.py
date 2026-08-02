@@ -11,7 +11,7 @@ from core.brain.config import GROQ_FAST_MODEL, GROQ_API_KEY
 
 from core.ui.typing_status import update_typing_status, launch_popup
 
-USER_NAME = os.getenv("USER_NAME", "Bhai")
+USER_NAME = os.getenv("USER_NAME", "Sir")
 FAST_MODEL = GROQ_FAST_MODEL
 
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -86,7 +86,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                         "properties": {
                             "agent_reply": {
                                 "type": "string",
-                                "description": "A natural, contextual Hinglish reply to the user confirming the action (e.g., 'Theek hai bhai, system lock kar diya', 'Aap aao tab tak lock rakhta hoon', 'Volume badha di bhai')."
+                                "description": "A natural, contextual reply to the user confirming the action (e.g., 'Okay, system locked', 'I will keep it locked until you return', 'Volume increased')."
                             },
                             "apps_to_open": {"type": "array", "items": {"type": "string"}},
                             "apps_to_close": {"type": "array", "items": {"type": "string"}},
@@ -121,7 +121,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                         "properties": {
                             "agent_reply": {
                                 "type": "string",
-                                "description": "A natural, contextual Hinglish reply to the user acknowledging the search (e.g., 'Ek second bhai, online check kar raha hoon', 'Mausam ka haal abhi batata hoon')."
+                                "description": "A natural, contextual reply to the user acknowledging the search (e.g., 'One moment, checking online', 'I will check the weather now')."
                             },
                             "query": {
                                 "type": "string",
@@ -190,7 +190,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 result["system_action"] = args.get("system_action", "")
                 
                 if not result["response"]:
-                    result["response"] = args.get("agent_reply", "Theek hai bhai, process kar raha hoon.")
+                    result["response"] = args.get("agent_reply", "Processing your request.")
             except Exception as e:
                 logger.error(f"Error parsing Groq tool args: {e}")
             
@@ -200,7 +200,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 
                 args = json.loads(tool_call_args)
                 query = args.get("query", "")
-                agent_reply = args.get("agent_reply", "Ek second sir, check kar raha hoon...")
+                agent_reply = args.get("agent_reply", "One moment, checking...")
                 
                 update_typing_status("typing", agent_reply)
                 
@@ -212,7 +212,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 final_completion = groq_client.chat.completions.create(
                     model=FAST_MODEL,
                     messages=[
-                        {"role": "system", "content": f"You are Jarvis. Answer the user's query naturally in Hinglish based ONLY on the provided Search Data and user context. Be direct, helpful, and do not use markdown.\n{context_prompt}"},
+                        {"role": "system", "content": f"You are Jarvis. Answer the user's query naturally based ONLY on the provided Search Data and user context. Be direct, helpful, and do not use markdown.\n{context_prompt}"},
                         {"role": "user", "content": f"Query: {raw_command}\nSearch Data: {search_xml[:4000]}"}
                     ],
                     temperature=0.3,
@@ -232,12 +232,12 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 
             except Exception as e:
                 logger.error(f"Error parsing Groq tool args for search: {e}")
-                result["response"] = "Sorry sir, search data process karne mein error aa gaya."
+                result["response"] = "Error processing search data."
 
         update_typing_status("completed", result["response"])
         return result
 
     except Exception as e:
         logger.error(f"Fast Brain Error: {e}")
-        update_typing_status("completed", f"Error aagaya bhai: {e}")
+        update_typing_status("completed", f"Error occurred: {e}")
         return None

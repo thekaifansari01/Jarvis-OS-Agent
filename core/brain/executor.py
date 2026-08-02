@@ -252,10 +252,10 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             logger.error(f"❌ Python Execution failed: {e}\n{traceback.format_exc()}")
             return f"Observation: Python Execution error -> {e}"
 
-    media_cmd = action_dict.get('inspect_media')
-    if media_cmd and isinstance(media_cmd, dict):
+    vision_cmd = action_dict.get('vision')
+    if vision_cmd and isinstance(vision_cmd, dict):
         try:
-            from tools.Vision.mediaInspector import inspect_media_files
+            from tools.Vision.vision import inspect_media_files
             from core.brain.config import AGENT_PRIMARY_PROVIDER, GEMINI_AGENT_MODEL, REGOLO_MODEL, OPENROUTER_MODEL
             
             active_model = GEMINI_AGENT_MODEL if AGENT_PRIMARY_PROVIDER == "gemini" else (
@@ -263,13 +263,13 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             )
             has_vision = getattr(active_model, "vision", False)
             
-            file_paths = media_cmd.get('file_paths', [])
-            query = media_cmd.get('query', '')
-            logger.info(f"🤖 Agent executing inspect_media tool (has_vision={has_vision})")
+            file_paths = vision_cmd.get('file_paths', [])
+            query = vision_cmd.get('query', '')
+            logger.info(f"🤖 Agent executing vision tool (has_vision={has_vision})")
             return inspect_media_files(file_paths, query, has_vision=has_vision)
         except Exception as e:
-            logger.error(f"❌ inspect_media crashed: {e}")
-            return f"Observation: inspect_media error -> {e}"
+            logger.error(f"❌ vision crashed: {e}")
+            return f"Observation: vision error -> {e}"
 
     email_action = action_dict.get('email_action', {})
     if email_action and isinstance(email_action, dict) and email_action.get('to'):

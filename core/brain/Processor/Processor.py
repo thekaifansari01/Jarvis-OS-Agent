@@ -198,6 +198,6 @@ def process_command(raw_command: str, memory_instance=None) -> Dict[str, any]:
     result = fetch_hybrid_response(resolved_command, memory_instance)
     
     if not result:
-        return make_result("Connection failed bhai, internet check karlo.", priority="low")
+        return make_result("Connection failed. Please check your internet connection.", priority="low")
 
     return result

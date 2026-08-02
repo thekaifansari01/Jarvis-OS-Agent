@@ -11,7 +11,7 @@ Data/Jarvis_Workspace/
 Data/tavily_search.log
 Data/processed_events.json
 Data/typing_status.json
-Data/UserProfile/
+Data/MediaVault/
 Data/RAG/
 Bin/
 **/node_modules/

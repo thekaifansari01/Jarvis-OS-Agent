@@ -160,7 +160,7 @@ User Command: "{raw_command}"
                     action="",
                     action_detail="",
                 )
-                timeout_msg = "Bhai, task thoda zyada time le raha tha, timeout ho gaya. Aap phir se try karo ya simple command do."
+                timeout_msg = "Task was taking too long and timed out. Please try again or provide a simpler command."
                 launch_popup()
                 update_typing_status("completed", timeout_msg)
             else:
@@ -460,6 +460,10 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             action_detail = (
                                 f"{value.get('action', '').upper()} Clipboard"
                             )
+                        elif key == "vision" and isinstance(value, dict):
+                            action_detail = value.get("query", "Inspecting media")
+                        elif key == "file_operations" and isinstance(value, dict):
+                            action_detail = value.get("action", "File operation")
                         elif key == "system_controller" and isinstance(value, dict):
                             if value.get("system_action") == "screenshot":
                                 action_detail = "Capturing Screen..."
@@ -760,7 +764,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
             action="",
             action_detail="",
         )
-        limit_msg = f"Bhai, maine maximum steps ({max_steps}) le liye hain. Task loop limit tak pahunch gaya hai. Kripya simple command do."
+        limit_msg = f"I have reached the maximum steps ({max_steps}). The task has hit the loop limit. Please provide a simpler command."
         launch_popup()
         update_typing_status("completed", limit_msg)
     else:

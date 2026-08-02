@@ -256,17 +256,33 @@ class AgentPanel(QWidget):
             self.gradient_phase -= math.pi * 2 
         
         if self.current_action_type == "search":
-            r, g, b = 0, 199, 255
+            r, g, b = 0, 199, 255        
         elif self.current_action_type == "deep_task":
-            r, g, b = 255, 20, 147
+            r, g, b = 255, 20, 147        
         elif self.current_action_type == "thinking":
-            r, g, b = 191, 90, 242
+            r, g, b = 191, 90, 242       
         elif self.current_action_type == "workspace":
-            r, g, b = 255, 159, 10
+            r, g, b = 255, 159, 10       
         elif self.current_action_type == "communication":
-            r, g, b = 50, 215, 75
+            r, g, b = 50, 215, 75      
+        
+        elif self.current_action_type == "vision":
+            r, g, b = 0, 255, 200          
+        elif self.current_action_type == "file_ops":
+            r, g, b = 255, 200, 0          
+        elif self.current_action_type == "terminal":
+            r, g, b = 0, 255, 100     
+        elif self.current_action_type == "memory":
+            r, g, b = 200, 100, 255     
+        elif self.current_action_type == "calendar":
+            r, g, b = 100, 200, 255       
+        elif self.current_action_type == "clipboard":
+            r, g, b = 255, 150, 200       
+        elif self.current_action_type == "image_gen":
+            r, g, b = 255, 100, 200       
+        
         else:
-            r, g, b = 255, 255, 255
+            r, g, b = 255, 255, 255       
 
         self.pulse_dot.setStyleSheet(f"background-color: rgb({r}, {g}, {b}); border-radius: 5px;")
         
@@ -433,14 +449,18 @@ class AgentPanel(QWidget):
             "THINKING": ("THINKING...", "thinking"),
             "search_actions": ("SEARCHING WEB", "search"),
             "deep_research": ("DEEP RESEARCH", "deep_task"),
-            "workspace_action": ("WORKSPACE", "workspace"),
             "email_action": ("SENDING EMAIL", "communication"),
             "whatsapp_action": ("WHATSAPP", "communication"),
+            "image_command": ("GENERATING IMAGE", "image_gen"),        
+            "clipboard_action": ("CLIPBOARD", "clipboard"),           
+            "vision": ("ANALYZING MEDIA", "vision"),                  
+            "file_operations": ("FILE OPERATION", "file_ops"),         
+            "memory_actions": ("RECALLING MEMORY", "memory"),       
+            "calendar_action": ("CALENDAR", "calendar"),              
+            "execute_terminal_command": ("TERMINAL", "terminal"),      
+            "run_python_code": ("RUNNING PYTHON", "deep_task"),       
             "apps_to_open": ("OPENING APP", "workspace"),
             "urls_to_open": ("OPENING URL", "workspace"),
-            "image_command": ("GENERATING IMAGE", "thinking"),
-            "vision_action": ("ANALYZING SCREEN", "search"),
-            "clipboard_action": ("CLIPBOARD", "workspace")
         }
         
         base_text, self.current_action_type = action_map.get(action, ("EXECUTING", "default"))
