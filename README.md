@@ -424,16 +424,6 @@ jarvis/
 | Image fallback fails | Configure `TOGETHER_AI`; Regolo image generation also needs `REGOLO_API_KEY`. |
 | Need diagnostic information | Read `Data/jarvis.log`. The console also prints service and tool errors. |
 
-## Known limitations
-
-- Windows is the only fully supported desktop platform.
-- The project does not include a sandbox for untrusted terminal/Python execution.
-- File operations do not include a dedicated delete command and are not restricted to a project root by the current implementation.
-- Agent outcomes depend on external provider availability, credentials, quotas, and model behavior.
-- Gmail Pub/Sub identifiers are currently code constants instead of environment-configured values.
-- The source repository may not include prebuilt popup executables because build artifacts are ignored.
-- The bundled project currently has no automated test suite documented for end users.
-
 ## Contributing
 
 1. Fork the repository.
