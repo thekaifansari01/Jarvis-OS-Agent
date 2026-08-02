@@ -81,8 +81,8 @@ def stop_speaking():
     is_speaking = False
     try:
         pygame.mixer.stop()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug("Unable to stop the pygame mixer: %s", exc, exc_info=True)
         
     while not _audio_queue.empty():
         try:

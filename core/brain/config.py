@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -54,4 +55,5 @@ CONFIG = {
     "AGENT_TIMEOUT": 1800,
     "AGENT_RETRY_LIMIT": 2,
     "AGENT_SCRATCHPAD_MAX_CHARS": 500000,
+    "LOG_FILE": str(Path(__file__).resolve().parents[2] / "Data" / "jarvis.log"),
 }

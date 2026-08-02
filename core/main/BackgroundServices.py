@@ -61,8 +61,8 @@ def stop_stt_popup():
     global _stt_popup_process
     try:
         exit_stt_popup()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug("STT popup exit signal could not be sent: %s", exc, exc_info=True)
 
     if _stt_popup_process:
         try:

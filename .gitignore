@@ -1,39 +1,39 @@
+# Python environments and bytecode
 .venv/
+venv/
 __pycache__/
+*.py[cod]
+
+# Secrets and local credentials
 .env
+.env.*
 Data/SessionCookies/
+
+# Runtime state, logs, and generated user data
 Data/agent_status.json
 Data/app_cache.json
 Data/stt_status.json
 Data/island_response.json
+Data/typing_status.json
+Data/processed_events.json
+Data/tavily_search.log
+Data/jarvis.log
 Data/jarvis_memory/
 Data/Jarvis_Workspace/
-Data/tavily_search.log
-Data/processed_events.json
-Data/typing_status.json
 Data/MediaVault/
 Data/RAG/
+
+# Dependency installs and compiled application binaries
+node_modules/
 Bin/
-**/node_modules/
-**/node_modules/*
-tools/Messanger/**/node_modules/
-tools/Messanger/whatsapp/BaileysServer/package-lock.json
-tools/Messanger/whatsapp/BaileysServer/node_modules/gopd/index.d.ts
-tools/Messanger/whatsapp/BaileysServer/package.json
-core/UiSrc/InputPopup/debug/
-core/UiSrc/InputPopup/release/
-core/UiSrc/InputPopup/.qtcreator/
-core/UiSrc/InputPopup/.qmake.stash
-core/UiSrc/InputPopup/Makefile*
-core/UiSrc/SttPopup/debug/
-core/UiSrc/SttPopup/release/
-core/UiSrc/SttPopup/.qtcreator/
-core/UiSrc/SttPopup/.qmake.stash
-core/UiSrc/SttPopup/Makefile*
-core/UiSrc/JarvisPhotoPopupViewer/debug/
-core/UiSrc/JarvisPhotoPopupViewer/release/
-core/UiSrc/JarvisPhotoPopupViewer/.qtcreator/
-core/UiSrc/JarvisPhotoPopupViewer/.qmake.stash
-core/UiSrc/JarvisPhotoPopupViewer/Makefile*
+
+# Qt Creator / qmake build artifacts
+core/UiSrc/**/debug/
+core/UiSrc/**/release/
+core/UiSrc/**/.qtcreator/
+core/UiSrc/**/.qmake.stash
+core/UiSrc/**/Makefile*
+
+# OS metadata
 .DS_Store
 Thumbs.db

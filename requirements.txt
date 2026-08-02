@@ -1,6 +1,9 @@
-# core
+# core / providers
 groq
-google-generativeai
+google-genai
+google-auth
+google-api-python-client
+google-cloud-pubsub
 chromadb
 pypdf
 pillow
@@ -11,6 +14,8 @@ edge-tts
 pyaudio
 pvporcupine
 deepgram-sdk
+pygame
+OpenWakeWord
 
 # tools
 tavily-python
@@ -23,6 +28,8 @@ pyperclip
 screen-brightness-control
 pycaw
 psutil
+comtypes
+keyboard
 
 # ui
 PyQt5

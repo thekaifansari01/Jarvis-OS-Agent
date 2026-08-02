@@ -54,14 +54,14 @@ def run_popup_task(executor: ThreadPoolExecutor, memory: ContextMemory):
         if cmd:
             try:
                 hide_stt_popup()
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.debug("Could not hide the STT popup before processing typed input: %s", exc, exc_info=True)
 
             if is_jarvis_busy() and hasattr(memory, 'add_live_feedback'):
                 try:
                     memory.add_live_feedback(cmd)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logging.error("Could not save typed input as live feedback: %s", exc, exc_info=True)
             else:
                 executor.submit(main_command_processor, cmd, executor, memory)
 

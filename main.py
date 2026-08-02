@@ -62,8 +62,8 @@ def main() -> None:
     try:
         from core.ui.agent_status import reset_agent_status
         reset_agent_status()
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.debug("Could not reset agent status during startup: %s", exc, exc_info=True)
 
     start_agent_panel()
     start_stt_popup()
@@ -117,8 +117,8 @@ def main() -> None:
                             logging.info("Exit command received.")
                             try:
                                 tts.stop_speaking()
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logging.debug("Could not stop TTS during shutdown command: %s", exc, exc_info=True)
                             break
 
                         if command:
@@ -131,8 +131,8 @@ def main() -> None:
                             else:
                                 try:
                                     hide_stt_popup()
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    logging.debug("Could not hide the STT popup: %s", exc, exc_info=True)
                                 executor.submit(main_command_processor, command, executor, memory)
                                 interrupt.clear_interrupt()
 
