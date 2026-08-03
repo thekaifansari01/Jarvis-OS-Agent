@@ -141,13 +141,24 @@ def execute_file_operation(action_dict: dict) -> str:
         action = action_dict.get("action")
         
         if action == "repo_map":
-            result = file_editor.get_repo_map()
+            file_path = action_dict.get("file_path", None)
+            result = file_editor.get_repo_map(file_path=file_path)
             return f"Observation: {result}"
 
         if action == "create_many":
             files_list = action_dict.get("files", [])
             if not files_list:
                 return "Observation: [ERROR] Missing 'files' array for create_many action."
+            
+            if not isinstance(files_list, list):
+                return f"Observation: [ERROR] 'files' must be an array, not {type(files_list).__name__}."
+            
+            for idx, item in enumerate(files_list):
+                if not isinstance(item, dict):
+                    return f"Observation: [ERROR] Item {idx} in 'files' is not a dictionary."
+                if "file_path" not in item:
+                    return f"Observation: [ERROR] Item {idx} missing 'file_path' key."
+            
             result = file_editor.create_many(files_list)
             return f"Observation: {result}"
 

@@ -260,7 +260,7 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="file_operations",
                     description=(
-                        "[WHEN TO USE]: Use for clean, Claude-Code style CRUD operations on local files.\n"
+                        "[WHEN TO USE]: Use for CRUD operations on local files.\n"
                         "Supported actions:\n"
                         "1. 'repo_map': Get an architectural tree overview of files in the workspace.\n"
                         "2. 'view': Read files. [CRITICAL]: To read the ENTIRE file, completely OMIT 'start_line' and 'end_line'. Use start/end lines ONLY if you specifically need a small line range.\n"
