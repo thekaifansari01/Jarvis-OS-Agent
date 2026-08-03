@@ -6,6 +6,7 @@ import time
 import queue
 import platform
 import re
+import sys
 
 def get_user_approval(action_type: str, content: str) -> bool:
     print(f"\n\033[91m[JARVIS REQUESTS CRITICAL PERMISSION]\033[0m")
@@ -73,14 +74,15 @@ class StatefulTerminal:
         for line in iter(self.process.stdout.readline, ''):
             self.output_queue.put(line)
 
-    def _read_until_empty(self, timeout=0.2):
+    def _read_until_empty(self, timeout=0.5):
         lines = []
         end_time = time.time() + timeout
         while time.time() < end_time:
             try:
                 line = self.output_queue.get(timeout=0.1)
-                lines.append(line)
-                end_time = time.time() + timeout 
+                if line:
+                    lines.append(line)
+                    end_time = time.time() + timeout
             except queue.Empty:
                 pass
         return "".join(lines)
@@ -94,19 +96,30 @@ class StatefulTerminal:
         
         lines = []
         start_time = time.time()
-        while time.time() - start_time < timeout:
+        idle_timeout = 2.0
+        last_output_time = time.time()
+        end_time = start_time + timeout
+        
+        while time.time() < end_time:
             try:
                 line = self.output_queue.get(timeout=0.1)
                 if marker in line:
                     break
-                lines.append(line)
+                if line:
+                    lines.append(line)
+                    last_output_time = time.time()
+                else:
+                    continue
             except queue.Empty:
+                if time.time() - last_output_time > idle_timeout:
+                    break
                 continue
         
         output = "".join(lines).strip()
         
-        if len(output) > 3000:
-            output = output[:1500] + "\n\n... [OUTPUT TRUNCATED BY SYSTEM TO SAVE CONTEXT] ...\n\n" + output[-1500:]
+        MAX_OUTPUT_LENGTH = 50000
+        if len(output) > MAX_OUTPUT_LENGTH:
+            output = output[:25000] + "\n\n... [OUTPUT TRUNCATED BY SYSTEM TO SAVE CONTEXT] ...\n\n" + output[-25000:]
             
         return output
 
@@ -142,9 +155,11 @@ def run_python_code(code_string: str) -> str:
             
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
+        
+        python_path = sys.executable
             
         result = subprocess.run(
-            ["python", temp_path], 
+            [python_path, temp_path], 
             capture_output=True, 
             text=True, 
             encoding='utf-8',
@@ -162,8 +177,9 @@ def run_python_code(code_string: str) -> str:
         if error:
             full_output += f"Error:\n{error}\n"
             
-        if len(full_output) > 3000:
-            full_output = full_output[:1500] + "\n\n... [TRUNCATED] ...\n\n" + full_output[-1500:]
+        MAX_OUTPUT_LENGTH = 50000
+        if len(full_output) > MAX_OUTPUT_LENGTH:
+            full_output = full_output[:25000] + "\n\n... [TRUNCATED] ...\n\n" + full_output[-25000:]
             
         if result.returncode == 0:
             return f"Observation: Python code executed successfully.\n{full_output}"
