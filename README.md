@@ -10,6 +10,8 @@
 [![Gemini](https://img.shields.io/badge/Reasoning-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![Regolo AI](https://img.shields.io/badge/Agentic-Regolo%20MoE-FF6F00?style=for-the-badge)](https://regolo.ai)
 [![OpenRouter](https://img.shields.io/badge/Failover-OpenRouter-FF6B6B?style=for-the-badge)](https://openrouter.ai)
+[![Custom Provider](https://img.shields.io/badge/Custom-Any%20OpenAI%20Compatible-00BFFF?style=for-the-badge)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari)
+[![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00e676?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/pulls)
 
@@ -41,7 +43,7 @@ JARVIS isn't just another ChatGPT wrapper. It's a **desktop-native AI Operating 
 |:---:|:---|:---|
 | 💻 | **Zero Line-Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers — eliminates the classic "line-drift bug" that plagues Claude Code and other AI agents. |
 | 🛡️ | **Proactive HITL Safety** | Background listeners for Gmail/WhatsApp/Calendar. The agent *never* modifies critical files or schedules without explicit user consent. |
-| 🔄 | **Multi-LLM Auto-Failover** | Seamlessly switches between **Regolo**, **Gemini**, and **OpenRouter** (Claude 3.7, o1, DeepSeek-V3) if the primary provider hits rate limits. |
+| 🔄 | **Multi-LLM Auto-Failover** | Seamlessly switches between **Regolo**, **Gemini**, **OpenRouter**, or any **custom OpenAI‑compatible endpoint** (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. |
 | 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule-based fallback — automatically routes commands to ultra-fast **FastBrain** or deep-reasoning **AgenticBrain**. |
 | 📚 | **Lifelong Episodic LTM** | ChromaDB-backed persistent memory with daily Groq summarization. Remembers conversations from *months* ago. |
 | ⚙️ | **Enterprise Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys) and auto-restarts them if they crash. |
@@ -65,12 +67,13 @@ flowchart TD
     Router -->|Fallback| LocalRouter[🔄 Local Rule-Based Router]
     
     Router -->|Simple / Stateless| FastBrain[⚡ FastBrain<br/>Groq Llama-3.3-70B]
-    Router -->|Complex / Stateful| AgenticBrain[🧠 AgenticBrain<br/>Regolo/Gemini/OpenRouter]
+    Router -->|Complex / Stateful| AgenticBrain[🧠 AgenticBrain<br/>Regolo/Gemini/OpenRouter/Custom]
     
     AgenticBrain --> Providers[🔌 Provider Abstraction Layer]
     Providers --> Regolo[Regolo MoE]
     Providers --> Gemini[Gemini Reasoning]
     Providers --> OpenRouter[OpenRouter<br/>Claude 3.7 / o1 / DeepSeek]
+    Providers --> Custom[Custom Provider<br/>Any OpenAI‑compatible<br/>endpoint including Ollama]
     
     subgraph Memory[🧠 Memory Ecosystem]
         LTM[(🗄️ ChromaDB LTM<br/>Episodic Archive)]
@@ -133,7 +136,7 @@ flowchart TD
 
 JARVIS uses a **Hybrid Semantic Router** (Regolo API + Local Keyword Fallback) to split commands. Here's exactly what each brain handles:
 
-| Feature / Capability | ⚡ FastBrain (Groq LPU) | 🧠 AgenticBrain (Regolo/Gemini/OpenRouter) |
+| Feature / Capability | ⚡ FastBrain (Groq LPU) | 🧠 AgenticBrain (Regolo/Gemini/OpenRouter/Custom) |
 | :--- | :--- | :--- |
 | **Core Philosophy** | Stateless, Sub-second latency, Direct OS toggles. | Stateful, Deep reasoning, Tool-calling Master. |
 | **Routing Trigger** | Short commands, casual chat, simple toggles. | 25+ words, file ops, code gen, communication. |
@@ -215,10 +218,12 @@ JARVIS features a full-fledged, reactive UI suite built with **PyQt5** and **ZMQ
 ## 🛡️ Resilience & Security Architecture
 
 ### 1. 🔄 Multi-LLM Auto-Failover (Provider Abstraction)
-JARVIS doesn't rely on a single AI provider. The `BaseLLMProvider` abstract class implements **Regolo**, **Gemini**, and **OpenRouter** providers.
+JARVIS doesn't rely on a single AI provider. The `BaseLLMProvider` abstract class implements **Regolo**, **Gemini**, **OpenRouter**, and now a **CustomProvider** that works with any OpenAI‑compatible endpoint (including local models).
 - **Primary:** Configurable via `AGENT_PRIMARY_PROVIDER`.
 - **Fallback:** If quota is exhausted (429 error), it auto-switches to `AGENT_FALLBACK_PROVIDER` without crashing the agent loop.
-- **Provider Support:** Regolo, Gemini, OpenRouter (Claude 3.7, o1, DeepSeek-V3, and 200+ models).
+- **Provider Support:** 
+  - ☁️ **Cloud:** Regolo, Gemini, OpenRouter (Claude 3.7, o1, DeepSeek-V3, 200+ models)
+  - 🖥️ **Local Models:** Ollama, LM Studio, vLLM, LocalAI, or any self-hosted OpenAI‑compatible endpoint
 
 ### 2. 🛡️ ServiceWatchdog (Background Process Guardian)
 A dedicated daemon thread runs in the background, checking the health of critical subprocesses every 5 seconds:
@@ -426,8 +431,14 @@ Copy-Item .env.example .env
 | `TAVILY_API_KEY` | Web search tool. | (Required for search) |
 | `DEEPGRAM_API_KEY` | Live speech-to-text. | (Required for voice) |
 | `TOGETHER_AI` | FLUX image-generation fallback. | (Optional) |
-| `AGENT_PRIMARY_PROVIDER` | Choose `regolo`, `gemini`, or `openrouter`. | `regolo` |
+| `AGENT_PRIMARY_PROVIDER` | Choose `regolo`, `gemini`, `openrouter`, or `custom`. | `regolo` |
 | `AGENT_FALLBACK_PROVIDER` | Auto-fallback when primary fails. | `gemini` |
+| **🖥️ Custom Provider Variables (Cloud or Local)** | | |
+| `CUSTOM_API_KEY` | API key for custom provider (use `EMPTY_KEY` for local models like Ollama). | `EMPTY_KEY` |
+| `CUSTOM_BASE_URL` | Base URL of the OpenAI‑compatible endpoint.<br>• **Local Ollama:** `http://localhost:11434/v1`<br>• **LM Studio:** `http://localhost:1234/v1`<br>• **vLLM:** `http://localhost:8000/v1`<br>• **Any self-hosted:** Your custom URL | `http://localhost:11434/v1` |
+| `CUSTOM_MODEL` | Model name to use with the custom provider.<br>• **Ollama example:** `llama3.2:3b`, `mistral:7b`, `deepseek-coder:6.7b`<br>• **LM Studio:** Model name as shown in UI | `default-model` |
+| `CUSTOM_THINKING_ENABLED` | Enable reasoning content if supported by the model. | `True` |
+| **Other** | | |
 | `EMBEDDING_DIM` | Dimension for ChromaDB vectors. | `768` |
 | `DEEP_RESEARCH_TIMEOUT` | Max seconds for deep research synthesis. | `420` |
 | `AGENT_MAX_STEPS` | Max agent loop iterations. | `50` |
@@ -493,7 +504,8 @@ jarvis-by-kaif-ansari/
 │   │   │   ├── baseProvider.py    # Abstract Class
 │   │   │   ├── regoloProvider.py
 │   │   │   ├── geminiProvider.py
-│   │   │   └── openrouterProvider.py
+│   │   │   ├── openrouterProvider.py
+│   │   │   └── customProvider.py  # Any OpenAI‑compatible endpoint (Ollama, LM Studio, etc.)
 │   │   ├── Memory/                # Persistence Ecosystem
 │   │   │   ├── Memory.py          # JSONL Context, User Bio/Mood, LTM Archiver
 │   │   │   ├── LifetimeMemory.py  # ChromaDB Episodic Memory (Daily Summaries)
@@ -557,6 +569,7 @@ jarvis-by-kaif-ansari/
 | WhatsApp cannot send | Run both `npm install` commands, complete QR login, ensure port 3000 is free. |
 | Agent panel/STT/Input popup is absent | Ensure the relevant executable exists in `Bin/`; otherwise build from `core/UiSrc/`. |
 | RAG returns no results | Put supported files in `Documents/Jarvis/RAG/`, set `GEMINI_API_KEY`, allow background indexer time. |
+| Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. For local models, ensure Ollama/LM Studio is running. Check `Data/jarvis.log` for details. |
 | Need diagnostic information | Read `Data/jarvis.log` — console also prints service/tool errors. |
 
 ---
