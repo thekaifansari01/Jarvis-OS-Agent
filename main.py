@@ -2,6 +2,10 @@ import faulthandler
 faulthandler.enable()
 import os
 import sys
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+os.chdir(PROJECT_ROOT)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 import warnings
 import ctypes
 import logging

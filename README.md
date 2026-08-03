@@ -384,13 +384,30 @@ npm install
 npm --prefix tools/Messanger/whatsapp/BaileysServer install
 ```
 
-### 3. Register Desktop URI Protocol (OAuth)
+### 3. Setup CLI & URI Protocol (One‑Time)
 
-To enable seamless OAuth web-authentication for Gmail and Google Calendar (`jarvis://` callback), run:
+JARVIS includes a smart setup script that configures both the `jarvis://` URL protocol and the global `jarvis` terminal command.
 
 ```powershell
+# Activate your virtual environment first
+.\.venv\Scripts\Activate.ps1
+
+# Run the setup script
 python SetupRegistry.py
 ```
+
+**What this does:**
+- ✅ Registers `jarvis://` protocol for OAuth callbacks (Gmail/Calendar)
+- ✅ Installs the `jarvis` CLI command via editable pip install
+- ✅ Adds `.venv\Scripts` to your Windows PATH
+- ✅ Automatically detects if components are already set up and skips duplicates
+
+After running, **open a new terminal** and type:
+```powershell
+jarvis
+```
+
+>🚀 **Global Command:** After running `SetupRegistry.py`, the `jarvis` command becomes available globally. You can type `jarvis` in any terminal, from any folder, without activating the virtual environment. The script automatically adds `.venv\Scripts` to your Windows PATH. No need to activate the virtual environment each time.
 
 ### 4. WhatsApp Bridge Setup
 
@@ -455,6 +472,10 @@ Copy-Item .env.example .env
 
 ```powershell
 python main.py
+```
+or (if you ran `SetupRegistry.py`):
+```powershell
+jarvis
 ```
 
 This starts the agent panel, STT popup (when the binary exists), Baileys bridge, service watchdog, RAG engine, proactive listeners, global hotkey, and wake-word listener.
@@ -551,7 +572,7 @@ jarvis-by-kaif-ansari/
 │   ├── jarvis_memory/             # ChromaDB LTM & JSONL history
 │   └── SessionCookies/            # Baileys creds, OAuth tokens
 ├── fonts/                         # UI fonts (English, Devanagari)
-├── SetupRegistry.py               # Registers jarvis:// URI protocol
+├── SetupRegistry.py               # Registers jarvis:// URI protocol + CLI command
 ├── main.py                        # Primary Entry Point
 └── requirements.txt               # Production dependencies
 ```
@@ -570,6 +591,7 @@ jarvis-by-kaif-ansari/
 | Agent panel/STT/Input popup is absent | Ensure the relevant executable exists in `Bin/`; otherwise build from `core/UiSrc/`. |
 | RAG returns no results | Put supported files in `Documents/Jarvis/RAG/`, set `GEMINI_API_KEY`, allow background indexer time. |
 | Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. For local models, ensure Ollama/LM Studio is running. Check `Data/jarvis.log` for details. |
+| `jarvis` command not recognised | Run `SetupRegistry.py` from the activated virtual environment, then open a **new terminal**. |
 | Need diagnostic information | Read `Data/jarvis.log` — console also prints service/tool errors. |
 
 ---
