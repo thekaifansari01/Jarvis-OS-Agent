@@ -40,6 +40,11 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 OPENROUTER_MODEL = ModelConfig("nvidia/nemotron-3-ultra-550b-a55b:free", vision=False, tools=True, reasoning=True)
 OPENROUTER_THINKING_ENABLED = True
 
+CUSTOM_API_KEY = os.getenv("CUSTOM_API_KEY", "")
+CUSTOM_BASE_URL = os.getenv("CUSTOM_BASE_URL", "http://localhost:11434/v1")
+CUSTOM_MODEL = os.getenv("CUSTOM_MODEL", "llama3")
+CUSTOM_THINKING_ENABLED = os.getenv("CUSTOM_THINKING_ENABLED", "False").lower() == "true"
+
 FLUX_IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell"
 AI_HORDE_IMAGE_MODEL = "AlbedoBase XL (SDXL)"
 
