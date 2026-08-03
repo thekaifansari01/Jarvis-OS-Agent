@@ -15,7 +15,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-00e676?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/pulls)
 
-**Built by a 17-year-old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
+**Built by a 17‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
 
 </div>
 
@@ -41,17 +41,35 @@ JARVIS isn't just another ChatGPT wrapper. It's a **desktop-native AI Operating 
 
 | Icon | Feature | Why It Matters |
 |:---:|:---|:---|
-| 💻 | **Zero Line-Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers — eliminates the classic "line-drift bug" that plagues Claude Code and other AI agents. |
-| 🛡️ | **Proactive HITL Safety** | Background listeners for Gmail/WhatsApp/Calendar. The agent *never* modifies critical files or schedules without explicit user consent. |
-| 🔄 | **Multi-LLM Auto-Failover** | Seamlessly switches between **Regolo**, **Gemini**, **OpenRouter**, or any **custom OpenAI‑compatible endpoint** (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. |
-| 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule-based fallback — automatically routes commands to ultra-fast **FastBrain** or deep-reasoning **AgenticBrain**. |
-| 📚 | **Lifelong Episodic LTM** | ChromaDB-backed persistent memory with daily Groq summarization. Remembers conversations from *months* ago. |
-| ⚙️ | **Enterprise Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys) and auto-restarts them if they crash. |
-| 🎨 | **Reactive UI Ecosystem** | ZMQ-powered floating Agent Panel, live markdown typing popup with async image previews, and native STT/Input popups. |
-| 🗣️ | **Voice-First Multimodal** | Deepgram STT + Edge TTS + Vision (OCR/object detection) + Image Generation (Flux/AI Horde). |
+| 💻 | **Zero Line-Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers — eliminates the classic "line-drift bug" that plagues Claude Code and other AI agents. **Automatically catches syntax errors via AST linter and self-corrects** without human intervention. |
+| 📨 | **Proactive Email + WhatsApp + Calendar Automation** | Background listeners for Gmail, WhatsApp, and Calendar. **Detects important emails, meeting reschedules, and WhatsApp messages in real-time.** The agent *never* modifies critical data without explicit user consent — asks before acting. |
+| 🔄 | **Multi-LLM Auto-Failover** | Seamlessly switches between **Regolo**, **Gemini**, **OpenRouter**, or any **custom OpenAI‑compatible endpoint** (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. **Zero downtime** — no interruption to your workflow. |
+| 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule-based fallback — **intelligently routes commands** to ultra-fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep-reasoning **AgenticBrain** for complex multi-step engineering, coding, and research tasks. |
+| 📚 | **Lifelong Episodic LTM & RAG** | ChromaDB-backed persistent memory with daily Groq summarization. **Remembers conversations from *months* ago.** Also indexes your local documents (`Documents/Jarvis/RAG/`) for instant semantic search — your personal knowledge base. |
+| ⚙️ | **Enterprise-Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys) and **auto-restarts them if they crash**. Multi-threaded executor ensures parallel task execution without blocking the main loop. |
+| 🎨 | **Reactive UI Ecosystem** | ZMQ-powered floating Agent Panel with **real‑time thought/action/observation streaming**, live markdown typing popup with async image previews (YouTube thumbnails, link previews, local images), and native STT/Input popups. **Glass-morphism, dynamic glow, auto-resize.** |
+| 🗣️ | **Voice-First Multimodal** | Deepgram speech‑to‑text (Nova-2) with openWakeWord detection, Edge TTS voice output, **multimodal vision** (OCR, object detection, image analysis via Gemini/Regolo), and **image generation** (Flux/AI Horde) — all integrated. |
+| 🤖 | **Autonomous Software Engineering** | Can **autonomously explore codebases** (`repo_map`), read files (`view`), replace exact code blocks (`replace_block` — zero line-drift), create multiple files (`create_many`), execute Python scripts (`run_python_code`), and run terminal commands (`execute_terminal_command`). **Real-world bug fixing** (10 tests, 3 bugs, 0.17 seconds) — proven. |
+| 🛡️ | **Human-in-the-Loop (HITL) Safety** | **Never executes irreversible actions** (sending emails, deleting files, updating calendars) without explicit user consent. Pending confirmations auto‑expire after 60 seconds to prevent stale memory injections. |
+| 🌐 | **Any Provider, Anywhere** | Works with **Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint** — including local models (Ollama, LM Studio, vLLM). **100% local inference possible** — no internet required with local LLMs. |
+| 🧩 | **Extensible Tool Ecosystem** | Integrated with **Gmail Pub/Sub, WhatsApp Baileys bridge, Google Calendar OAuth, Tavily search, ArXiv academic research, YouTube transcript summarization, system clipboard, hardware controls (volume/brightness/screenshot), and more.** |
 
 ---
 
+## 🔥 Why This Matters (The Real Story)
+
+| Problem | How JARVIS Solves It |
+|---------|----------------------|
+| **AI agents hallucinate line numbers** | `replace_block` uses exact SEARCH/REPLACE diffs — **zero line-drift** |
+| **AI forgets past conversations** | ChromaDB LTM + daily Groq summarization — **remembers months of context** |
+| **AI can't control your desktop** | Win32 API + AppOpener — **opens apps, changes volume, takes screenshots** |
+| **AI can't read your emails** | Gmail Pub/Sub listener — **detects important emails proactively** |
+| **AI can't send WhatsApp** | Baileys Node.js bridge — **sends messages, fetches chat history** |
+| **AI crashes and stops working** | ServiceWatchdog — **auto-restarts background processes** |
+| **AI is locked to one provider** | Provider abstraction + custom endpoint — **use any model, any provider, anywhere** |
+| **AI has no safety** | HITL consent gate — **never modifies critical data without permission** |
+| **AI has no UI** | ZMQ-powered Agent Panel + Typing Popup — **real-time status, markdown rendering, async images** |
+| **AI can't hear or see** | Deepgram STT + Gemini Vision — **voice input, image analysis, OCR** |
 ## 🏗️ System Architecture
 
 JARVIS uses a modular, event-driven architecture that separates fast conversational inference from stateful, multi-tool agentic engineering:
@@ -223,13 +241,13 @@ JARVIS doesn't rely on a single AI provider. The `BaseLLMProvider` abstract clas
 - **Fallback:** If quota is exhausted (429 error), it auto-switches to `AGENT_FALLBACK_PROVIDER` without crashing the agent loop.
 - **Provider Support:** 
   - ☁️ **Cloud:** Regolo, Gemini, OpenRouter (Claude 3.7, o1, DeepSeek-V3, 200+ models)
-  - 🖥️ **Local Models:** Ollama, LM Studio, vLLM, LocalAI, or any self-hosted OpenAI‑compatible endpoint
+  - 🖥️ **Local Models:** Ollama, LM Studio, vLLM, LocalAI, or any self-hosted OpenAI‑compatible endpoint.
 
 ### 2. 🛡️ ServiceWatchdog (Background Process Guardian)
 A dedicated daemon thread runs in the background, checking the health of critical subprocesses every 5 seconds:
 - **Baileys Server** (WhatsApp Bridge)
 - **STT Popup** (Voice Status UI)
-- If a process is down, it attempts a restart up to `max_retries=3` with a 15-second cooldown period, ensuring maximum uptime.
+If a process is down, it attempts a restart up to `max_retries=3` with a 15-second cooldown period, ensuring maximum uptime.
 
 ### 3. 🔒 Human-in-the-Loop (HITL) Consent Protocol
 - **Proactive Trigger Detection:** If the `Proactive Scout` detects an email/WhatsApp asking to reschedule a meeting, the AgenticBrain enters *Partner Confirmation Mode*.
