@@ -70,7 +70,7 @@ def safe_delete(path, retries=3, delay=0.5):
 def deleteMemory():
     try:
         root_dir = os.path.dirname(os.path.abspath(__file__))
-        target_folder = os.path.join(root_dir, "Jarvis", "core", "brain", "memory")
+        target_folder = os.path.join(root_dir, "Data", "memory")
         
         print("\n--- Deleting Memory ---")
         safe_delete(target_folder)
@@ -144,13 +144,42 @@ MEMORY & RESET COMMANDS (Requires Jarvis to be OFF):
 
 def handle_cli_commands():
     args = [arg.lower() for arg in sys.argv[1:]]
-    subcommands = {"logout", "memory", "reset", "help", "--help", "-h"}
-
-    if not any(arg in subcommands for arg in args):
+    if not args:
         return False
 
-    if any(h in args for h in ("help", "--help", "-h")):
+    dev_flags = {"test_jarvis", "no_wake"}
+    non_dev_args = [a for a in args if a not in dev_flags and not a.startswith("voice=")]
+    if not non_dev_args:
+        return False
+
+    if any(h in non_dev_args for h in ("help", "--help", "-h")):
         show_help_menu()
+        return True
+
+    subcommands = {"logout", "memory", "reset"}
+    has_valid_subcommand = any(arg in subcommands for arg in non_dev_args)
+
+    if not has_valid_subcommand:
+        alias_map = {
+            "--clear": "jarvis memory --clear",
+            "-c": "jarvis memory --clear",
+            "clear": "jarvis memory --clear",
+            "mem": "jarvis memory --clear",
+            "lgout": "jarvis logout --all",
+            "log": "jarvis logout --all",
+            "signout": "jarvis logout --all",
+            "purge": "jarvis reset --hard",
+            "factory": "jarvis reset --hard",
+            "--hard": "jarvis reset --hard"
+        }
+        print("\n❌ [ERROR] Invalid command or flag provided.")
+        for arg in non_dev_args:
+            if arg in alias_map:
+                print(f"💡 Did you mean: '{alias_map[arg]}'?")
+                break
+        else:
+            print("💡 Tip: Type 'jarvis --help' to see all available commands.")
+        print("")
         return True
 
     if is_jarvis_running():
@@ -160,15 +189,15 @@ def handle_cli_commands():
 
     print("\n⚡ [JARVIS CLI] Executing terminal command...")
 
-    if "logout" in args:
+    if "logout" in non_dev_args:
         targets = []
-        if "--whatsapp" in args:
+        if "--whatsapp" in non_dev_args:
             targets.append("whatsapp")
-        if "--mail" in args:
+        if "--mail" in non_dev_args:
             targets.append("mail")
-        if "--calendar" in args:
+        if "--calendar" in non_dev_args:
             targets.append("calendar")
-        if "--all" in args:
+        if "--all" in non_dev_args:
             targets = ["whatsapp", "mail", "calendar"]
 
         if not targets:
@@ -177,15 +206,15 @@ def handle_cli_commands():
         else:
             deleteSessionCookies(*targets)
 
-    if "memory" in args:
-        if "--clear" in args or "--purge" in args:
+    if "memory" in non_dev_args:
+        if "--clear" in non_dev_args or "--purge" in non_dev_args:
             deleteMemory()
         else:
             print("⚠️ [WARNING] Use 'jarvis memory --clear' to delete brain memory.")
             print("💡 Tip: Type 'jarvis --help' to see all usage options.")
 
-    if "reset" in args:
-        if "--hard" in args:
+    if "reset" in non_dev_args:
+        if "--hard" in non_dev_args:
             print("🚨 [HARD RESET] Deleting all sessions and memory...")
             deleteMemory()
             deleteSessionCookies("whatsapp", "mail", "calendar")
