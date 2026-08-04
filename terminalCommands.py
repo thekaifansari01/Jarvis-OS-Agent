@@ -1,268 +1,312 @@
-import os
-import sys
-import shutil
-import time
 import subprocess
+import os
+import tempfile
+import threading
+import time
+import queue
 import platform
-from pathlib import Path
+import re
+import sys
+import shlex
+import ast
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-LOCK_FILE = os.path.join(PROJECT_ROOT, ".jarvis.lock")
-
-def is_jarvis_running():
-    return os.path.exists(LOCK_FILE)
-
-def create_lock_file():
-    try:
-        with open(LOCK_FILE, "w", encoding="utf-8") as f:
-            f.write(str(os.getpid()))
-    except Exception as e:
-        print(f"⚠️ Could not create lock file: {e}")
-
-def remove_lock_file():
-    try:
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
-    except Exception as e:
-        print(f"⚠️ Could not remove lock file: {e}")
-
-def safe_delete(path, retries=3, delay=0.5):
-    if not os.path.exists(path):
-        return False
-    for attempt in range(1, retries + 1):
-        try:
-            if os.path.isdir(path):
-                def remove_readonly(func, path, exc_info):
-                    import stat
-                    os.chmod(path, stat.S_IWRITE)
-                    func(path)
-                shutil.rmtree(path, onerror=remove_readonly)
-                return True
-            elif os.path.isfile(path) or os.path.islink(path):
-                os.chmod(path, 0o777)
-                os.remove(path)
-                return True
-        except PermissionError:
-            if attempt < retries:
-                time.sleep(delay)
-            else:
-                return False
-        except FileNotFoundError:
+def get_user_approval(action_type: str, content: str) -> bool:
+    print(f"\n\033[91m[JARVIS REQUESTS CRITICAL PERMISSION]\033[0m")
+    print(f"Action: {action_type}")
+    print(f"Content:\n{content}\n")
+    
+    while True:
+        choice = input("\033[92mAllow execution? (Y/N):\033[0m ").strip().upper()
+        if choice == 'Y':
             return True
-        except Exception:
+        elif choice == 'N':
             return False
+        print("Invalid input. Please enter Y or N.")
+
+def is_terminal_command_safe(command: str) -> bool:
+    return True
+
+def _is_system_destroyer(command: str) -> bool:
+    if not command or not command.strip():
+        return False
+    try:
+        tokens = shlex.split(command.strip())
+    except ValueError:
+        cmd_lower = command.lower()
+        if re.search(r'\brm\s+-rf\s+/*\s*$', cmd_lower) or re.search(r'\bdel\s+/[fs]\s+c:\\', cmd_lower):
+            return True
+        return False
+    if not tokens:
+        return False
+    cmd = tokens[0].lower()
+    if cmd in ['format', 'diskpart', 'mkfs', 'fdisk', 'parted']:
+        return True
+    if cmd == 'dd':
+        for token in tokens:
+            if token.startswith('of=') or token.startswith('if='):
+                if '/dev/sd' in token or '/dev/nvme' in token or '/dev/hd' in token or '\\\\.\\PhysicalDrive' in token:
+                    return True
+        return False
+    if cmd in ['rm', 'del', 'rd', 'rmdir', 'erase']:
+        has_force_recursive = False
+        if platform.system() == 'Windows':
+            if '/s' in tokens or '/q' in tokens:
+                has_force_recursive = True
+        else:
+            if '-rf' in tokens or '-fr' in tokens or ('--recursive' in tokens and '--force' in tokens) or ('-r' in tokens and '-f' in tokens):
+                has_force_recursive = True
+        if not has_force_recursive:
+            return False
+        targets = []
+        for token in tokens[1:]:
+            if not token.startswith('-'):
+                targets.append(token)
+        if not targets:
+            if command.strip().endswith('/') or command.strip().endswith('/*'):
+                return True
+            return False
+        for target in targets:
+            try:
+                abs_path = os.path.realpath(target)
+            except Exception:
+                continue
+            if platform.system() == 'Windows':
+                if abs_path in ['C:\\', 'C:\\Windows', 'C:\\System32', 'D:\\', 'E:\\']:
+                    return True
+                if any(abs_path.startswith(drive) for drive in ['C:\\Windows', 'C:\\System32']):
+                    return True
+            else:
+                if abs_path == '/' or abs_path == '/boot' or abs_path == '/etc' or abs_path == '/usr' or abs_path == '/bin' or abs_path == '/sbin' or abs_path == '/lib' or abs_path == '/dev':
+                    return True
+        return False
     return False
 
-def deleteMemory():
+def _is_python_destructive(code: str) -> bool:
     try:
-        target_folder = os.path.join(PROJECT_ROOT, "Data", "jarvis_memory")
-        if safe_delete(target_folder):
-            print("🧹 Memory cleared successfully.")
-        else:
-            print("⚠️ Could not clear memory. Please close Jarvis and try again.")
-    except Exception:
-        print("⚠️ Could not clear memory. Please close Jarvis and try again.")
-
-def deleteSessionCookies(*targets):
-    if not targets:
-        print("⚠️ No service specified.")
-        return
-    try:
-        session_dir = os.path.join(PROJECT_ROOT, "Data", "SessionCookies")
-        paths_map = {
-            "whatsapp": [
-                os.path.join(session_dir, "auth_info_baileys"),
-                os.path.join(session_dir, "chats.db")
-            ],
-            "calendar": [
-                os.path.join(session_dir, "calendar_token.json")
-            ],
-            "mail": [
-                os.path.join(session_dir, "token.json")
-            ]
-        }
-        services_logged_out = []
-        failed_services = []
-        for target in targets:
-            key = str(target).strip().lower()
-            if key not in paths_map:
-                failed_services.append(target)
-                continue
-            path_list = paths_map[key]
-            all_deleted = True
-            for item_path in path_list:
-                if not safe_delete(item_path):
-                    all_deleted = False
-                    break
-            if all_deleted:
-                service_name = {
-                    "whatsapp": "WhatsApp",
-                    "calendar": "Calendar",
-                    "mail": "Gmail"
-                }.get(key, key.capitalize())
-                services_logged_out.append(service_name)
-            else:
-                failed_services.append(target)
-        if services_logged_out:
-            print(f"✅ {', '.join(services_logged_out)} logged out successfully.")
-        if failed_services:
-            print(f"⚠️ Could not logout: {', '.join(failed_services)}")
-        if not services_logged_out and not failed_services:
-            print("⚠️ No services specified.")
-    except Exception:
-        print("⚠️ Could not logout services. Please close Jarvis and try again.")
-
-def login_service(service: str):
-    if service == "whatsapp":
-        baileys_dir = os.path.join(PROJECT_ROOT, "tools", "Messanger", "whatsapp", "BaileysServer")
-        script_path = os.path.join(baileys_dir, "baileys_service.js")
-        if not os.path.exists(script_path):
-            print("❌ WhatsApp login service not found.")
-            return
-        print("\n🔐 Starting WhatsApp login. Scan QR code from the popup window.")
-        print("Press Ctrl+C after scanning to complete the process.\n")
-        try:
-            subprocess.run(["node", script_path], cwd=baileys_dir, check=False)
-            print("✅ WhatsApp login completed.")
-        except KeyboardInterrupt:
-            print("\n✅ WhatsApp login process completed.")
-        except Exception:
-            print("❌ WhatsApp login failed.")
-    elif service == "mail":
-        try:
-            from tools.Messanger.email_manager import authenticate_gmail
-            print("\n🔐 Starting Gmail login. Browser will open for authentication.")
-            service_obj = authenticate_gmail(interactive=True)
-            if service_obj:
-                print("✅ Gmail login successful.")
-            else:
-                print("❌ Gmail login failed or timed out.")
-        except Exception:
-            print("❌ Gmail login failed.")
-    elif service == "calendar":
-        try:
-            from tools.Calendar.CalendarTool import authenticate_calendar
-            print("\n🔐 Starting Google Calendar login. Browser will open for authentication.")
-            service_obj, status = authenticate_calendar(interactive=True)
-            if service_obj:
-                print("✅ Calendar login successful.")
-            else:
-                print(f"❌ Calendar login failed.")
-        except Exception:
-            print("❌ Calendar login failed.")
-    else:
-        print(f"❌ Unknown service: {service}")
-
-def show_help_menu():
-    print("""
-====================================================================
-                        🤖 JARVIS HELP MENU
-====================================================================
-
-USAGE:
-    jarvis                     Start Jarvis AI Voice Assistant
-    jarvis --help              Show this help menu
-
-LOGIN COMMANDS (Jarvis must be OFF):
-    jarvis login --whatsapp    Login to WhatsApp
-    jarvis login --mail        Login to Gmail
-    jarvis login --calendar    Login to Google Calendar
-    jarvis login --all         Login to all services
-
-LOGOUT COMMANDS (Jarvis must be OFF):
-    jarvis logout --whatsapp   Logout from WhatsApp
-    jarvis logout --mail       Logout from Gmail
-    jarvis logout --calendar   Logout from Google Calendar
-    jarvis logout --all        Logout from all services
-
-MEMORY & RESET COMMANDS (Jarvis must be OFF):
-    jarvis memory --clear      Clear Jarvis memory and chat history
-    jarvis reset --hard        Factory reset (clear memory + all logins)
-
-====================================================================
-""")
-
-def handle_cli_commands():
-    args = [arg.lower() for arg in sys.argv[1:]]
-    if not args:
+        tree = ast.parse(code)
+    except SyntaxError:
         return False
-    dev_flags = {"test_jarvis", "no_wake"}
-    non_dev_args = [a for a in args if a not in dev_flags and not a.startswith("voice=")]
-    if not non_dev_args:
+    
+    dangerous_patterns = [
+        r'rm\s+-rf\s+/*', r'del\s+/[fs]\s+c:\\', r'format\s+[a-z]:',
+        r'dd\s+.*of=/dev/sd', r'mkfs', r'diskpart', r'fdisk'
+    ]
+    
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func_name = None
+            if isinstance(node.func, ast.Attribute):
+                if isinstance(node.func.value, ast.Name):
+                    func_name = f"{node.func.value.id}.{node.func.attr}"
+                elif isinstance(node.func.value, ast.Attribute):
+                    func_name = f"{ast.unparse(node.func.value)}.{node.func.attr}"
+            elif isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            
+            if func_name:
+                if func_name in ['os.system', 'os.popen', 'subprocess.run', 'subprocess.Popen', 'subprocess.call', 'subprocess.check_output']:
+                    if node.args:
+                        cmd_arg = None
+                        if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                            cmd_arg = node.args[0].value
+                        elif isinstance(node.args[0], ast.Str):
+                            cmd_arg = node.args[0].s
+                        if cmd_arg:
+                            for pattern in dangerous_patterns:
+                                if re.search(pattern, cmd_arg, re.IGNORECASE):
+                                    return True
+                
+                if func_name in ['shutil.rmtree', 'os.remove', 'os.unlink', 'os.rmdir', 'shutil.move', 'shutil.copy']:
+                    target_path = None
+                    if node.args:
+                        if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                            target_path = node.args[0].value
+                        elif isinstance(node.args[0], ast.Str):
+                            target_path = node.args[0].s
+                    if target_path:
+                        try:
+                            abs_path = os.path.realpath(target_path)
+                        except Exception:
+                            continue
+                        if platform.system() == 'Windows':
+                            if abs_path in ['C:\\', 'C:\\Windows', 'C:\\System32'] or abs_path.startswith('C:\\Windows') or abs_path.startswith('C:\\System32'):
+                                return True
+                        else:
+                            if abs_path == '/' or abs_path == '/boot' or abs_path == '/etc' or abs_path == '/usr' or abs_path == '/bin' or abs_path == '/sbin' or abs_path == '/lib' or abs_path == '/dev':
+                                return True
+                
+                if func_name == 'open':
+                    if len(node.args) > 1:
+                        mode_arg = None
+                        if isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
+                            mode_arg = node.args[1].value.lower()
+                        elif isinstance(node.args[1], ast.Str):
+                            mode_arg = node.args[1].s.lower()
+                        if mode_arg and ('w' in mode_arg or 'a' in mode_arg):
+                            target_path = None
+                            if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                                target_path = node.args[0].value
+                            elif isinstance(node.args[0], ast.Str):
+                                target_path = node.args[0].s
+                            if target_path:
+                                try:
+                                    abs_path = os.path.realpath(target_path)
+                                except Exception:
+                                    continue
+                                if platform.system() == 'Windows':
+                                    if abs_path.startswith('C:\\Windows') or abs_path.startswith('C:\\System32'):
+                                        return True
+                                else:
+                                    if abs_path.startswith('/etc') or abs_path.startswith('/usr') or abs_path.startswith('/bin') or abs_path.startswith('/sbin') or abs_path.startswith('/lib') or abs_path.startswith('/dev'):
+                                        return True
+    return False
+
+def is_python_code_safe(code: str) -> bool:
+    if _is_python_destructive(code):
         return False
-    if any(h in non_dev_args for h in ("help", "--help", "-h")):
-        show_help_menu()
-        return True
-    subcommands = {"logout", "memory", "reset", "login"}
-    has_valid_subcommand = any(arg in subcommands for arg in non_dev_args)
-    if not has_valid_subcommand:
-        alias_map = {
-            "--clear": "jarvis memory --clear",
-            "-c": "jarvis memory --clear",
-            "clear": "jarvis memory --clear",
-            "mem": "jarvis memory --clear",
-            "lgout": "jarvis logout --all",
-            "log": "jarvis logout --all",
-            "signout": "jarvis logout --all",
-            "purge": "jarvis reset --hard",
-            "factory": "jarvis reset --hard",
-            "--hard": "jarvis reset --hard"
-        }
-        print("\n❌ Invalid command. Type 'jarvis --help' to see available commands.")
-        for arg in non_dev_args:
-            if arg in alias_map:
-                print(f"💡 Did you mean: '{alias_map[arg]}'?")
-                break
-        print("")
-        return True
-    if is_jarvis_running():
-        print("\n❌ Jarvis is currently running! Please stop Jarvis first.\n")
-        sys.exit(1)
-    print("\n⚡ Executing command...")
-    if "login" in non_dev_args:
-        services = []
-        if "--whatsapp" in non_dev_args:
-            services.append("whatsapp")
-        if "--mail" in non_dev_args:
-            services.append("mail")
-        if "--calendar" in non_dev_args:
-            services.append("calendar")
-        if "--all" in non_dev_args:
-            services = ["whatsapp", "mail", "calendar"]
-        if not services:
-            print("⚠️ Please specify a service: --whatsapp, --mail, --calendar, or --all")
-            print("💡 Type 'jarvis --help' for usage.")
-        else:
-            for svc in services:
-                login_service(svc)
-    if "logout" in non_dev_args:
-        targets = []
-        if "--whatsapp" in non_dev_args:
-            targets.append("whatsapp")
-        if "--mail" in non_dev_args:
-            targets.append("mail")
-        if "--calendar" in non_dev_args:
-            targets.append("calendar")
-        if "--all" in non_dev_args:
-            targets = ["whatsapp", "mail", "calendar"]
-        if not targets:
-            print("⚠️ Please specify a service: --whatsapp, --mail, --calendar, or --all")
-            print("💡 Type 'jarvis --help' for usage.")
-        else:
-            deleteSessionCookies(*targets)
-    if "memory" in non_dev_args:
-        if "--clear" in non_dev_args or "--purge" in non_dev_args:
-            deleteMemory()
-        else:
-            print("⚠️ Use 'jarvis memory --clear' to clear memory.")
-            print("💡 Type 'jarvis --help' for usage.")
-    if "reset" in non_dev_args:
-        if "--hard" in non_dev_args:
-            print("🚨 Factory reset in progress...")
-            deleteMemory()
-            deleteSessionCookies("whatsapp", "mail", "calendar")
-            print("✅ Factory reset completed.")
-        else:
-            print("⚠️ Use 'jarvis reset --hard' to factory reset.")
-            print("💡 Type 'jarvis --help' for usage.")
     return True
+
+class StatefulTerminal:
+    def __init__(self):
+        shell_cmd = "cmd.exe" if platform.system() == "Windows" else "/bin/bash"
+        user_home = os.path.expanduser("~")
+        self.process = subprocess.Popen(
+            shell_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            bufsize=1,
+            shell=False,
+            cwd=user_home,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"}
+        )
+        self.output_queue = queue.Queue()
+        self.reader_thread = threading.Thread(target=self._read_output, daemon=True)
+        self.reader_thread.start()
+        self._read_until_empty(timeout=0.5)
+
+    def _read_output(self):
+        for line in iter(self.process.stdout.readline, ''):
+            self.output_queue.put(line)
+
+    def _read_until_empty(self, timeout=0.5):
+        lines = []
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            try:
+                line = self.output_queue.get(timeout=0.1)
+                if line:
+                    lines.append(line)
+                    end_time = time.time() + timeout
+            except queue.Empty:
+                pass
+        return "".join(lines)
+
+    def execute(self, command: str, timeout: int = 30) -> str:
+        marker = f"__CMD_END_{time.time()}__"
+        full_command = f"{command}\necho {marker}\n"
+            
+        self.process.stdin.write(full_command)
+        self.process.stdin.flush()
+        
+        lines = []
+        start_time = time.time()
+        idle_timeout = 2.0
+        last_output_time = time.time()
+        end_time = start_time + timeout
+        
+        while time.time() < end_time:
+            try:
+                line = self.output_queue.get(timeout=0.1)
+                if marker in line:
+                    break
+                if line:
+                    lines.append(line)
+                    last_output_time = time.time()
+                else:
+                    continue
+            except queue.Empty:
+                if time.time() - last_output_time > idle_timeout:
+                    break
+                continue
+        
+        output = "".join(lines).strip()
+        
+        MAX_OUTPUT_LENGTH = 50000
+        if len(output) > MAX_OUTPUT_LENGTH:
+            output = output[:25000] + "\n\n... [OUTPUT TRUNCATED BY SYSTEM TO SAVE CONTEXT] ...\n\n" + output[-25000:]
+            
+        return output
+
+terminal_session = StatefulTerminal()
+
+def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
+    if _is_system_destroyer(command):
+        print(f"\n\033[91m[SYSTEM PROTECTION]\033[0m Auto-blocked lethal command: {command}")
+        return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Command targets system core and was automatically blocked. No execution took place."
+    
+    print(f"\n\033[94m[AUTO-APPROVED TERMINAL COMMAND]\033[0m: {command}")
+    try:
+        output = terminal_session.execute(command, timeout=timeout_seconds)
+        if output:
+            return f"Observation: Command executed.\nOutput:\n{output}"
+        return "Observation: Command executed successfully with no output."
+    except Exception as e:
+        return f"Observation: Terminal execution crashed -> {str(e)}"
+
+def run_python_code(code_string: str) -> str:
+    if not is_python_code_safe(code_string):
+        print(f"\n\033[91m[SYSTEM PROTECTION]\033[0m Auto-blocked lethal Python code.")
+        return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Python code targets system core and was automatically blocked. No execution took place."
+    else:
+        print(f"\n\033[94m[AUTO-APPROVED PYTHON SCRIPT]\033[0m: Executing script...")
+        
+    fd, temp_path = tempfile.mkstemp(suffix=".py")
+    
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(code_string)
+            
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        
+        python_path = sys.executable
+            
+        result = subprocess.run(
+            [python_path, temp_path], 
+            capture_output=True, 
+            text=True, 
+            encoding='utf-8',
+            errors='replace',
+            env=env,
+            timeout=120
+        )
+        
+        output = result.stdout.strip()
+        error = result.stderr.strip()
+        
+        full_output = ""
+        if output:
+            full_output += f"Output:\n{output}\n"
+        if error:
+            full_output += f"Error:\n{error}\n"
+            
+        MAX_OUTPUT_LENGTH = 50000
+        if len(full_output) > MAX_OUTPUT_LENGTH:
+            full_output = full_output[:25000] + "\n\n... [TRUNCATED] ...\n\n" + full_output[-25000:]
+            
+        if result.returncode == 0:
+            return f"Observation: Python code executed successfully.\n{full_output}"
+        else:
+            return f"Observation: Python script failed.\n{full_output}"
+            
+    except subprocess.TimeoutExpired:
+        return "Observation: Python script timed out after 120 seconds."
+    except Exception as e:
+        return f"Observation: Python execution crashed -> {str(e)}"
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
