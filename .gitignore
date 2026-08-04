@@ -35,6 +35,7 @@ core/UiSrc/**/.qmake.stash
 core/UiSrc/**/Makefile*
 
 setup.py
+.jarvis.lock
 
 # OS metadata
 .DS_Store
