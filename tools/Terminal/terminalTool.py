@@ -82,10 +82,10 @@ def _is_system_destroyer(command: str) -> bool:
 
 def is_python_code_safe(code: str) -> bool:
     dangerous_patterns = [
-        r'os\.remove', r'os\.rmdir', r'os\.unlink', r'os\.mkdir', r'os\.makedirs',
-        r'shutil\.rmtree', r'shutil\.move', r'shutil\.copy',
-        r'open\s*\([^,]+,\s*[\'"][wa]b?[\'"]\)', 
-        r'subprocess', r'os\.system', r'os\.popen'
+        r'subprocess',
+        r'os\.system',
+        r'os\.popen',
+        r'shutil\.rmtree',
     ]
     for pattern in dangerous_patterns:
         if re.search(pattern, code):
