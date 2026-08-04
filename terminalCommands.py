@@ -70,7 +70,7 @@ def safe_delete(path, retries=3, delay=0.5):
 def deleteMemory():
     try:
         root_dir = os.path.dirname(os.path.abspath(__file__))
-        target_folder = os.path.join(root_dir, "Data", "memory")
+        target_folder = os.path.join(root_dir, "Data", "jarvis_memory")
         
         print("\n--- Deleting Memory ---")
         safe_delete(target_folder)
