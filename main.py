@@ -3,6 +3,12 @@ faulthandler.enable()
 import os
 import sys
 import platform
+import threading
+import warnings
+import logging
+import signal
+import time
+import ctypes
 
 os.environ['PYTHONUNBUFFERED'] = '1'
 
@@ -14,7 +20,6 @@ if hasattr(sys.stderr, 'reconfigure'):
 def disable_quickedit():
     if platform.system() == "Windows":
         try:
-            import ctypes
             kernel32 = ctypes.windll.kernel32
             STD_INPUT_HANDLE = -10
             ENABLE_QUICK_EDIT_MODE = 0x0040
@@ -34,11 +39,6 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(PROJECT_ROOT)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
-
-import warnings
-import logging
-import signal
-import time
 
 os.environ['TOGETHER_NO_BANNER'] = '1'
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
@@ -70,8 +70,20 @@ def signal_handler(signum, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+def set_terminal_title(title="Jarvis"):
+    try:
+        if platform.system() == "Windows":
+            ctypes.windll.kernel32.SetConsoleTitleW(title)
+        else:
+            sys.stdout.write(f"\033]0;{title}\007")
+            sys.stdout.flush()
+    except Exception:
+        pass
+
 def main() -> None:
     global _is_running
+
+    set_terminal_title("Jarvis")
 
     if handle_cli_commands():
         sys.exit(0)
@@ -99,25 +111,24 @@ def main() -> None:
     is_dev_mode = "test_jarvis" in args
     no_wake = "no_wake" in args
 
-    for arg in args:
-        if arg.startswith("voice="):
-            forced_tts = arg.split("=", 1)[1].strip()
-            break
-
     try:
         from core.ui.agent_status import reset_agent_status
         reset_agent_status()
-    except Exception as exc:
-        logging.debug("Could not reset agent status during startup: %s", exc, exc_info=True)
+    except Exception:
+        pass
 
     start_agent_panel()
     start_stt_popup()
     start_baileys_server()
     start_watchdog()
-    start_rag_engine()
 
-    if not is_dev_mode:
-        time.sleep(1)
+    def start_rag_background():
+        try:
+            start_rag_engine()
+        except Exception as e:
+            logging.error(f"RAG engine startup failed: {e}")
+
+    threading.Thread(target=start_rag_background, daemon=True).start()
 
     try:
         memory = ContextMemory()
@@ -132,10 +143,13 @@ def main() -> None:
             def add_live_feedback(self, cmd): pass
         memory = FakeMemory()
 
-    try:
-        start_proactive_agent(memory, is_jarvis_busy)
-    except Exception as e:
-        logging.error(f"Failed to start proactive agent: {e}")
+    def start_proactive_background():
+        try:
+            start_proactive_agent(memory, is_jarvis_busy)
+        except Exception as e:
+            logging.error(f"Failed to start proactive agent: {e}")
+
+    threading.Thread(target=start_proactive_background, daemon=True).start()
 
     if not no_wake:
         try:
@@ -162,8 +176,8 @@ def main() -> None:
                             logging.info("Exit command received.")
                             try:
                                 tts.stop_speaking()
-                            except Exception as exc:
-                                logging.debug("Could not stop TTS during shutdown command: %s", exc, exc_info=True)
+                            except Exception:
+                                pass
                             break
 
                         if command:
@@ -176,8 +190,8 @@ def main() -> None:
                             else:
                                 try:
                                     hide_stt_popup()
-                                except Exception as exc:
-                                    logging.debug("Could not hide the STT popup: %s", exc, exc_info=True)
+                                except Exception:
+                                    pass
                                 executor.submit(main_command_processor, command, executor, memory)
                                 interrupt.clear_interrupt()
 
@@ -195,16 +209,16 @@ def main() -> None:
             pygame.quit()
         except Exception as e:
             logging.error(f"Error cleaning up TTS/Pygame: {e}")
-        
+
         remove_lock_file()
         stop_watchdog()
         stop_all_services()
-        
+
         try:
             proc_manager.cleanup()
         except Exception as e:
             logging.error(f"Error cleaning up process manager: {e}")
-            
+
         logging.info("Shutdown sequence complete.")
 
 if __name__ == "__main__":
