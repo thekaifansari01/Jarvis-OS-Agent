@@ -23,6 +23,7 @@ warnings.filterwarnings('ignore')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+from terminalCommands import handle_cli_commands, create_lock_file, remove_lock_file, is_jarvis_running
 from core.brain.Memory.Memory import ContextMemory
 from core.voice import stt, tts, interrupt
 from core.voice.stt_status import hide_stt_popup
@@ -41,6 +42,7 @@ def signal_handler(signum, frame):
     _is_running = False
     logging.info("Interrupt signal received. Initiating graceful shutdown.")
     try:
+        remove_lock_file()
         stop_watchdog()
         stop_all_services()
         proc_manager.cleanup()
@@ -53,6 +55,16 @@ signal.signal(signal.SIGTERM, signal_handler)
 
 def main() -> None:
     global _is_running
+
+    if handle_cli_commands():
+        sys.exit(0)
+
+    if is_jarvis_running():
+        print("\n❌ [ERROR] Jarvis is ALREADY running in another terminal window!")
+        print("⚠️  Please close the existing Jarvis instance before starting a new one.\n")
+        sys.exit(1)
+
+    create_lock_file()
 
     args = [arg.lower() for arg in sys.argv[1:]]
     is_dev_mode = "test_jarvis" in args
@@ -155,6 +167,7 @@ def main() -> None:
         except Exception as e:
             logging.error(f"Error cleaning up TTS/Pygame: {e}")
         
+        remove_lock_file()
         stop_watchdog()
         stop_all_services()
         
