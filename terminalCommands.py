@@ -8,7 +8,6 @@ import platform
 import re
 import sys
 import shlex
-import ast
 
 def get_user_approval(action_type: str, content: str) -> bool:
     print(f"\n\033[91m[JARVIS REQUESTS CRITICAL PERMISSION]\033[0m")
@@ -81,89 +80,16 @@ def _is_system_destroyer(command: str) -> bool:
         return False
     return False
 
-def _is_python_destructive(code: str) -> bool:
-    try:
-        tree = ast.parse(code)
-    except SyntaxError:
-        return False
-    
-    dangerous_patterns = [
-        r'rm\s+-rf\s+/*', r'del\s+/[fs]\s+c:\\', r'format\s+[a-z]:',
-        r'dd\s+.*of=/dev/sd', r'mkfs', r'diskpart', r'fdisk'
-    ]
-    
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            func_name = None
-            if isinstance(node.func, ast.Attribute):
-                if isinstance(node.func.value, ast.Name):
-                    func_name = f"{node.func.value.id}.{node.func.attr}"
-                elif isinstance(node.func.value, ast.Attribute):
-                    func_name = f"{ast.unparse(node.func.value)}.{node.func.attr}"
-            elif isinstance(node.func, ast.Name):
-                func_name = node.func.id
-            
-            if func_name:
-                if func_name in ['os.system', 'os.popen', 'subprocess.run', 'subprocess.Popen', 'subprocess.call', 'subprocess.check_output']:
-                    if node.args:
-                        cmd_arg = None
-                        if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                            cmd_arg = node.args[0].value
-                        elif isinstance(node.args[0], ast.Str):
-                            cmd_arg = node.args[0].s
-                        if cmd_arg:
-                            for pattern in dangerous_patterns:
-                                if re.search(pattern, cmd_arg, re.IGNORECASE):
-                                    return True
-                
-                if func_name in ['shutil.rmtree', 'os.remove', 'os.unlink', 'os.rmdir', 'shutil.move', 'shutil.copy']:
-                    target_path = None
-                    if node.args:
-                        if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                            target_path = node.args[0].value
-                        elif isinstance(node.args[0], ast.Str):
-                            target_path = node.args[0].s
-                    if target_path:
-                        try:
-                            abs_path = os.path.realpath(target_path)
-                        except Exception:
-                            continue
-                        if platform.system() == 'Windows':
-                            if abs_path in ['C:\\', 'C:\\Windows', 'C:\\System32'] or abs_path.startswith('C:\\Windows') or abs_path.startswith('C:\\System32'):
-                                return True
-                        else:
-                            if abs_path == '/' or abs_path == '/boot' or abs_path == '/etc' or abs_path == '/usr' or abs_path == '/bin' or abs_path == '/sbin' or abs_path == '/lib' or abs_path == '/dev':
-                                return True
-                
-                if func_name == 'open':
-                    if len(node.args) > 1:
-                        mode_arg = None
-                        if isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
-                            mode_arg = node.args[1].value.lower()
-                        elif isinstance(node.args[1], ast.Str):
-                            mode_arg = node.args[1].s.lower()
-                        if mode_arg and ('w' in mode_arg or 'a' in mode_arg):
-                            target_path = None
-                            if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                                target_path = node.args[0].value
-                            elif isinstance(node.args[0], ast.Str):
-                                target_path = node.args[0].s
-                            if target_path:
-                                try:
-                                    abs_path = os.path.realpath(target_path)
-                                except Exception:
-                                    continue
-                                if platform.system() == 'Windows':
-                                    if abs_path.startswith('C:\\Windows') or abs_path.startswith('C:\\System32'):
-                                        return True
-                                else:
-                                    if abs_path.startswith('/etc') or abs_path.startswith('/usr') or abs_path.startswith('/bin') or abs_path.startswith('/sbin') or abs_path.startswith('/lib') or abs_path.startswith('/dev'):
-                                        return True
-    return False
-
 def is_python_code_safe(code: str) -> bool:
-    if _is_python_destructive(code):
-        return False
+    dangerous_patterns = [
+        r'subprocess',
+        r'os\.system',
+        r'os\.popen',
+        r'shutil\.rmtree',
+    ]
+    for pattern in dangerous_patterns:
+        if re.search(pattern, code):
+            return False
     return True
 
 class StatefulTerminal:
@@ -259,10 +185,10 @@ def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
 
 def run_python_code(code_string: str) -> str:
     if not is_python_code_safe(code_string):
-        print(f"\n\033[91m[SYSTEM PROTECTION]\033[0m Auto-blocked lethal Python code.")
-        return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Python code targets system core and was automatically blocked. No execution took place."
+        if not get_user_approval("Python Code Execution (CRITICAL)", code_string):
+            return "Observation: Action Denied by User."
     else:
-        print(f"\n\033[94m[AUTO-APPROVED PYTHON SCRIPT]\033[0m: Executing script...")
+        print(f"\n\033[94m[AUTO-APPROVED PYTHON SCRIPT]\033[0m: Executing data processing script...")
         
     fd, temp_path = tempfile.mkstemp(suffix=".py")
     
