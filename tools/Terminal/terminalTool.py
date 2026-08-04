@@ -7,6 +7,7 @@ import queue
 import platform
 import re
 import sys
+import shlex
 
 def get_user_approval(action_type: str, content: str) -> bool:
     print(f"\n\033[91m[JARVIS REQUESTS CRITICAL PERMISSION]\033[0m")
@@ -22,19 +23,62 @@ def get_user_approval(action_type: str, content: str) -> bool:
         print("Invalid input. Please enter Y or N.")
 
 def is_terminal_command_safe(command: str) -> bool:
-    dangerous_patterns = [
-        r'\bdel\b', r'\brm\b', r'\brmdir\b', r'\bmkdir\b', r'\bmd\b', r'\bmove\b', 
-        r'\bren\b', r'\brename\b', r'\bformat\b', r'\bcopy\b', r'\bcp\b', r'\bmv\b',
-        r'\bRemove-Item\b', r'\bNew-Item\b', r'\bMove-Item\b', r'\bRename-Item\b', r'\bCopy-Item\b',
-        r'\bSet-Content\b', r'\bAdd-Content\b', r'\bClear-Content\b', 
-        r'\bwget\b', r'\bcurl\b', r'\bInvoke-WebRequest\b', r'\bpip install\b', r'\bnpm install\b',
-        r'\bgit clone\b', r'\bvenv\b', r'\bnpm\b',
-        r'>', r'>>'
-    ]
-    for pattern in dangerous_patterns:
-        if re.search(pattern, command, re.IGNORECASE):
-            return False
     return True
+
+def _is_system_destroyer(command: str) -> bool:
+    if not command or not command.strip():
+        return False
+    try:
+        tokens = shlex.split(command.strip())
+    except ValueError:
+        cmd_lower = command.lower()
+        if re.search(r'\brm\s+-rf\s+/*\s*$', cmd_lower) or re.search(r'\bdel\s+/[fs]\s+c:\\', cmd_lower):
+            return True
+        return False
+    if not tokens:
+        return False
+    cmd = tokens[0].lower()
+    if cmd in ['format', 'diskpart', 'mkfs', 'fdisk', 'parted']:
+        return True
+    if cmd == 'dd':
+        for token in tokens:
+            if token.startswith('of=') or token.startswith('if='):
+                if '/dev/sd' in token or '/dev/nvme' in token or '/dev/hd' in token or '\\\\.\\PhysicalDrive' in token:
+                    return True
+        return False
+    if cmd in ['rm', 'del', 'rd', 'rmdir', 'erase']:
+        has_force_recursive = False
+        if platform.system() == 'Windows':
+            if '/s' in tokens or '/q' in tokens:
+                has_force_recursive = True
+        else:
+            if '-rf' in tokens or '-fr' in tokens or ('--recursive' in tokens and '--force' in tokens) or ('-r' in tokens and '-f' in tokens):
+                has_force_recursive = True
+        if not has_force_recursive:
+            return False
+        targets = []
+        for token in tokens[1:]:
+            if not token.startswith('-'):
+                targets.append(token)
+        if not targets:
+            if command.strip().endswith('/') or command.strip().endswith('/*'):
+                return True
+            return False
+        for target in targets:
+            try:
+                abs_path = os.path.realpath(target)
+            except Exception:
+                continue
+            if platform.system() == 'Windows':
+                if abs_path in ['C:\\', 'C:\\Windows', 'C:\\System32', 'D:\\', 'E:\\']:
+                    return True
+                if any(abs_path.startswith(drive) for drive in ['C:\\Windows', 'C:\\System32']):
+                    return True
+            else:
+                if abs_path == '/' or abs_path == '/boot' or abs_path == '/etc' or abs_path == '/usr' or abs_path == '/bin' or abs_path == '/sbin' or abs_path == '/lib' or abs_path == '/dev':
+                    return True
+        return False
+    return False
 
 def is_python_code_safe(code: str) -> bool:
     dangerous_patterns = [
@@ -126,12 +170,11 @@ class StatefulTerminal:
 terminal_session = StatefulTerminal()
 
 def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
-    if not is_terminal_command_safe(command):
-        if not get_user_approval("Terminal Command (CRITICAL)", command):
-            return "Observation: Action Denied by User."
-    else:
-        print(f"\n\033[94m[AUTO-APPROVED TERMINAL COMMAND]\033[0m: {command}")
+    if _is_system_destroyer(command):
+        print(f"\n\033[91m[SYSTEM PROTECTION]\033[0m Auto-blocked lethal command: {command}")
+        return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Command targets system core and was automatically blocked. No execution took place."
     
+    print(f"\n\033[94m[AUTO-APPROVED TERMINAL COMMAND]\033[0m: {command}")
     try:
         output = terminal_session.execute(command, timeout=timeout_seconds)
         if output:
