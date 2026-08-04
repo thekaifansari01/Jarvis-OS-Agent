@@ -57,13 +57,14 @@ JARVIS isn't just another ChatGPT wrapper. It's a **desktop-native AI Operating 
 | 🔄 | **Multi-LLM Auto-Failover** | Seamlessly switches between Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. Zero downtime — no interruption to your workflow. |
 | 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule‑based fallback — intelligently routes commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep‑reasoning **AgenticBrain** for complex multi‑step engineering, coding, and research tasks. |
 | 📚 | **Lifelong Episodic LTM & RAG** | ChromaDB‑backed persistent memory with daily Groq summarization. Remembers conversations from months ago. Also indexes your local documents (`Documents/Jarvis/RAG/`) for instant semantic search — your personal knowledge base. |
-| ⚙️ | **Enterprise-Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys) and auto‑restarts them if they crash. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
+| ⚙️ | **Enterprise-Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
 | 🎨 | **Reactive UI Ecosystem** | ZMQ‑powered floating Agent Panel with real‑time thought/action/observation streaming, live markdown typing popup with async image previews (YouTube thumbnails, link previews, local images), and native STT/Input popups. Glass‑morphism, dynamic glow, auto‑resize. |
 | 🗣️ | **Voice‑First Multimodal** | Deepgram speech‑to‑text (Nova‑2) with openWakeWord detection, Edge TTS voice output, multimodal vision (OCR, object detection, image analysis via Gemini/Regolo), and image generation (Flux/AI Horde) — all integrated. |
 | 🤖 | **Autonomous Software Engineering** | Can autonomously explore codebases (`repo_map`), read files (`view`), replace exact code blocks (`replace_block` — zero line‑drift), create multiple files (`create_many`), execute Python scripts (`run_python_code`), and run terminal commands (`execute_terminal_command`). Real‑world bug fixing (10 tests, 3 bugs, 0.17 seconds) — proven. |
 | 🛡️ | **Human‑in‑the‑Loop (HITL) Safety** | Never executes irreversible actions (sending emails, deleting files, updating calendars) without explicit user consent. Pending confirmations auto‑expire after 60 seconds to prevent stale memory injections. |
 | 🌐 | **Any Provider, Anywhere** | Works with Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint — including local models (Ollama, LM Studio, vLLM). 100% local inference possible — no internet required with local LLMs. |
 | 🧩 | **Extensible Tool Ecosystem** | Integrated with Gmail Pub/Sub, WhatsApp Baileys bridge, Google Calendar OAuth, Tavily search, ArXiv academic research, YouTube transcript summarization, system clipboard, hardware controls (volume/brightness/screenshot), and more. |
+| 🔐 | **Conditional Service Startup** | WhatsApp, Email, and Calendar services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
 
 ---
 
@@ -81,6 +82,7 @@ JARVIS isn't just another ChatGPT wrapper. It's a **desktop-native AI Operating 
 | **AI has no safety** | HITL consent gate — **never modifies critical data without permission** |
 | **AI has no UI** | ZMQ‑powered Agent Panel + Typing Popup — **real‑time status, markdown rendering, async images** |
 | **AI can't hear or see** | Deepgram STT + Gemini Vision — **voice input, image analysis, OCR** |
+| **AI opens unwanted login popups on startup** | Conditional service startup + manual login CLI — **services start only when you're ready** |
 
 ---
 
@@ -148,7 +150,8 @@ flowchart TD
         Consent[🔒 HITL Consent Gate]
     end
     
-    Listeners --> Scout -->|Suggested Action| AgenticBrain
+    Listeners -->|Conditional Start| Scout
+    Scout -->|Suggested Action| AgenticBrain
     AgenticBrain -->|Requires Permission| Consent -->|User Confirms| AgenticBrain
     
     subgraph Resilience[⚙️ Resilience Layer]
@@ -157,7 +160,7 @@ flowchart TD
         Recovery[🔄 Two-Strike Rule]
     end
     
-    Watchdog -.->|Monitors| System
+    Watchdog -.->|Smart Skip| System
     Failover -.-> Providers
     Recovery -.-> AgenticBrain
 ```
@@ -264,7 +267,11 @@ JARVIS does not rely on a single AI provider. The `BaseLLMProvider` abstract cla
 A dedicated daemon thread runs in the background, checking the health of critical subprocesses every 5 seconds:
 - **Baileys Server** (WhatsApp Bridge)
 - **STT Popup** (Voice Status UI)
-If a process is down, it attempts a restart up to `max_retries=3` with a 15‑second cooldown period, ensuring maximum uptime.
+
+**Smart Monitoring:**
+- If a service is **not logged in** (credentials missing), the watchdog **skips monitoring** entirely and logs only **once per minute** to avoid spam.
+- If the service is logged in and crashes, it attempts a restart up to `max_retries=3` with a 15‑second cooldown period.
+- This ensures maximum uptime for active services while keeping the system clean and quiet for unauthenticated ones.
 
 ### 3. 🔒 Human‑in‑the‑Loop (HITL) Consent Protocol
 - **Proactive Trigger Detection:** If the `Proactive Scout` detects an email/WhatsApp asking to reschedule a meeting, the AgenticBrain enters *Partner Confirmation Mode*.
@@ -276,6 +283,12 @@ If a tool or script fails:
 - **Strike 1:** Reads stderr/stdout, fixes syntax/logic, and retries once with an improved script.
 - **Strike 2:** If it fails a second time, ABANDONS that approach immediately and pivots to an alternative strategy.
 - **Pragmatic Completion:** Avoids endless iterations for minor cosmetic perfection. Once the essential data/file is generated correctly, it invokes `complete_task`.
+
+### 5. 🔐 Conditional Service Startup & Manual Login
+- **Startup:** WhatsApp, Email, and Calendar services start **only if credentials exist**. No unwanted browser or QR popups appear.
+- **Proactive Listeners:** Only start for services that are already logged in, preventing unnecessary background threads.
+- **Tool Calls:** When you explicitly ask to send an email or create a calendar event, the authentication flow opens as expected — preserving the interactive experience.
+- **Manual Login CLI:** Use `jarvis login --whatsapp/--mail/--calendar` to authenticate on demand (requires Jarvis to be stopped).
 
 ---
 
@@ -423,6 +436,8 @@ On the first run, scan the QR code displayed by the Baileys process. Keep the lo
 - Local service URL: `http://localhost:3000`
 - Session data: `Data/SessionCookies/auth_info_baileys/`
 
+> **Tip:** You can also set up WhatsApp manually using the terminal login command (see [Session & Memory Management CLI](#7-session--memory-management-cli)).
+
 ### 5. WhatsApp Contacts (Optional)
 
 Create `Data/contacts.json` for named recipients:
@@ -445,7 +460,7 @@ or (if you ran `SetupRegistry.py`):
 jarvis
 ```
 
-This starts the agent panel, STT popup (when the binary exists), Baileys bridge, service watchdog, RAG engine, proactive listeners, global hotkey, and wake‑word listener.
+This starts the agent panel, STT popup (when the binary exists), Baileys bridge (only if WhatsApp is logged in), service watchdog (smart monitoring), RAG engine, proactive listeners (only for logged-in services), global hotkey, and wake‑word listener.
 
 #### Silent Mode (Wake Word Disabled, Trigger via Hotkeys Only)
 ```powershell
@@ -469,10 +484,14 @@ This mode skips the one‑second startup delay. It does **not** disable STT, Bai
 
 JARVIS includes powerful CLI subcommands to manage sessions, memory, and reset the system.
 
-> **⚠️ IMPORTANT:** All logout, memory clear, and reset commands require Jarvis to be **OFF** (not running). Stop Jarvis first (`Ctrl + C` or say `exit`) before running these.
+> **⚠️ IMPORTANT:** All logout, memory clear, login, and reset commands require Jarvis to be **OFF** (not running). Stop Jarvis first (`Ctrl + C` or say `exit`) before running these.
 
 | Command | Action |
 |---------|--------|
+| `jarvis login --whatsapp` | Start WhatsApp QR login (manual scan — opens popup) |
+| `jarvis login --mail` | Start Gmail OAuth login (opens browser) |
+| `jarvis login --calendar` | Start Google Calendar OAuth login (opens browser) |
+| `jarvis login --all` | Login to all services sequentially |
 | `jarvis logout --whatsapp` | Logout WhatsApp & clear `chats.db` |
 | `jarvis logout --mail` | Logout Gmail session & clear token |
 | `jarvis logout --calendar` | Logout Google Calendar session |
@@ -487,11 +506,14 @@ JARVIS includes powerful CLI subcommands to manage sessions, memory, and reset t
 # View help menu
 jarvis -h
 
+# Login to WhatsApp only
+jarvis login --whatsapp
+
+# Login to Gmail + Calendar together
+jarvis login --mail --calendar
+
 # Logout WhatsApp only
 jarvis logout --whatsapp
-
-# Logout Gmail + Calendar together
-jarvis logout --mail --calendar
 
 # Clear memory (keep sessions)
 jarvis memory --clear
@@ -499,6 +521,8 @@ jarvis memory --clear
 # Factory reset (wipe everything)
 jarvis reset --hard
 ```
+
+> 💡 **After logging in:** Restart Jarvis. The service will now start automatically on every launch, and its proactive listener will begin monitoring.
 
 ### 8. Keyboard Shortcuts
 
@@ -572,8 +596,8 @@ jarvis-by-kaif-ansari/
 │   ├── main/
 │   │   ├── CommandHandler.py      # Main command bus, _is_busy state
 │   │   ├── HotKeyManager.py       # Ctrl+Shift+J binding
-│   │   ├── BackgroundServices.py  # Spawn/Kill STT, Baileys, Agent Panel
-│   │   └── ServiceWatchdog.py     # Auto‑Restart daemon for background processes
+│   │   ├── BackgroundServices.py  # Spawn/Kill STT, Baileys, Agent Panel (conditional)
+│   │   └── ServiceWatchdog.py     # Auto‑Restart daemon with smart monitoring
 │   ├── voice/                     # STT, TTS, Wake Word
 │   │   ├── stt.py (Deepgram)
 │   │   ├── tts.py (Edge TTS)
@@ -600,10 +624,10 @@ jarvis-by-kaif-ansari/
 │   ├── Vision/                    # Multimodal image/video handlers
 │   └── ImageGeneration/           # Text‑to‑image, image‑to‑image
 ├── Proactive/                     # HITL Scout & Event Queue
-│   ├── proactive_agent.py
-│   ├── Email/                     # Gmail Pub/Sub listener
+│   ├── proactive_agent.py         # Conditional listener startup
+│   ├── Email/                     # Gmail Pub/Sub listener (non‑interactive auth)
 │   ├── WhatsApp/                  # WhatsApp alert listener
-│   └── Reminders/                 # Calendar reminder listener
+│   └── Reminders/                 # Calendar reminder listener (non‑interactive auth)
 ├── Data/                          # Local State (Vectors, Profile, Cookies)
 │   ├── jarvis_memory/             # ChromaDB LTM & JSONL history
 │   └── SessionCookies/            # Baileys creds, OAuth tokens
@@ -628,6 +652,8 @@ jarvis-by-kaif-ansari/
 | RAG returns no results | Put supported files in `Documents/Jarvis/RAG/`, set `GEMINI_API_KEY`, allow background indexer time. |
 | Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. For local models, ensure Ollama/LM Studio is running. Check `Data/jarvis.log` for details. |
 | `jarvis` command not recognised | Run `SetupRegistry.py` from the activated virtual environment, then open a **new terminal**. |
+| Unwanted browser/QR popup on startup | Log out of the service (`jarvis logout --service`). The system now starts services only when credentials exist. |
+| Watchdog logs spam | Already fixed — watchdog now logs unlogged services only once per minute. If you see frequent logs, ensure you are using the latest version. |
 | Need diagnostic information | Read `Data/jarvis.log` — console also prints service/tool errors. |
 
 ---
