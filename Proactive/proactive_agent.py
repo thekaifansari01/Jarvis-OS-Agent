@@ -52,7 +52,6 @@ def mark_event_as_processed(source: str, text: str):
         if os.path.exists(PROCESSED_EVENTS_FILE):
             with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
                 processed_hashes = json.load(f)
-
         event_hash = _get_event_hash(source, text)
         if event_hash not in processed_hashes:
             processed_hashes.append(event_hash)
@@ -83,7 +82,6 @@ def evaluate_events_batch(batched_data: str, recent_history: str, current_mood: 
     default_ignore = {"decision": "IGNORE", "emotion_tag": "[calm]", "announcement": "", "agent_command": ""}
     if not groq_client:
         return default_ignore
-
     backoff = 2
     for attempt in range(3):
         try:
@@ -118,10 +116,8 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
     decision = decision_data.get("decision", "IGNORE").upper()
     announcement = decision_data.get("announcement", "").strip()
     agent_command = decision_data.get("agent_command", "").strip()
-
     if "IGNORE" in decision:
         return
-
     if is_jarvis_busy_callback:
         was_busy = False
         while is_jarvis_busy_callback() and not _stop_proactive.is_set():
@@ -129,10 +125,8 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
             time.sleep(1)
         if was_busy:
             time.sleep(5)
-
     if decision in ["SUGGEST_ACTION", "ACT_AND_ANNOUNCE"] and agent_command:
         logger.info(f"⚡ Proactive Triggering Silent Agentic Brain: {agent_command}")
-
         def _run_silent_agent():
             try:
                 agent_context = f"[PROACTIVE EVENT TRIGGER]\n{batched_data}"
@@ -153,14 +147,11 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
                         )
             except Exception as e:
                 logger.error(f"Failed to execute background Agentic Brain: {e}")
-
         threading.Thread(target=_run_silent_agent, daemon=True).start()
         return
-
     if decision == "ANNOUNCE" and announcement:
         logger.info(f"📢 Proactive Announcement: {announcement}")
         threading.Thread(target=speak, args=(announcement,), daemon=True).start()
-
         if memory_instance:
             try:
                 truncated_data = batched_data if len(batched_data) <= 2000 else batched_data[:2000] + "\n\n[...Message Truncated]"
@@ -186,16 +177,13 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                 for ev in events:
                     if not is_instant_spam(ev.data) and not is_event_already_processed(ev.source, ev.data):
                         valid_events.append(ev)
-
                 if valid_events:
                     batched_data = "\n---\n".join([
                         f"Source: {ev.source} | Priority: {ev.priority} | Time: {ev.timestamp.strftime('%I:%M %p')}\nData: {ev.data}"
                         for ev in valid_events
                     ])
-
                     recent_history = "No recent history."
                     current_mood = "Neutral"
-
                     if memory_instance:
                         try:
                             recent_history = memory_instance.get_fast_history_context()
@@ -204,13 +192,10 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                                 current_mood = mood_history[-1].get("mood", "Neutral")
                         except Exception as mem_err:
                             logger.warning(f"Failed to fetch memory context: {mem_err}")
-
                     decision_data = evaluate_events_batch(batched_data, recent_history, current_mood)
                     handle_proactive_decision(decision_data, batched_data, memory_instance, is_jarvis_busy_callback)
-
                     for ev in valid_events:
                         mark_event_as_processed(ev.source, ev.data)
-
         except Exception as e:
             logger.error(f"Error in Proactive Loop: {e}")
         time.sleep(2)
@@ -219,7 +204,7 @@ def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
     brain_thread = threading.Thread(target=proactive_loop, args=(memory_instance, is_jarvis_busy_callback), daemon=True)
     brain_thread.start()
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     session_dir = os.path.join(base_dir, "Data", "SessionCookies")
 
     email_token = os.path.join(session_dir, "token.json")
