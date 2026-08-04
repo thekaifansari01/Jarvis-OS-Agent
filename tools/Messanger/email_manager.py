@@ -28,7 +28,7 @@ COOKIES_DIR = BASE_DIR / "Data" / "SessionCookies"
 COOKIES_DIR.mkdir(parents=True, exist_ok=True)
 TOKEN_PATH = COOKIES_DIR / "token.json"
 
-def authenticate_gmail():
+def authenticate_gmail(interactive: bool = True):
     creds = None
     if TOKEN_PATH.exists():
         try:
@@ -53,11 +53,10 @@ def authenticate_gmail():
                 except Exception:
                     pass
 
-        if not creds or not creds.valid:
+        if (not creds or not creds.valid) and interactive:
             webbrowser.open("https://jarvis-oauth-server.vercel.app/api/oauth/start?service=gmail")
             timeout = 120
             start_time = time.time()
-            
             while time.time() - start_time < timeout:
                 if TOKEN_PATH.exists():
                     try:

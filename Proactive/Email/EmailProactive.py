@@ -192,7 +192,7 @@ def mark_as_read(service, msg_id):
 def start_gmail_watch():
     global _email_service, _watch_timer
     try:
-        service = authenticate_gmail()
+        service = authenticate_gmail(interactive=False)
         if not service:
             return None
         body = {'topicName': TOPIC_NAME, 'labelIds': ['INBOX'], 'labelFilterAction': 'include'}

@@ -28,7 +28,7 @@ def helper_format_to_iso(time_str: str, default_time_suffix: str = "00:00:00") -
     except Exception:
         return ""
 
-def authenticate_calendar():
+def authenticate_calendar(interactive: bool = True):
     creds = None
     if TOKEN_PATH.exists():
         try:
@@ -39,7 +39,7 @@ def authenticate_calendar():
                 TOKEN_PATH.unlink()
             except Exception:
                 pass
-    
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
@@ -52,12 +52,11 @@ def authenticate_calendar():
                     TOKEN_PATH.unlink()
                 except Exception:
                     pass
-                
-        if not creds or not creds.valid:
+
+        if (not creds or not creds.valid) and interactive:
             webbrowser.open("https://jarvis-oauth-server.vercel.app/api/oauth/start?service=calendar")
             timeout = 120
             start_time = time.time()
-            
             while time.time() - start_time < timeout:
                 if TOKEN_PATH.exists():
                     try:
@@ -108,23 +107,23 @@ def check_events(start_time: str = None, end_time: str = None, max_results: int 
         start_iso = datetime.datetime.utcnow().isoformat() + 'Z'
     else:
         start_iso = helper_format_to_iso(start_time, "00:00:00")
-        
+
     end_iso = helper_format_to_iso(end_time, "23:59:59") if end_time else None
 
     try:
         events_result = service.events().list(
-            calendarId='primary', 
+            calendarId='primary',
             timeMin=start_iso,
             timeMax=end_iso,
-            maxResults=max_results, 
+            maxResults=max_results,
             singleEvents=True,
             orderBy='startTime'
         ).execute()
-        
+
         events = events_result.get('items', [])
         if not events:
             return "Observation: Is time range mein calendar mein koi event ya reminder schedule nahi hai."
-        
+
         output = "Observation: Found these scheduled events:\n"
         for event in events:
             start = event['start'].get('dateTime', event['start'].get('date'))
@@ -153,7 +152,7 @@ def delete_event(event_id: str = None, summary_query: str = None) -> str:
             events_result = service.events().list(
                 calendarId='primary', timeMin=now_iso, maxResults=50, singleEvents=True
             ).execute()
-            
+
             events = events_result.get('items', [])
             target_id = None
             matched_title = ""

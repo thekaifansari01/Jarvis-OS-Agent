@@ -25,7 +25,7 @@ CACHE_DIR = "Data"
 PROCESSED_EVENTS_FILE = os.path.join(CACHE_DIR, "processed_events.json")
 
 SPAM_KEYWORDS = [
-    "newsletter", "unsubscribe", "promotions", 
+    "newsletter", "unsubscribe", "promotions",
     "50% off", "sale starts", "cashback", "advertisement"
 ]
 
@@ -52,7 +52,7 @@ def mark_event_as_processed(source: str, text: str):
         if os.path.exists(PROCESSED_EVENTS_FILE):
             with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
                 processed_hashes = json.load(f)
-        
+
         event_hash = _get_event_hash(source, text)
         if event_hash not in processed_hashes:
             processed_hashes.append(event_hash)
@@ -132,7 +132,7 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
 
     if decision in ["SUGGEST_ACTION", "ACT_AND_ANNOUNCE"] and agent_command:
         logger.info(f"⚡ Proactive Triggering Silent Agentic Brain: {agent_command}")
-        
+
         def _run_silent_agent():
             try:
                 agent_context = f"[PROACTIVE EVENT TRIGGER]\n{batched_data}"
@@ -219,18 +219,28 @@ def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
     brain_thread = threading.Thread(target=proactive_loop, args=(memory_instance, is_jarvis_busy_callback), daemon=True)
     brain_thread.start()
 
-    active_listeners = [
-        listen_for_emails,
-        listen_for_whatsapp,
-        listen_for_reminders,
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    session_dir = os.path.join(base_dir, "Data", "SessionCookies")
+
+    email_token = os.path.join(session_dir, "token.json")
+    calendar_token = os.path.join(session_dir, "calendar_token.json")
+    whatsapp_creds = os.path.join(session_dir, "auth_info_baileys", "creds.json")
+
+    listener_checks = [
+        ("Email", listen_for_emails, email_token),
+        ("WhatsApp", listen_for_whatsapp, whatsapp_creds),
+        ("Calendar Reminder", listen_for_reminders, calendar_token),
     ]
 
-    for listener_func in active_listeners:
+    for name, listener_func, cred_path in listener_checks:
         try:
-            listener_thread = threading.Thread(target=listener_func, daemon=True)
-            listener_thread.start()
-            logger.info(f"✅ Started Proactive Listener: {listener_func.__name__}")
+            if os.path.exists(cred_path):
+                t = threading.Thread(target=listener_func, daemon=True)
+                t.start()
+                logger.info(f"✅ Started Proactive Listener: {name}")
+            else:
+                logger.info(f"⏭️ Skipping {name} listener (not logged in)")
         except Exception as e:
-            logger.error(f"Failed to start listener {listener_func.__name__}: {e}")
+            logger.error(f"Failed to start listener {name}: {e}")
 
     return brain_thread
