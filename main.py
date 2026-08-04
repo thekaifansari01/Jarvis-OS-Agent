@@ -2,6 +2,33 @@ import faulthandler
 faulthandler.enable()
 import os
 import sys
+import platform
+
+os.environ['PYTHONUNBUFFERED'] = '1'
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(write_through=True)
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(write_through=True)
+
+def disable_quickedit():
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            STD_INPUT_HANDLE = -10
+            ENABLE_QUICK_EDIT_MODE = 0x0040
+            ENABLE_EXTENDED_FLAGS = 0x0080
+            handle = kernel32.GetStdHandle(STD_INPUT_HANDLE)
+            mode = ctypes.c_ulong()
+            kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+            mode.value &= ~ENABLE_QUICK_EDIT_MODE
+            mode.value |= ENABLE_EXTENDED_FLAGS
+            kernel32.SetConsoleMode(handle, mode)
+        except Exception:
+            pass
+
+disable_quickedit()
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(PROJECT_ROOT)
