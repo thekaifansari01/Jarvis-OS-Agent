@@ -2,19 +2,16 @@ import faulthandler
 faulthandler.enable()
 import os
 import sys
+
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(PROJECT_ROOT)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
 import warnings
-import ctypes
 import logging
-import platform
-import pygame
 import signal
-import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 os.environ['TOGETHER_NO_BANNER'] = '1'
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
@@ -24,16 +21,6 @@ warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 from terminalCommands import handle_cli_commands, create_lock_file, remove_lock_file, is_jarvis_running
-from core.brain.Memory.Memory import ContextMemory
-from core.voice import stt, tts, interrupt
-from core.voice.stt_status import hide_stt_popup
-from core.utils.ProcessManager import proc_manager
-from Proactive.proactive_agent import start_proactive_agent
-
-from core.main.BackgroundServices import start_agent_panel, start_stt_popup, start_rag_engine, start_baileys_server, stop_all_services
-from core.main.CommandHandler import main_command_processor, is_jarvis_busy
-from core.main.HotKeyManager import setup_hotkeys
-from core.main.ServiceWatchdog import start_watchdog, stop_watchdog
 
 _is_running = True
 
@@ -43,6 +30,9 @@ def signal_handler(signum, frame):
     logging.info("Interrupt signal received. Initiating graceful shutdown.")
     try:
         remove_lock_file()
+        from core.main.ServiceWatchdog import stop_watchdog
+        from core.main.BackgroundServices import stop_all_services
+        from core.utils.ProcessManager import proc_manager
         stop_watchdog()
         stop_all_services()
         proc_manager.cleanup()
@@ -65,6 +55,18 @@ def main() -> None:
         sys.exit(1)
 
     create_lock_file()
+
+    import pygame
+    from concurrent.futures import ThreadPoolExecutor
+    from core.brain.Memory.Memory import ContextMemory
+    from core.voice import stt, tts, interrupt
+    from core.voice.stt_status import hide_stt_popup
+    from core.utils.ProcessManager import proc_manager
+    from Proactive.proactive_agent import start_proactive_agent
+    from core.main.BackgroundServices import start_agent_panel, start_stt_popup, start_rag_engine, start_baileys_server, stop_all_services
+    from core.main.CommandHandler import main_command_processor, is_jarvis_busy
+    from core.main.HotKeyManager import setup_hotkeys
+    from core.main.ServiceWatchdog import start_watchdog, stop_watchdog
 
     args = [arg.lower() for arg in sys.argv[1:]]
     is_dev_mode = "test_jarvis" in args
