@@ -65,7 +65,7 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
       <directive>STRICT PRIORITY: Always use built-in native tools first ('whatsapp_action', 'email_action', 'search_actions', 'calendar_action', 'memory_actions').</directive>
     </rule>
     <rule level="2" type="file_operations">
-      <directive>USE 'file_operations' FOR CLAUDE-CODE STYLE FILE CRUD & REPO MAP: Use 'repo_map' to inspect project architecture before coding. Use 'view' to read files. Use 'replace_block' for exact search-and-replace block edits (NEVER use line numbers to avoid line-drift bugs). Use 'create' for single files UNDER 250-300 lines. Use 'create_many' ONLY when creating 2 to 4 small files simultaneously in one step. Always use full absolute file paths.</directive>
+      <directive>USE 'file_operations' FOR FILE CRUD & REPO MAP: Use 'repo_map' to inspect project architecture before coding. Use 'view' to read files (single or batch via 'file_paths'). Use 'replace_block' for exact search-and-replace block edits. Use 'create' to create single file (with 'file_path' + 'content') or multiple files (with 'files' array) in one step. Always use full absolute file paths.</directive>
     </rule>
     <rule level="3" type="python_repl">
       <directive>USE 'run_python_code' FOR COMPLEX OS, DATA & MULTI-FILE PROJECTS: Preferred for recursive folder searching, file filtering, regex parsing, math, custom scripts, and multi-step logic.</directive>
@@ -263,22 +263,31 @@ def get_native_tools():
                         "[WHEN TO USE]: Use for CRUD operations on local files.\n"
                         "Supported actions:\n"
                         "1. 'repo_map': Get an architectural tree overview of files in the workspace.\n"
-                        "2. 'view': Read files. [CRITICAL]: To read the ENTIRE file, completely OMIT 'start_line' and 'end_line'. Use start/end lines ONLY if you specifically need a small line range.\n"
+                        "2. 'view': Read files.\n"
+                        "   - To read a SINGLE file, pass 'file_path'.\n"
+                        "   - To read MULTIPLE files in ONE step (batch), pass 'file_paths' (list) instead of 'file_path'.\n"
+                        "   - [CRITICAL]: To read the ENTIRE file, completely OMIT 'start_line' and 'end_line'. Output is truncated at 15,000 characters for safety.\n"
                         "3. 'replace_block': EXACT diff search-replace. ALWAYS prefer this over line numbers to avoid line-drift bugs.\n"
-                        "4. 'create': Create a new file with initial content.\n"
-                        "5. 'create_many': Simultaneously create 2 to 4 small files in one step.\n"
-                        "[CRITICAL RULE]: Always use full absolute file paths with forward slashes ('/'). NEVER use backslashes ('\\')."
+                        "4. 'create': Create new file(s).\n"
+                        "   - To create a SINGLE file, pass 'file_path' and 'content'.\n"
+                        "   - To create MULTIPLE files in ONE step (batch), pass 'files' (list of objects with 'file_path' and 'content') instead.\n"
+                        "[CRITICAL RULE]: Always use full absolute file paths with forward slashes ('/'). NEVER use backslashes ('\\\\')."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "action": types.Schema(
                                 type=types.Type.STRING,
-                                description="Required. Choose exactly one: 'repo_map', 'view', 'replace_block', 'create', 'create_many'."
+                                description="Required. Choose exactly one: 'repo_map', 'view', 'replace_block', 'create'."
                             ),
                             "file_path": types.Schema(
                                 type=types.Type.STRING,
-                                description="Required for 'view', 'replace_block', 'create'. Absolute file path."
+                                description="For 'view' (single) or 'create' (single) or 'replace_block'. Absolute file path."
+                            ),
+                            "file_paths": types.Schema(
+                                type=types.Type.ARRAY,
+                                items=types.Schema(type=types.Type.STRING),
+                                description="Optional for 'view': List of absolute file paths to read in one batch (use instead of file_path). Max 10-15 files recommended."
                             ),
                             "search_block": types.Schema(
                                 type=types.Type.STRING,
@@ -290,15 +299,15 @@ def get_native_tools():
                             ),
                             "start_line": types.Schema(
                                 type=types.Type.INTEGER,
-                                description="Optional for 'view': start line number (1-indexed)."
+                                description="Optional for 'view': start line number (1-indexed). If omitted, reads from beginning."
                             ),
                             "end_line": types.Schema(
                                 type=types.Type.INTEGER,
-                                description="Optional for 'view': end line number (1-indexed)."
+                                description="Optional for 'view': end line number (1-indexed). If omitted, reads till end."
                             ),
                             "content": types.Schema(
                                 type=types.Type.STRING,
-                                description="Required for 'create': Full text content of the new file."
+                                description="Required for 'create' (single): Full text content of the new file."
                             ),
                             "files": types.Schema(
                                 type=types.Type.ARRAY,
@@ -309,7 +318,7 @@ def get_native_tools():
                                         "content": types.Schema(type=types.Type.STRING, description="Full content of the file.")
                                     }
                                 ),
-                                description="Required for 'create_many': Array of file objects (maximum 3-4 files per call)."
+                                description="Optional for 'create': Array of file objects to create in one batch (use instead of file_path+content). Max 10 files."
                             )
                         },
                         required=["action"]

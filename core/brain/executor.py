@@ -145,36 +145,27 @@ def execute_file_operation(action_dict: dict) -> str:
             result = file_editor.get_repo_map(file_path=file_path)
             return f"Observation: {result}"
 
-        if action == "create_many":
-            files_list = action_dict.get("files", [])
-            if not files_list:
-                return "Observation: [ERROR] Missing 'files' array for create_many action."
-            
-            if not isinstance(files_list, list):
-                return f"Observation: [ERROR] 'files' must be an array, not {type(files_list).__name__}."
-            
-            for idx, item in enumerate(files_list):
-                if not isinstance(item, dict):
-                    return f"Observation: [ERROR] Item {idx} in 'files' is not a dictionary."
-                if "file_path" not in item:
-                    return f"Observation: [ERROR] Item {idx} missing 'file_path' key."
-            
-            result = file_editor.create_many(files_list)
-            return f"Observation: {result}"
-
-        file_path = action_dict.get("file_path")
-        if not file_path:
-            return "Observation: [ERROR] Missing 'file_path' for file operation."
-
-        file_path = os.path.abspath(file_path.replace("\\", "/"))
-
         if action == "view":
+            file_path = action_dict.get("file_path")
+            file_paths = action_dict.get("file_paths")
+            if not file_path and not file_paths:
+                return "Observation: [ERROR] Either 'file_path' or 'file_paths' must be provided for view."
+            
+            if file_path:
+                file_path = os.path.abspath(file_path.replace("\\", "/"))
+            if file_paths:
+                file_paths = [os.path.abspath(p.replace("\\", "/")) for p in file_paths if p]
+            
             start = _safe_int(action_dict.get("start_line"))
             end = _safe_int(action_dict.get("end_line"))
-            result = file_editor.view(file_path, start, end)
+            result = file_editor.view(file_path=file_path, file_paths=file_paths, start_line=start, end_line=end)
             return f"Observation: {result}"
 
-        elif action == "replace_block":
+        if action == "replace_block":
+            file_path = action_dict.get("file_path")
+            if not file_path:
+                return "Observation: [ERROR] Missing 'file_path' for replace_block."
+            file_path = os.path.abspath(file_path.replace("\\", "/"))
             search_block = action_dict.get("search_block")
             replace_block = action_dict.get("replace_block")
             if not search_block or replace_block is None:
@@ -182,13 +173,25 @@ def execute_file_operation(action_dict: dict) -> str:
             result = file_editor.replace_block(file_path, str(search_block), str(replace_block))
             return f"Observation: {result}"
 
-        elif action == "create":
+        if action == "create":
+            file_path = action_dict.get("file_path")
             content = action_dict.get("content", "")
-            result = file_editor.create(file_path, str(content))
+            files = action_dict.get("files")
+            if not file_path and not files:
+                return "Observation: [ERROR] Either 'file_path' or 'files' must be provided for create."
+            
+            if file_path:
+                file_path = os.path.abspath(file_path.replace("\\", "/"))
+            if files:
+                for item in files:
+                    if "file_path" in item:
+                        item["file_path"] = os.path.abspath(item["file_path"].replace("\\", "/"))
+            
+            result = file_editor.create(file_path=file_path, content=content, files=files)
             return f"Observation: {result}"
 
         else:
-            return f"Observation: [ERROR] Unknown file action '{action}'. Supported: view, replace_block, create, create_many, repo_map."
+            return f"Observation: [ERROR] Unknown file action '{action}'. Supported: repo_map, view, replace_block, create."
             
     except Exception as e:
         return f"Observation: [ERROR] File operation runtime crash: {str(e)}"
