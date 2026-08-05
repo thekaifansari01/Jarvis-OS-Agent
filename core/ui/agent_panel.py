@@ -77,8 +77,6 @@ class AgentPanel(QWidget):
         self.zmq_listener = AgentZmqListener()
         self.zmq_listener.status_received.connect(self.process_status_update)
         self.zmq_listener.start()
-        
-        self.process_status_update({"step": 0, "thought": "System Initialized...", "action": "idle", "action_detail": "", "observation": "", "tokens": 0})
 
     def minimumSizeHint(self):
         return QSize(0, 0)
@@ -106,16 +104,16 @@ class AgentPanel(QWidget):
         self.container.setAttribute(Qt.WA_StyledBackground, True)
         self.default_wrapper_style = """
             #IslandWrapper {
-                background-color: rgba(255, 255, 255, 0.05);
+                background-color: rgba(255, 255, 255, 0.07);
                 border-radius: 28px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.12);
             }
         """
         self.container.setStyleSheet(self.default_wrapper_style)
 
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(30) 
-        self.shadow.setColor(QColor(0, 0, 0, 180)) 
+        self.shadow.setBlurRadius(28) 
+        self.shadow.setColor(QColor(0, 0, 0, 170)) 
         self.shadow.setOffset(0, 6) 
         self.container.setGraphicsEffect(self.shadow)
 
@@ -205,12 +203,6 @@ class AgentPanel(QWidget):
                 padding-bottom: 2px;
             }
         """)
-        
-        self.thought_shadow = QGraphicsDropShadowEffect(self)
-        self.thought_shadow.setBlurRadius(12)
-        self.thought_shadow.setColor(QColor(0, 0, 0, 160))
-        self.thought_shadow.setOffset(0, 2)
-        self.thought_label.setGraphicsEffect(self.thought_shadow)
 
         self.thought_scroll.setWidget(self.thought_label)
         self.layout.addWidget(self.thought_scroll)
@@ -266,7 +258,7 @@ class AgentPanel(QWidget):
             label.setFont(font)
 
     def update_glow_effect(self):
-        self.gradient_phase += 0.035
+        self.gradient_phase += 0.05
         if self.gradient_phase >= math.pi * 2:
             self.gradient_phase -= math.pi * 2 
         
@@ -298,25 +290,10 @@ class AgentPanel(QWidget):
             r, g, b = 255, 255, 255       
 
         self.pulse_dot.setStyleSheet(f"background-color: rgb({r}, {g}, {b}); border-radius: 5px;")
-        
-        alpha = int(20 + math.sin(self.gradient_phase) * 15)
-        alpha2 = max(0, alpha - 15)
-
-        self.container.setStyleSheet(f"""
-            #IslandWrapper {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
-                    stop:0 rgba({r}, {g}, {b}, {alpha/255.0:.3f}), 
-                    stop:1 rgba({r}, {g}, {b}, {alpha2/255.0:.3f}));
-                border-radius: 28px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-            }}
-        """)
 
     def reset_island_style(self):
         self.rgb_timer.stop()
         self.container.setStyleSheet(self.default_wrapper_style)
-        self.shadow.setColor(QColor(0, 0, 0, 180))
-        self.shadow.setBlurRadius(30)
         self.pulse_dot.setStyleSheet("background-color: #555555; border-radius: 5px;")
 
     def start_pulse_animation(self):
@@ -371,13 +348,13 @@ class AgentPanel(QWidget):
             self.show_anim_group = QParallelAnimationGroup(self)
             
             fade_in = QPropertyAnimation(self, b"windowOpacity")
-            fade_in.setDuration(350)
+            fade_in.setDuration(280)
             fade_in.setStartValue(self.windowOpacity())
             fade_in.setEndValue(1.0)
             fade_in.setEasingCurve(QEasingCurve.InOutQuad)
             
             slide_down = QPropertyAnimation(self, b"pos")
-            slide_down.setDuration(450)
+            slide_down.setDuration(360)
             slide_down.setStartValue(self.pos())
             slide_down.setEndValue(QPoint(self.target_geometry.x(), self.target_geometry.y()))
             slide_down.setEasingCurve(QEasingCurve.OutCubic) 
@@ -407,13 +384,13 @@ class AgentPanel(QWidget):
         self.hide_anim_group = QParallelAnimationGroup(self)
         
         fade_out = QPropertyAnimation(self, b"windowOpacity")
-        fade_out.setDuration(280)
+        fade_out.setDuration(240)
         fade_out.setStartValue(self.windowOpacity())
         fade_out.setEndValue(0.0)
         fade_out.setEasingCurve(QEasingCurve.OutQuad)
         
         slide_up = QPropertyAnimation(self, b"pos")
-        slide_up.setDuration(350)
+        slide_up.setDuration(300)
         slide_up.setStartValue(self.pos())
         slide_up.setEndValue(QPoint(self.x(), self.y() - 25))
         slide_up.setEasingCurve(QEasingCurve.OutCubic)
@@ -424,16 +401,21 @@ class AgentPanel(QWidget):
         self.hide_anim_group.start()
 
     def process_status_update(self, status):
+        step = status.get("step", 0)
+        action = status.get("action", "")
+        thought = status.get("thought", "")
+
+        if step == 0 and action in ["idle", ""] and "Initialized" in thought:
+            self.reset_island_style()
+            return
+
         if status == self.last_status:
-            if self.isVisible() and status.get("step", 0) == 0:
+            if self.isVisible() and step == 0:
                 self.hide_timer.start(4000)
             return
         
         self.last_status = status
-        step = status.get("step", 0)
         tokens = status.get("tokens", 0)
-        thought = status.get("thought", "")
-        action = status.get("action", "")
         action_detail = status.get("action_detail", "")
         observation = status.get("observation", "")
 
@@ -448,7 +430,7 @@ class AgentPanel(QWidget):
             is_task_complete = True
         else:
             if not self.rgb_timer.isActive():
-                self.rgb_timer.start(30)
+                self.rgb_timer.start(40)
 
         action_map = {
             "THINKING": ("THINKING...", "thinking"),
