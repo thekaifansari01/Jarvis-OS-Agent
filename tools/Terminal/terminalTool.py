@@ -96,6 +96,14 @@ class StatefulTerminal:
     def __init__(self):
         shell_cmd = "cmd.exe" if platform.system() == "Windows" else "/bin/bash"
         user_home = os.path.expanduser("~")
+        custom_env = {
+            **os.environ,
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUNBUFFERED": "1",
+            "PIP_PROGRESS_BAR": "off",
+            "CI": "true",
+            "NPM_CONFIG_PROGRESS": "false"
+        }
         self.process = subprocess.Popen(
             shell_cmd,
             stdin=subprocess.PIPE,
@@ -107,7 +115,7 @@ class StatefulTerminal:
             bufsize=1,
             shell=False,
             cwd=user_home,
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"}
+            env=custom_env
         )
         self.output_queue = queue.Queue()
         self.reader_thread = threading.Thread(target=self._read_output, daemon=True)
@@ -140,8 +148,6 @@ class StatefulTerminal:
         
         lines = []
         start_time = time.time()
-        idle_timeout = 2.0
-        last_output_time = time.time()
         end_time = start_time + timeout
         
         while time.time() < end_time:
@@ -151,12 +157,7 @@ class StatefulTerminal:
                     break
                 if line:
                     lines.append(line)
-                    last_output_time = time.time()
-                else:
-                    continue
             except queue.Empty:
-                if time.time() - last_output_time > idle_timeout:
-                    break
                 continue
         
         output = "".join(lines).strip()
@@ -174,6 +175,11 @@ def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
         print(f"\n\033[91m[SYSTEM PROTECTION]\033[0m Auto-blocked lethal command: {command}")
         return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Command targets system core and was automatically blocked. No execution took place."
     
+    heavy_keywords = ['pip install', 'npm install', 'npm i ', 'git clone', 'yarn add', 'pnpm install', 'apt-get install']
+    if any(kw in command.lower() for kw in heavy_keywords) and timeout_seconds <= 30:
+        timeout_seconds = 180
+        print(f"\n\033[93m[HEAVY COMMAND DETECTED]\033[0m: Auto-extending terminal timeout to {timeout_seconds} seconds.")
+
     print(f"\n\033[94m[AUTO-APPROVED TERMINAL COMMAND]\033[0m: {command}")
     try:
         output = terminal_session.execute(command, timeout=timeout_seconds)
