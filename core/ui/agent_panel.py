@@ -59,6 +59,10 @@ class AgentPanel(QWidget):
 
         self.gradient_phase = 0.0
         self.current_action_type = "idle"
+
+        # Smooth RGB Color Lerping (Interpolation)
+        self.current_rgb = [191, 90, 242]
+        self.target_rgb = [191, 90, 242]
         
         self.rgb_timer = QTimer(self)
         self.rgb_timer.timeout.connect(self.update_glow_effect)
@@ -102,33 +106,49 @@ class AgentPanel(QWidget):
         self.container.setObjectName("IslandWrapper")
         self.container.setMinimumSize(0, 0) 
         self.container.setAttribute(Qt.WA_StyledBackground, True)
+        
+        # 1. Specular Dynamic Glass Border Container (Top-left light reflection)
         self.default_wrapper_style = """
             #IslandWrapper {
-                background-color: rgba(255, 255, 255, 0.07);
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(255, 255, 255, 0.28),
+                    stop:0.35 rgba(255, 255, 255, 0.08),
+                    stop:0.75 rgba(191, 90, 242, 0.22),
+                    stop:1 rgba(255, 255, 255, 0.14)
+                );
                 border-radius: 28px;
-                border: 1px solid rgba(255, 255, 255, 0.12);
             }
         """
         self.container.setStyleSheet(self.default_wrapper_style)
 
+        # 2. Soft Floating macOS Ambient Shadow
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(28) 
-        self.shadow.setColor(QColor(0, 0, 0, 170)) 
-        self.shadow.setOffset(0, 6) 
+        self.shadow.setBlurRadius(45) 
+        self.shadow.setColor(QColor(0, 0, 0, 160)) 
+        self.shadow.setOffset(0, 10) 
         self.container.setGraphicsEffect(self.shadow)
 
         self.wrapper_layout = QVBoxLayout(self.container)
-        self.wrapper_layout.setContentsMargins(1, 1, 1, 1)
+        self.wrapper_layout.setContentsMargins(1, 1, 1, 1)  # 1px padding reveals outer specular border
         self.wrapper_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
         self.inner_island = QFrame(self.container)
         self.inner_island.setObjectName("Island")
         self.inner_island.setMinimumSize(0, 0) 
         self.inner_island.setAttribute(Qt.WA_StyledBackground, True)
+        
+        # 3. Deep Velvet Midnight Glass Inner Body
         self.inner_island.setStyleSheet("""
             #Island {
-                background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #151518, stop:1 #0A0A0C);
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(22, 22, 28, 0.97), 
+                    stop:0.4 rgba(15, 15, 19, 0.98),
+                    stop:1 rgba(9, 9, 12, 0.99)
+                );
                 border-radius: 27px;
+                border: 1px solid rgba(255, 255, 255, 0.04);
             }
         """)
         self.wrapper_layout.addWidget(self.inner_island)
@@ -149,19 +169,31 @@ class AgentPanel(QWidget):
         self.pulse_dot.setGraphicsEffect(self.pulse_opacity)
         self.start_pulse_animation()
         
+        # Sleek Glass Pill Badge
         self.status_tag = QLabel("AGENT IDLE")
-        self.status_tag.setFont(QFont(self.font_eng, 9, QFont.Bold))
-        self.status_tag.setStyleSheet("color: rgba(255, 255, 255, 0.8); letter-spacing: 1.2px; border: none; background: transparent;")
-        self.status_tag.setMaximumWidth(160)
+        self.status_tag.setFont(QFont(self.font_eng, 8, QFont.Bold))
+        self.status_tag.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.92);
+                background-color: rgba(255, 255, 255, 0.07);
+                border: 1px solid rgba(255, 255, 255, 0.11);
+                border-radius: 10px;
+                padding: 3px 12px;
+                font-weight: 600;
+                letter-spacing: 0.9px;
+            }
+        """)
+        self.status_tag.setMaximumWidth(180)
         self.status_tag.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         header_layout.addWidget(self.pulse_dot)
         header_layout.addWidget(self.status_tag)
         header_layout.addStretch()
         
+        # Token & Step Metadata
         self.token_label = QLabel("TOKENS: 0")
         self.token_label.setFont(QFont(self.font_eng, 9, QFont.Bold))
-        self.token_label.setStyleSheet("color: rgba(255, 255, 255, 0.45); letter-spacing: 1px; border: none; background: transparent;")
+        self.token_label.setStyleSheet("color: rgba(255, 255, 255, 0.38); letter-spacing: 0.8px; border: none; background: transparent;")
         self.token_label.setMinimumWidth(85)
         self.token_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.token_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -169,7 +201,7 @@ class AgentPanel(QWidget):
 
         self.phase_label = QLabel("STEP: 00")
         self.phase_label.setFont(QFont(self.font_eng, 9, QFont.Bold))
-        self.phase_label.setStyleSheet("color: rgba(255, 255, 255, 0.4); letter-spacing: 1px; border: none; background: transparent;")
+        self.phase_label.setStyleSheet("color: rgba(255, 255, 255, 0.38); letter-spacing: 0.8px; border: none; background: transparent;")
         self.phase_label.setMinimumWidth(65)
         self.phase_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.phase_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -195,12 +227,11 @@ class AgentPanel(QWidget):
         self.thought_label.setFont(thought_font) 
         self.thought_label.setStyleSheet("""
             QLabel {
-                color: rgba(245, 245, 250, 0.95); 
-                line-height: 1.5; 
+                color: rgba(246, 246, 252, 0.94); 
+                line-height: 1.45; 
                 border: none;
                 background: transparent;
-                padding-top: 2px;
-                padding-bottom: 2px;
+                padding: 2px 4px;
             }
         """)
 
@@ -213,18 +244,21 @@ class AgentPanel(QWidget):
         self.layout.addWidget(self.separator)
         self.separator.hide() 
 
+        # Clean Frosted Glass Card (No vertical line)
         self.obs_label = QLabel("")
         self.obs_label.setMinimumSize(0, 0) 
         self.obs_label.setWordWrap(True)
-        self.obs_label.setAlignment(Qt.AlignCenter)
+        self.obs_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.obs_label.setFont(QFont(self.font_eng, 10)) 
         self.obs_label.setStyleSheet("""
-            color: rgba(255, 255, 255, 0.75); 
-            line-height: 1.4; 
-            border: none;
-            padding: 8px;
-            background-color: rgba(255, 255, 255, 0.04);
-            border-radius: 10px;
+            QLabel {
+                color: rgba(235, 235, 245, 0.88); 
+                line-height: 1.4; 
+                border: 1px solid rgba(255, 255, 255, 0.07);
+                padding: 10px 14px;
+                background-color: rgba(255, 255, 255, 0.04);
+                border-radius: 10px;
+            }
         """)
         self.layout.addWidget(self.obs_label)
         self.obs_label.hide() 
@@ -262,39 +296,49 @@ class AgentPanel(QWidget):
         if self.gradient_phase >= math.pi * 2:
             self.gradient_phase -= math.pi * 2 
         
-        if self.current_action_type == "search":
-            r, g, b = 0, 199, 255        
-        elif self.current_action_type == "deep_task":
-            r, g, b = 255, 20, 147        
-        elif self.current_action_type == "thinking":
-            r, g, b = 191, 90, 242       
-        elif self.current_action_type == "workspace":
-            r, g, b = 255, 159, 10       
-        elif self.current_action_type == "communication":
-            r, g, b = 50, 215, 75      
-        elif self.current_action_type == "vision":
-            r, g, b = 0, 255, 200          
-        elif self.current_action_type == "file_ops":
-            r, g, b = 255, 200, 0          
-        elif self.current_action_type == "terminal":
-            r, g, b = 0, 255, 100     
-        elif self.current_action_type == "memory":
-            r, g, b = 200, 100, 255     
-        elif self.current_action_type == "calendar":
-            r, g, b = 100, 200, 255       
-        elif self.current_action_type == "clipboard":
-            r, g, b = 255, 150, 200       
-        elif self.current_action_type == "image_gen":
-            r, g, b = 255, 100, 200       
-        else:
-            r, g, b = 255, 255, 255       
+        color_map = {
+            "search": [0, 199, 255],
+            "deep_task": [255, 20, 147],
+            "thinking": [191, 90, 242],
+            "workspace": [255, 159, 10],
+            "communication": [50, 215, 75],
+            "vision": [0, 255, 200],
+            "file_ops": [255, 200, 0],
+            "terminal": [0, 255, 100],
+            "memory": [200, 100, 255],
+            "calendar": [100, 200, 255],
+            "clipboard": [255, 150, 200],
+            "image_gen": [255, 100, 200],
+            "idle": [85, 85, 85]
+        }
+        self.target_rgb = color_map.get(self.current_action_type, [255, 255, 255])
 
+        # Smooth linear interpolation (lerp) towards target color
+        for i in range(3):
+            self.current_rgb[i] += (self.target_rgb[i] - self.current_rgb[i]) * 0.15
+
+        r, g, b = [int(c) for c in self.current_rgb]
+        
+        # 1. Update pulse dot
         self.pulse_dot.setStyleSheet(f"background-color: rgb({r}, {g}, {b}); border-radius: 5px;")
 
+        # 2. Dynamically Lerp Outer Specular Glass Border
+        self.container.setStyleSheet(f"""
+            #IslandWrapper {{
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(255, 255, 255, 0.28),
+                    stop:0.35 rgba(255, 255, 255, 0.08),
+                    stop:0.75 rgba({r}, {g}, {b}, 0.22),
+                    stop:1 rgba(255, 255, 255, 0.14)
+                );
+                border-radius: 28px;
+            }}
+        """)
+
     def reset_island_style(self):
-        self.rgb_timer.stop()
-        self.container.setStyleSheet(self.default_wrapper_style)
-        self.pulse_dot.setStyleSheet("background-color: #555555; border-radius: 5px;")
+        self.current_action_type = "idle"
+        self.target_rgb = [85, 85, 85]
 
     def start_pulse_animation(self):
         self.p_anim = QPropertyAnimation(self.pulse_opacity, b"opacity")
@@ -459,7 +503,7 @@ class AgentPanel(QWidget):
             if full_tag_text != self.last_tag_text:
                 self.last_tag_text = full_tag_text
                 fm = QFontMetrics(self.status_tag.font())
-                elided_tag = fm.elidedText(full_tag_text, Qt.ElideRight, 155)
+                elided_tag = fm.elidedText(full_tag_text, Qt.ElideRight, 175)
                 self.status_tag.setText(elided_tag)
 
             if self.current_step != step:
