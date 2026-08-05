@@ -290,9 +290,6 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         + "\n\n"
                         + prompt
                     )
-                    
-                    prompt_tokens = count_tokens(full_prompt)
-                    total_loop_tokens += prompt_tokens
 
                     if pending_image_payloads:
                         content_block = [{"type": "text", "text": full_prompt}] + pending_image_payloads
@@ -349,6 +346,18 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             tc = chunk.get("tool_calls", [])
                             if tc:
                                 tool_calls = tc
+                                tc_str = str(tc)
+                                live_tokens += max(1, len(tc_str) // 4)
+                                chunk_counter += 1
+                                if not silent and chunk_counter % 4 == 0:
+                                    update_agent_status(
+                                        step=step + 1,
+                                        total_steps=max_steps,
+                                        thought=thought_text.strip() or "Generating Tool Call...",
+                                        action="THINKING",
+                                        action_detail="",
+                                        tokens=live_tokens,
+                                    )
 
                         if not thought_text:
                             thought_text = content_text.strip() or "Analyzing context..."
@@ -774,7 +783,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
 """
 
             step += 1
-            time.sleep(1)
+            time.sleep(0.05)
 
         except Exception as e:
             error_msg = str(e)
