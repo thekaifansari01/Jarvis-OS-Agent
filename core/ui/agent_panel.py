@@ -65,8 +65,8 @@ class AgentPanel(QWidget):
 
         self.target_geometry = None
         self.resize_anim = QPropertyAnimation(self, b"anim_geometry")
-        self.resize_anim.setEasingCurve(QEasingCurve.InOutCubic) 
-        self.resize_anim.setDuration(300)
+        self.resize_anim.setEasingCurve(QEasingCurve.OutCubic) 
+        self.resize_anim.setDuration(260)
 
         self.initUI()
         
@@ -74,7 +74,7 @@ class AgentPanel(QWidget):
         self.zmq_listener.status_received.connect(self.process_status_update)
         self.zmq_listener.start()
         
-        self.process_status_update({"step": 0, "thought": "", "action": "", "action_detail": "", "observation": ""})
+        self.process_status_update({"step": 0, "thought": "", "action": "", "action_detail": "", "observation": "", "tokens": 0})
 
     def minimumSizeHint(self):
         return QSize(0, 0)
@@ -158,6 +158,14 @@ class AgentPanel(QWidget):
         header_layout.addWidget(self.status_tag)
         header_layout.addStretch()
         
+        self.token_label = QLabel("TOKENS: 0")
+        self.token_label.setFont(QFont(self.font_eng, 9, QFont.Bold))
+        self.token_label.setStyleSheet("color: rgba(255, 255, 255, 0.45); letter-spacing: 1px; border: none; background: transparent;")
+        self.token_label.setMinimumWidth(85)
+        self.token_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.token_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        header_layout.addWidget(self.token_label)
+
         self.phase_label = QLabel("STEP: 00")
         self.phase_label.setFont(QFont(self.font_eng, 9, QFont.Bold))
         self.phase_label.setStyleSheet("color: rgba(255, 255, 255, 0.4); letter-spacing: 1px; border: none; background: transparent;")
@@ -241,6 +249,13 @@ class AgentPanel(QWidget):
     def is_hindi(self, text):
         return bool(re.search(r'[\u0900-\u097F]', text))
 
+    def format_tokens(self, n):
+        if n >= 1000:
+            val = n / 1000.0
+            formatted = f"{val:.1f}".rstrip('0').rstrip('.')
+            return f"{formatted}k"
+        return str(n)
+
     def set_label_font(self, label, text, base_size):
         if self.is_hindi(text):
             font = QFont(self.font_hin, base_size + 1, QFont.Medium)
@@ -265,7 +280,6 @@ class AgentPanel(QWidget):
             r, g, b = 255, 159, 10       
         elif self.current_action_type == "communication":
             r, g, b = 50, 215, 75      
-        
         elif self.current_action_type == "vision":
             r, g, b = 0, 255, 200          
         elif self.current_action_type == "file_ops":
@@ -280,7 +294,6 @@ class AgentPanel(QWidget):
             r, g, b = 255, 150, 200       
         elif self.current_action_type == "image_gen":
             r, g, b = 255, 100, 200       
-        
         else:
             r, g, b = 255, 255, 255       
 
@@ -368,13 +381,13 @@ class AgentPanel(QWidget):
             self.show_anim_group = QParallelAnimationGroup(self)
             
             fade_in = QPropertyAnimation(self, b"windowOpacity")
-            fade_in.setDuration(400)
+            fade_in.setDuration(350)
             fade_in.setStartValue(self.windowOpacity())
             fade_in.setEndValue(1.0)
             fade_in.setEasingCurve(QEasingCurve.InOutQuad)
             
             slide_down = QPropertyAnimation(self, b"pos")
-            slide_down.setDuration(500)
+            slide_down.setDuration(450)
             slide_down.setStartValue(self.pos())
             slide_down.setEndValue(QPoint(self.target_geometry.x(), self.target_geometry.y()))
             slide_down.setEasingCurve(QEasingCurve.OutCubic) 
@@ -388,7 +401,8 @@ class AgentPanel(QWidget):
                 width_diff = abs(self.target_geometry.width() - new_geometry.width())
                 height_diff = abs(self.target_geometry.height() - new_geometry.height())
                 
-                if width_diff > 4 or height_diff > 4:
+                # 🟢 ANTI-JITTER UPGRADE: Only resize window if layout difference > 8px
+                if width_diff > 8 or height_diff > 8:
                     self.target_geometry = new_geometry
                     if self.resize_anim.state() == QPropertyAnimation.Running:
                         self.resize_anim.stop()
@@ -407,13 +421,13 @@ class AgentPanel(QWidget):
         self.hide_anim_group = QParallelAnimationGroup(self)
         
         fade_out = QPropertyAnimation(self, b"windowOpacity")
-        fade_out.setDuration(300)
+        fade_out.setDuration(280)
         fade_out.setStartValue(self.windowOpacity())
         fade_out.setEndValue(0.0)
         fade_out.setEasingCurve(QEasingCurve.OutQuad)
         
         slide_up = QPropertyAnimation(self, b"pos")
-        slide_up.setDuration(400)
+        slide_up.setDuration(350)
         slide_up.setStartValue(self.pos())
         slide_up.setEndValue(QPoint(self.x(), self.y() - 25))
         slide_up.setEasingCurve(QEasingCurve.OutCubic)
@@ -431,10 +445,15 @@ class AgentPanel(QWidget):
         
         self.last_status = status
         step = status.get("step", 0)
+        tokens = status.get("tokens", 0)
         thought = status.get("thought", "")
         action = status.get("action", "")
         action_detail = status.get("action_detail", "")
         observation = status.get("observation", "")
+
+        # 🟢 COMPACT TOKEN DISPLAY: e.g., TOKENS: 1.2k / 4k
+        formatted_tokens = self.format_tokens(tokens)
+        self.token_label.setText(f"TOKENS: {formatted_tokens}")
 
         if step == 0:
             self.current_step = -1 

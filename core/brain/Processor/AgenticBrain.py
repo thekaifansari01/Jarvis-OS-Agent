@@ -5,6 +5,7 @@ import time
 import tempfile
 import datetime
 from typing import Dict, Optional
+import tiktoken
 from core.brain.config import CONFIG
 from core.logger.logger import logger
 from core.brain.executor import execute_single_tool_sync
@@ -20,6 +21,22 @@ from core.brain.Processor.FastBrain import make_result, clean_json_string
 from core.ui.typing_status import launch_popup, update_typing_status
 
 FAST_MODEL = GROQ_FAST_MODEL
+
+try:
+    TOKENIZER = tiktoken.get_encoding("cl100k_base")
+except Exception:
+    TOKENIZER = None
+
+
+def count_tokens(text: str) -> int:
+    if not text:
+        return 0
+    if TOKENIZER:
+        try:
+            return len(TOKENIZER.encode(str(text)))
+        except Exception:
+            pass
+    return len(str(text)) // 4
 
 
 def optimize_observation(text: str, max_chars: int = 10000) -> str:
@@ -129,6 +146,7 @@ User Command: "{raw_command}"
     timeout_seconds = CONFIG.get("AGENT_TIMEOUT", 120)
     retry_limit = CONFIG.get("AGENT_RETRY_LIMIT", 2)
     step = 0
+    total_loop_tokens = 0
     start_time = time.time()
 
     completed_actions = set()
@@ -159,6 +177,7 @@ User Command: "{raw_command}"
                     thought="Task timed out",
                     action="",
                     action_detail="",
+                    tokens=total_loop_tokens,
                 )
                 timeout_msg = "Task was taking too long and timed out. Please try again or provide a simpler command."
                 launch_popup()
@@ -255,6 +274,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                     thought="Thinking...",
                     action="THINKING",
                     action_detail="",
+                    tokens=total_loop_tokens,
                 )
 
             ai_response = {}
@@ -270,6 +290,10 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         + "\n\n"
                         + prompt
                     )
+                    
+                    prompt_tokens = count_tokens(full_prompt)
+                    total_loop_tokens += prompt_tokens
+
                     if pending_image_payloads:
                         content_block = [{"type": "text", "text": full_prompt}] + pending_image_payloads
                         messages = [{"role": "user", "content": content_block}]
@@ -281,6 +305,8 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         thought_text = ""
                         content_text = ""
                         tool_calls = []
+                        live_tokens = total_loop_tokens
+                        chunk_counter = 0
                         for chunk in current_provider.generate_stream(
                             messages=messages,
                             tools=native_tools,
@@ -293,18 +319,32 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             rc = chunk.get("reasoning_content", "")
                             if rc:
                                 thought_text += rc
-                                if not silent:
+                                live_tokens += count_tokens(rc)
+                                chunk_counter += 1
+                                if not silent and chunk_counter % 4 == 0:
                                     update_agent_status(
                                         step=step + 1,
                                         total_steps=max_steps,
                                         thought=thought_text.strip(),
                                         action="THINKING",
                                         action_detail="",
+                                        tokens=live_tokens,
                                     )
 
                             ct = chunk.get("content", "")
                             if ct:
                                 content_text += ct
+                                live_tokens += count_tokens(ct)
+                                chunk_counter += 1
+                                if not silent and chunk_counter % 4 == 0:
+                                    update_agent_status(
+                                        step=step + 1,
+                                        total_steps=max_steps,
+                                        thought=thought_text.strip() or "Thinking...",
+                                        action="THINKING",
+                                        action_detail="",
+                                        tokens=live_tokens,
+                                    )
 
                             tc = chunk.get("tool_calls", [])
                             if tc:
@@ -312,6 +352,13 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
 
                         if not thought_text:
                             thought_text = content_text.strip() or "Analyzing context..."
+
+                        output_tokens = (
+                            count_tokens(thought_text)
+                            + count_tokens(content_text)
+                            + count_tokens(json.dumps(tool_calls))
+                        )
+                        total_loop_tokens += output_tokens
 
                         response = {
                             "content": content_text,
@@ -329,6 +376,13 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         )
                         if response.get("error"):
                             raise Exception(response["error"])
+
+                        output_tokens = (
+                            count_tokens(response.get("reasoning_content", ""))
+                            + count_tokens(response.get("content", ""))
+                            + count_tokens(json.dumps(response.get("tool_calls", [])))
+                        )
+                        total_loop_tokens += output_tokens
 
                     thought_text = response.get("reasoning_content") or response.get("content", "")
                     if thought_text is None:
@@ -478,6 +532,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                     thought=ai_response.get("thought", ""),
                     action=action_key,
                     action_detail=action_detail,
+                    tokens=total_loop_tokens,
                 )
 
             if ai_response.get("is_task_complete"):
@@ -498,6 +553,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                     thought="Task completed",
                     action="",
                     action_detail="",
+                    tokens=total_loop_tokens,
                 )
 
                 launch_popup()
@@ -676,6 +732,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                                     action=action_key,
                                     action_detail=action_detail,
                                     observation=str(observation)[:200],
+                                    tokens=total_loop_tokens,
                                 )
                             break
                         else:
@@ -734,6 +791,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         thought="All providers failed",
                         action="",
                         action_detail="",
+                        tokens=total_loop_tokens,
                     )
                     limit_msg = "Bhai, saare AI providers ki limit khatam ho gayi. Thoda ruko aur phir try karo."
                     launch_popup()
@@ -763,6 +821,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
             thought="Max steps reached",
             action="",
             action_detail="",
+            tokens=total_loop_tokens,
         )
         limit_msg = f"I have reached the maximum steps ({max_steps}). The task has hit the loop limit. Please provide a simpler command."
         launch_popup()
