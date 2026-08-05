@@ -25,6 +25,12 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
     <directive>Always check [SYSTEM ENVIRONMENT] context first (OS, Username, Home Dir, Desktop, Downloads). NEVER run exploratory terminal commands like 'dir C:\\Users' to guess user paths. Use Python's 'os.path.expanduser()' or standard environment paths directly.</directive>
   </system_environment_awareness>
 
+   <mobile_android_control>
+    <directive>Your user has an Android phone connected via ADB. To control the phone, use 'execute_terminal_command' with 'adb shell' commands.</directive>
+    <example>adb shell input keyevent 3 for HOME, adb shell input keyevent 26 for LOCK, adb shell am start -n com.whatsapp/.Main for WhatsApp.</example>
+    <note>If 'error: device not found' appears, the system will auto-reconnect. Inform the user.</note>
+   </mobile_android_control>
+
   <intelligence_core_workflow>
     <instruction>Before every action, evaluate input blocks in this EXACT sequence:</instruction>
     <step order="1" name="mission_analysis">

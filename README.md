@@ -1,3 +1,4 @@
+
 <div align="center">
 
 # 🧠 J.A.R.V.I.S. — The Autonomous AI Agent
@@ -33,6 +34,7 @@
 - [🎨 UI & Visualization Ecosystem](#-ui--visualization-ecosystem)
 - [🛡️ Resilience & Security Architecture](#️-resilience--security-architecture)
 - [🛠️ Integrated Tool Ecosystem](#️-integrated-tool-ecosystem)
+- [📱 Mobile Phone Control (Android)](#-mobile-phone-control-android)
 - [📋 Example Requests](#-example-requests--see-jarvis-in-action)
 - [🚀 Advanced Scenarios](#-advanced-scenarios)
 - [🚀 Getting Started](#-getting-started)
@@ -54,10 +56,11 @@ JARVIS isn't just another ChatGPT wrapper. It's a **desktop-native AI Operating 
 |:---:|:---|:---|
 | 💻 | **Zero Line-Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers — eliminates the classic "line-drift bug" that plagues Claude Code and other AI agents. Automatically catches syntax errors via AST linter and self‑corrects without human intervention. |
 | 📨 | **Proactive Email + WhatsApp + Calendar Automation** | Background listeners for Gmail, WhatsApp, and Calendar detect important emails, meeting reschedules, and messages in real time. The agent never modifies critical data without explicit user consent — asks before acting. |
+| 📱 | **Mobile Phone Control (Android)** | Control your Android phone remotely via ADB over Tailscale — lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, take screenshots, adjust volume, and more. Automatically connects on startup and reconnects if the connection drops. |
 | 🔄 | **Multi-LLM Auto-Failover** | Seamlessly switches between Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. Zero downtime — no interruption to your workflow. |
 | 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule‑based fallback — intelligently routes commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep‑reasoning **AgenticBrain** for complex multi‑step engineering, coding, and research tasks. |
 | 📚 | **Lifelong Episodic LTM & RAG** | ChromaDB‑backed persistent memory with daily Groq summarization. Remembers conversations from months ago. Also indexes your local documents (`Documents/Jarvis/RAG/`) for instant semantic search — your personal knowledge base. |
-| ⚙️ | **Enterprise-Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
+| ⚙️ | **Enterprise-Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys, Mobile ADB) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
 | 🎨 | **Reactive UI Ecosystem** | ZMQ‑powered floating Agent Panel with real‑time thought/action/observation streaming, live markdown typing popup with async image previews (YouTube thumbnails, link previews, local images), and native STT/Input popups. Glass‑morphism, dynamic glow, auto‑resize. |
 | 🗣️ | **Voice‑First Multimodal** | Deepgram speech‑to‑text (Nova‑2) with openWakeWord detection, Edge TTS voice output, multimodal vision (OCR, object detection, image analysis via Gemini/Regolo), and image generation (Flux/AI Horde) — all integrated. |
 | 🤖 | **Autonomous Software Engineering** | Can autonomously explore codebases (`repo_map`), read files (`view`), replace exact code blocks (`replace_block` — zero line‑drift), create multiple files (`create_many`), execute Python scripts (`run_python_code`), and run terminal commands (`execute_terminal_command`). Real‑world bug fixing (10 tests, 3 bugs, 0.17 seconds) — proven. |
@@ -65,26 +68,7 @@ JARVIS isn't just another ChatGPT wrapper. It's a **desktop-native AI Operating 
 | 🛡️ | **Intelligent Command Security** | Uses `shlex` tokenization and `os.path.realpath` canonicalization to auto‑block only system‑destroying commands (`rm -rf /`, `format C:`, `dd` to `/dev/sda`, `diskpart`). Safe commands (`pip`, `git`, `mkdir`, `rm file.txt`) run without prompts — zero friction, enterprise safety. |
 | 🌐 | **Any Provider, Anywhere** | Works with Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint — including local models (Ollama, LM Studio, vLLM). 100% local inference possible — no internet required with local LLMs. |
 | 🧩 | **Extensible Tool Ecosystem** | Integrated with Gmail Pub/Sub, WhatsApp Baileys bridge, Google Calendar OAuth, Tavily search, ArXiv academic research, YouTube transcript summarization, system clipboard, hardware controls (volume/brightness/screenshot), and more. |
-| 🔐 | **Conditional Service Startup** | WhatsApp, Email, and Calendar services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
-
----
-
-### 🔥 Why This Matters (The Real Story)
-
-| Problem | How JARVIS Solves It |
-|---------|----------------------|
-| **AI agents hallucinate line numbers** | `replace_block` uses exact SEARCH/REPLACE diffs — **zero line‑drift** |
-| **AI forgets past conversations** | ChromaDB LTM + daily Groq summarization — **remembers months of context** |
-| **AI can't control your desktop** | Win32 API + AppOpener — **opens apps, changes volume, takes screenshots** |
-| **AI can't read your emails** | Gmail Pub/Sub listener — **detects important emails proactively** |
-| **AI can't send WhatsApp** | Baileys Node.js bridge — **sends messages, fetches chat history** |
-| **AI crashes and stops working** | ServiceWatchdog — **auto‑restarts background processes** |
-| **AI is locked to one provider** | Provider abstraction + custom endpoint — **use any model, any provider, anywhere** |
-| **AI has no safety** | HITL consent gate — **never modifies critical data without permission** |
-| **AI has no UI** | ZMQ‑powered Agent Panel + Typing Popup — **real‑time status, markdown rendering, async images** |
-| **AI can't hear or see** | Deepgram STT + Gemini Vision — **voice input, image analysis, OCR** |
-| **AI opens unwanted login popups on startup** | Conditional service startup + manual login CLI — **services start only when you're ready** |
-| **AI blocks harmless commands unnecessarily** | Intelligent command security — **auto‑blocks only OS‑destroying commands, auto‑approves everything else** |
+| 🔐 | **Conditional Service Startup** | WhatsApp, Email, Calendar, and now **Mobile ADB** services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
 
 ---
 
@@ -128,6 +112,7 @@ flowchart TD
         Search[🌐 Tavily / ArXiv / Scraper]
         Vision[👁️ Vision Multimodal / OCR]
         Image[🎨 Image Gen / Edit]
+        Mobile[📱 ADB / Mobile Control]
     end
     
     AgenticBrain --> Tools
@@ -185,6 +170,7 @@ JARVIS uses a **Hybrid Semantic Router** (Regolo API + Local Keyword Fallback) t
 | **Memory Recall** | ❌ No personal LTM memory. | ✅ `memory_actions` (15‑day logs + Lifetime episodic recall). |
 | **Multimodal** | ❌ No vision. | ✅ `vision` (Image/Video analysis, OCR, object detection). |
 | **Research** | ❌ Simple web search only (`quick_web_search`). | ✅ `deep_research` (420s multi‑source synthesis), ArXiv, YouTube transcripts. |
+| **Mobile Control** | ❌ No. | ✅ ADB over Tailscale – lock/unlock, apps, calls, SMS, screenshots, WiFi/Data, etc. |
 | **Proactive HITL** | ❌ No. | ✅ Strict Partner Confirmation Mode. Asks consent before permanent changes. |
 
 ---
@@ -269,6 +255,7 @@ JARVIS does not rely on a single AI provider. The `BaseLLMProvider` abstract cla
 A dedicated daemon thread runs in the background, checking the health of critical subprocesses every 5 seconds:
 - **Baileys Server** (WhatsApp Bridge)
 - **STT Popup** (Voice Status UI)
+- **Mobile ADB Connection** (Android Phone)
 
 **Smart Monitoring:**
 - If a service is **not logged in** (credentials missing), the watchdog **skips monitoring** entirely and logs only **once per minute** to avoid spam.
@@ -287,7 +274,7 @@ If a tool or script fails:
 - **Pragmatic Completion:** Avoids endless iterations for minor cosmetic perfection. Once the essential data/file is generated correctly, it invokes `complete_task`.
 
 ### 5. 🔐 Conditional Service Startup & Manual Login
-- **Startup:** WhatsApp, Email, and Calendar services start **only if credentials exist**. No unwanted browser or QR popups appear.
+- **Startup:** WhatsApp, Email, Calendar, and **Mobile ADB** services start **only if credentials exist** (for ADB, the environment variable `ADB_PHONE_IP` must be set). No unwanted browser or QR popups appear.
 - **Proactive Listeners:** Only start for services that are already logged in, preventing unnecessary background threads.
 - **Tool Calls:** When you explicitly ask to send an email or create a calendar event, the authentication flow opens as expected — preserving the interactive experience.
 - **Manual Login CLI:** Use `jarvis login --whatsapp/--mail/--calendar` to authenticate on demand (requires Jarvis to be stopped).
@@ -307,10 +294,96 @@ JARVIS now features an advanced, zero‑bother security layer for terminal comma
 | 💻 **Software Engineering** | Project `repo_map`, Exact `replace_block` diffs, Post‑edit syntax linting, Multi‑file batch creation (`create_many`). | Python AST / `py_compile` / `fileEditor.py` |
 | 📨 **Communication** | Send/read Gmails, Dispatch WhatsApp messages/files, Fetch WhatsApp chat history, Manage Google Calendar events. | Gmail Pub/Sub, Baileys Node.js Server, Calendar OAuth |
 | 📂 **Workspace & RAG** | Single‑file CRUD, Recursive directory scanning, Local markdown RAG indexing with hash‑based change detection. | Python `os`/`pathlib`, ChromaDB Vector Index |
+| 📱 **Mobile Phone Control** | Lock/unlock, Home/Back, Volume, Flashlight, Open Apps (WhatsApp, Chrome, etc.), Make calls, Send SMS, Screenshots, Toggle WiFi/Data, Battery status, Notification panel, Quick Settings, File transfer (pull/push). | ADB over Tailscale / local network |
 | 🌐 **Search & Research** | Live web scraping, Academic research (ArXiv), YouTube transcript summarization, Multi‑source synthesis reports. | Tavily Search, BeautifulSoup, ArXiv API |
 | ⚙️ **System Automation** | Launch/close desktop apps, Hardware volume/brightness, Screenshots, Clipboard CRUD (Read/Write). | Python OS Bindings, Win32 API, Pygame |
 | 👁️ **Multimodal Vision** | Image/Video analysis, Object detection, OCR extraction from scanned documents/photos. | Gemini/Regolo Vision models |
 | 🎨 **Image Generation** | Text‑to‑image generation, Image‑to‑image editing. | Regolo Qwen‑Image / Together FLUX / AI Horde |
+
+---
+
+## 📱 Mobile Phone Control (Android)
+
+JARVIS can now control your Android phone remotely via **ADB (Android Debug Bridge)** over **Tailscale** (or a local network). The connection is established automatically when Jarvis starts, and a dedicated **ServiceWatchdog** monitors the connection and reconnects if it drops.
+
+### 🔧 Capabilities
+
+| Category | Example Commands |
+| :--- | :--- |
+| **System Actions** | Lock/Unlock, Home, Back, Recent Apps |
+| **Volume & Media** | Volume Up/Down, Mute, Flashlight Toggle |
+| **App Launcher** | WhatsApp, Chrome, YouTube, Spotify, Camera, Settings, Instagram, Telegram |
+| **Calls & SMS** | Make a call (direct), Open dialer, Send SMS |
+| **Screenshots** | Take screenshot and save to PC |
+| **WiFi & Data** | Enable/Disable WiFi, Enable/Disable Mobile Data |
+| **Notifications** | Expand notification panel, Quick Settings |
+| **Battery** | Check battery level, charging status |
+| **File Transfer** | Pull files from phone to PC, Push files from PC to phone |
+
+### 🛠️ Setup Guide
+
+1. **Install ADB on your PC**  
+   Download the [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools) and extract them to a folder (e.g., `C:\adb`). Add that folder to your system `PATH` or use the full path.
+
+2. **Enable USB Debugging on your Android phone**  
+   - Go to **Settings → About Phone → Build Number** and tap it 7 times to enable Developer Options.
+   - Go to **Settings → System → Developer Options** and enable **USB Debugging**.
+
+3. **Connect your phone via USB** for the first time  
+   - Plug your phone into your PC using a USB cable.
+   - On your phone, when prompted, **allow USB debugging** and check "Always allow from this computer".
+
+4. **Set up Tailscale (for remote access)**  
+   - Install [Tailscale](https://tailscale.com/download) on both your PC and your phone.
+   - Log in with the same account on both devices.
+   - Ensure both devices are connected to the Tailscale network.
+
+5. **Enable ADB over TCP/IP**  
+   While the phone is still connected via USB, open a terminal and run:
+   ```bash
+   adb tcpip 5555
+   ```
+   This tells the phone to listen for ADB connections over the network.
+
+6. **Disconnect the USB cable** and connect via Tailscale IP:
+   ```bash
+   adb connect <phone-tailscale-ip>:5555
+   ```
+   You can find the Tailscale IP of your phone by running `tailscale status` on your PC.
+
+7. **Set the environment variable** in your `.env` file:
+   ```ini
+   ADB_PHONE_IP=<phone-tailscale-ip>
+   ADB_PHONE_PORT=5555   # optional, default is 5555
+   ```
+
+8. **Restart Jarvis** – the mobile connection will be established automatically on startup, and the watchdog will keep it alive.
+
+### 🧠 How Jarvis Uses It
+
+- **Background Service:** `core/main/BackgroundServices.py` contains `start_mobile_connection()` and `stop_mobile_connection()` which are called on startup and shutdown.
+- **Watchdog Integration:** `ServiceWatchdog` monitors the connection every 5 seconds. If it goes down, it automatically runs `adb connect` again.
+- **Agent Usage:** The AgenticBrain uses the `execute_terminal_command` tool to run `adb shell` commands. The system prompt includes a minimal instruction for the agent to use ADB for mobile requests.
+
+### 💬 Example Natural Language Commands
+
+| You Say | Jarvis Executes |
+| :--- | :--- |
+| "Lock the phone" | `adb shell input keyevent 26` |
+| "Go to the home screen" | `adb shell input keyevent 3` |
+| "Open WhatsApp" | `adb shell am start -n com.whatsapp/.Main` |
+| "Call 9876543210" | `adb shell am start -a android.intent.action.CALL -d tel:9876543210` |
+| "Send an SMS to 9876543210 saying 'Come here'" | `adb shell am start -a android.intent.action.SENDTO -d sms:9876543210 --es sms_body "Come here"` |
+| "Take a screenshot of the phone" | `adb shell screencap /sdcard/screenshot.png && adb pull /sdcard/screenshot.png Desktop/screenshot.png` |
+| "Turn off WiFi" | `adb shell svc wifi disable` |
+| "Check the battery status" | `adb shell dumpsys battery` |
+| "Open the notification panel" | `adb shell cmd statusbar expand-notifications` |
+
+### 🛡️ Security & Privacy
+
+- The ADB connection is encrypted by Tailscale (WireGuard).
+- No phone data leaves your Tailscale network – it all stays within your private VPN.
+- The watchdog only reconnects if the environment variable is set; otherwise it silently skips the service.
 
 ---
 
@@ -351,6 +424,7 @@ JARVIS now features an advanced, zero‑bother security layer for terminal comma
 | **Web Scraping & Analysis** | `"Scrape the content of this webpage and perform sentiment analysis"` | Reads the page, extracts key text, and performs sentiment/tonality analysis. |
 | **Image Generation** | `"Generate a cyberpunk JARVIS wallpaper with neon purple glow"` | Generates image via Flux/AI Horde and saves it to desktop. |
 | **System + File Operations** | `"Create a 'Projects' folder on the desktop, create 5 Python files inside it, and define a class in each file"` | Uses `run_python_code` to batch‑create multiple files with boilerplate classes — **all in 15 seconds.** |
+| **Mobile Control** | `"Phone lock kar do"` | Runs `adb shell input keyevent 26` to lock the phone. |
 | **Proactive HITL** | *(Jarvis detects email about meeting reschedule)* → `"Bro, Ram's email has arrived that the meeting has been shifted to 5 PM. Should I update the calendar?"` | Enters **Partner Confirmation Mode**, asks for consent, and executes only after user says *"Yes do it"*. |
 
 ---
@@ -457,7 +531,27 @@ Create `Data/contacts.json` for named recipients:
 }
 ```
 
-### 6. Running JARVIS
+### 6. Mobile Phone Control Setup (Android)
+
+> **Pre‑requisites:** ADB, USB debugging enabled on your phone, and Tailscale installed on both PC and phone.
+
+1. **Install ADB** and add it to your system PATH.
+2. **Connect your phone via USB** and run:
+   ```bash
+   adb tcpip 5555
+   ```
+3. **Disconnect USB**, then connect via Tailscale IP:
+   ```bash
+   adb connect <phone-tailscale-ip>:5555
+   ```
+4. **Add the environment variable** to your `.env`:
+   ```ini
+   ADB_PHONE_IP=<phone-tailscale-ip>
+   ADB_PHONE_PORT=5555   # optional
+   ```
+5. **Restart Jarvis** – the connection will be managed automatically.
+
+### 7. Running JARVIS
 
 #### Full Autonomous Voice & Desktop Mode (Default)
 ```powershell
@@ -468,7 +562,7 @@ or (if you ran `SetupRegistry.py`):
 jarvis
 ```
 
-This starts the agent panel, STT popup (when the binary exists), Baileys bridge (only if WhatsApp is logged in), service watchdog (smart monitoring), RAG engine, proactive listeners (only for logged-in services), global hotkey, and wake‑word listener.
+This starts the agent panel, STT popup (when the binary exists), Baileys bridge (only if WhatsApp is logged in), service watchdog (smart monitoring), RAG engine, proactive listeners (only for logged-in services), global hotkey, and wake‑word listener. The Mobile ADB connection starts automatically if `ADB_PHONE_IP` is set.
 
 #### Silent Mode (Wake Word Disabled, Trigger via Hotkeys Only)
 ```powershell
@@ -488,7 +582,7 @@ This mode skips the one‑second startup delay. It does **not** disable STT, Bai
 - Say `exit`, `quit`, `stop`, or `bye` after voice activation, or
 - Press `Ctrl + C` in the terminal running JARVIS.
 
-### 7. Session & Memory Management CLI
+### 8. Session & Memory Management CLI
 
 JARVIS includes powerful CLI subcommands to manage sessions, memory, and reset the system.
 
@@ -532,7 +626,7 @@ jarvis reset --hard
 
 > 💡 **After logging in:** Restart Jarvis. The service will now start automatically on every launch, and its proactive listener will begin monitoring.
 
-### 8. Keyboard Shortcuts
+### 9. Keyboard Shortcuts
 
 - `Ctrl + Shift + J`: Open Floating Text Input & Markdown UI Popup (Runs `InputPopup.exe`).
 
@@ -564,6 +658,9 @@ Copy-Item .env.example .env
 | `CUSTOM_BASE_URL` | Base URL of the OpenAI‑compatible endpoint.<br>• **Local Ollama:** `http://localhost:11434/v1`<br>• **LM Studio:** `http://localhost:1234/v1`<br>• **vLLM:** `http://localhost:8000/v1`<br>• **Any self‑hosted:** Your custom URL | `http://localhost:11434/v1` |
 | `CUSTOM_MODEL` | Model name to use with the custom provider.<br>• **Ollama example:** `llama3.2:3b`, `mistral:7b`, `deepseek‑coder:6.7b`<br>• **LM Studio:** Model name as shown in UI | `default‑model` |
 | `CUSTOM_THINKING_ENABLED` | Enable reasoning content if supported by the model. | `True` |
+| **📱 Mobile Control (Android)** | | |
+| `ADB_PHONE_IP` | Tailscale (or local) IP of your Android phone. | (Optional) |
+| `ADB_PHONE_PORT` | Port for ADB over TCP/IP. | `5555` |
 | **Other** | | |
 | `EMBEDDING_DIM` | Dimension for ChromaDB vectors. | `768` |
 | `DEEP_RESEARCH_TIMEOUT` | Max seconds for deep research synthesis. | `420` |
@@ -599,13 +696,13 @@ jarvis-by-kaif-ansari/
 │   │   │   ├── Memory.py          # JSONL Context, User Bio/Mood, LTM Archiver
 │   │   │   ├── LifetimeMemory.py  # ChromaDB Episodic Memory (Daily Summaries)
 │   │   │   └── RagEngine.py       # Smart Chunking, Hash‑based RAG Indexing
-│   │   ├── executor.py            # Tool Dispatcher (System, File, Comms)
+│   │   ├── executor.py            # Tool Dispatcher (System, File, Comms, Mobile)
 │   │   └── config.py              # Enterprise Configurations
 │   ├── main/
 │   │   ├── CommandHandler.py      # Main command bus, _is_busy state
 │   │   ├── HotKeyManager.py       # Ctrl+Shift+J binding
-│   │   ├── BackgroundServices.py  # Spawn/Kill STT, Baileys, Agent Panel (conditional)
-│   │   └── ServiceWatchdog.py     # Auto‑Restart daemon with smart monitoring
+│   │   ├── BackgroundServices.py  # Spawn/Kill STT, Baileys, Agent Panel, Mobile ADB (conditional)
+│   │   └── ServiceWatchdog.py     # Auto‑Restart daemon with smart monitoring (includes mobile)
 │   ├── voice/                     # STT, TTS, Wake Word
 │   │   ├── stt.py (Deepgram)
 │   │   ├── tts.py (Edge TTS)
@@ -662,6 +759,7 @@ jarvis-by-kaif-ansari/
 | `jarvis` command not recognised | Run `SetupRegistry.py` from the activated virtual environment, then open a **new terminal**. |
 | Unwanted browser/QR popup on startup | Log out of the service (`jarvis logout --service`). The system now starts services only when credentials exist. |
 | Watchdog logs spam | Already fixed — watchdog now logs unlogged services only once per minute. If you see frequent logs, ensure you are using the latest version. |
+| Mobile ADB fails to connect | Check `ADB_PHONE_IP` is set correctly in `.env`. Ensure Tailscale is running on both devices. Run `adb devices` manually to verify the connection. The watchdog will attempt to reconnect automatically; if it fails, check `Data/jarvis.log` for details. |
 | Need diagnostic information | Read `Data/jarvis.log` — console also prints service/tool errors. |
 
 ---

@@ -5,8 +5,11 @@ import os
 from core.main.BackgroundServices import (
     start_baileys_server,
     start_stt_popup,
+    start_mobile_connection,
     is_baileys_running,
-    is_stt_popup_running
+    is_stt_popup_running,
+    is_mobile_connected,
+    ADB_HOST
 )
 
 class ServiceWatchdog:
@@ -35,6 +38,14 @@ class ServiceWatchdog:
                 "has_creds": lambda: True
             }
         }
+        if ADB_HOST is not None:
+            self.services["mobile_adb"] = {
+                "is_running_check": is_mobile_connected,
+                "start_func": start_mobile_connection,
+                "retries": 0,
+                "last_restart": 0,
+                "has_creds": lambda: True
+            }
 
     def start(self):
         if self._is_running:

@@ -3,8 +3,15 @@ import sys
 import subprocess
 import platform
 import logging
+from dotenv import load_dotenv
 from core.utils.ProcessManager import proc_manager
 from core.voice.stt_status import exit_stt_popup
+
+load_dotenv()
+
+ADB_HOST = os.getenv("ADB_PHONE_IP")
+ADB_PORT = os.getenv("ADB_PHONE_PORT", "5555")
+ADB_TARGET = f"{ADB_HOST}:{ADB_PORT}" if ADB_HOST else None
 
 _panel_process = None
 _stt_popup_process = None
@@ -124,9 +131,9 @@ def is_baileys_running() -> bool:
 def start_rag_engine():
     try:
         from core.brain.RagEngine import rag_engine
-        logging.info("🚀 RAG Engine initialized successfully. Folder created & indexing started in background.")
+        logging.info("RAG Engine initialized successfully. Folder created & indexing started in background.")
     except Exception as e:
-        logging.error(f"❌ RAG Engine initialization failed: {e}")
+        logging.error(f"RAG Engine initialization failed: {e}")
 
 def stop_rag_engine():
     global _rag_engine_initialized
@@ -134,16 +141,53 @@ def stop_rag_engine():
         try:
             pass
         except Exception as e:
-            logging.error(f"⚠️ RAG Engine stop error: {e}")
+            logging.error(f"RAG Engine stop error: {e}")
         finally:
             _rag_engine_initialized = False
-            logging.info("🛑 RAG Engine stopped successfully.")
+            logging.info("RAG Engine stopped successfully.")
     else:
         logging.debug("RAG Engine was not running, nothing to stop.")
+
+def start_mobile_connection():
+    if ADB_HOST is None:
+        logging.info("ADB_PHONE_IP not set in environment. Skipping mobile connection.")
+        return
+    try:
+        subprocess.run(["adb", "disconnect", ADB_TARGET], capture_output=True, text=True)
+        result = subprocess.run(["adb", "connect", ADB_TARGET], capture_output=True, text=True)
+        if "connected" in result.stdout.lower() or "already connected" in result.stdout.lower():
+            logging.info(f"Mobile connected successfully to {ADB_TARGET}")
+        else:
+            logging.warning(f"Mobile connect failed: {result.stdout}")
+    except Exception as e:
+        logging.error(f"Mobile start service crashed: {e}")
+
+def stop_mobile_connection():
+    if ADB_HOST is None:
+        return
+    try:
+        subprocess.run(["adb", "disconnect", ADB_TARGET], capture_output=True, text=True)
+        logging.info(f"Mobile disconnected from {ADB_TARGET}")
+    except Exception as e:
+        logging.error(f"Mobile stop service crashed: {e}")
+
+def is_mobile_connected():
+    if ADB_HOST is None:
+        return False
+    try:
+        result = subprocess.run(["adb", "devices"], capture_output=True, text=True)
+        lines = result.stdout.splitlines()
+        for line in lines:
+            if ADB_HOST in line and "device" in line:
+                return True
+        return False
+    except:
+        return False
 
 def stop_all_services():
     logging.info("Initiating shutdown of all background services.")
     stop_agent_panel()
     stop_stt_popup()
     stop_baileys_server()
+    stop_mobile_connection()
     stop_rag_engine()
