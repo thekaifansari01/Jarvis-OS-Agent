@@ -13,11 +13,9 @@ from tavily import TavilyClient
 
 from core.brain.config import GEMINI_AGENT_MODEL, DEEP_RESEARCH_TIMEOUT, GEMINI_API_KEY
 from core.ui.agent_status import update_agent_status
+from core.logger.logger import logger
 
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 CREATIONS_DIR = Path.home() / "Documents" / "Jarvis" / "DeepResearch"
 CREATIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -58,10 +56,7 @@ Return ONLY the filename, nothing else.
         return None
 
 def deep_research(topic, max_steps=None):
-    logger.info(f"🚀 TAVILY DEEP RESEARCH START: {topic}")
-    print("\n" + "="*80)
-    print(f"📚 TOPIC: {topic}")
-    print("="*80)
+    logger.info(f"TAVILY DEEP RESEARCH START: {topic}")
 
     try:
         update_agent_status(
@@ -80,7 +75,7 @@ def deep_research(topic, max_steps=None):
 
         tavily_client = TavilyClient(api_key=tavily_api_key)
 
-        print("⏳ Requesting Tavily Pro Research (this may take a few minutes)...")
+        logger.info("Requesting Tavily Pro Research (this may take a few minutes)...")
         response = tavily_client.research(topic, model="pro")
         request_id = response.get("request_id")
 
@@ -88,7 +83,7 @@ def deep_research(topic, max_steps=None):
             logger.error(f"Task creation failed. Response: {response}")
             return f"Error: Could not start research task. Response: {response}"
 
-        print(f"✅ Research Task created. Request ID: {request_id}")
+        logger.info(f"Research Task created. Request ID: {request_id}")
 
         start_time = time.time()
         timeout = DEEP_RESEARCH_TIMEOUT if DEEP_RESEARCH_TIMEOUT else 600
@@ -100,7 +95,7 @@ def deep_research(topic, max_steps=None):
         while True:
             elapsed_time = int(time.time() - start_time)
             if elapsed_time > timeout:
-                logger.warning("⏰ Timeout reached while polling Tavily")
+                logger.warning("Timeout reached while polling Tavily")
                 return "Error: Research task timed out."
 
             time.sleep(poll_interval)
@@ -116,7 +111,7 @@ def deep_research(topic, max_steps=None):
 
             status_res = tavily_client.get_research(request_id)
             status = status_res.get("status")
-            print(f"🔄 Status: {status.upper()} (Elapsed: {elapsed_time}s)")
+            logger.info(f"Status: {status.upper()} (Elapsed: {elapsed_time}s)")
 
             if status == "completed":
                 result_content = status_res.get("content", "No content returned.")
@@ -143,11 +138,6 @@ def deep_research(topic, max_steps=None):
         except Exception:
             pass
 
-        print("\n" + "🌟" * 30)
-        print("FINAL REPORT:")
-        print("🌟" * 30)
-        print(final_report[:500] + "\n...[Report Truncated for CLI View]...")
-
         client = genai.Client(api_key=GEMINI_API_KEY)
         ai_filename = generate_filename_from_ai(topic, final_report, client, GEMINI_AGENT_MODEL)
 
@@ -170,9 +160,9 @@ def deep_research(topic, max_steps=None):
         except Exception as e:
             pass
 
-        logger.info(f"📄 Report saved to {filepath}")
-        print(f"\n💾 Report automatically saved as: {ai_filename}")
-        print(f"📍 Location: {CREATIONS_DIR.resolve()}")
+        logger.info(f"Report saved to {filepath}")
+        logger.info(f"Report automatically saved as: {ai_filename}")
+        logger.info(f"Location: {CREATIONS_DIR.resolve()}")
 
         return final_report
 

@@ -12,11 +12,14 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from core.brain.config import GROQ_API_KEY
+from core.logger.logger import logger
 
 try:
     from core.voice.tts import speak
 except ImportError:
-    def speak(text): print(f"JARVIS: {text}")
+    # Fallback: use logger instead of print
+    def speak(text):
+        logger.warning(f"TTS not available, speaking via log: {text}")
 
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -29,10 +32,12 @@ COOKIES_DIR.mkdir(parents=True, exist_ok=True)
 TOKEN_PATH = COOKIES_DIR / "token.json"
 
 def authenticate_gmail(interactive: bool = True):
+    logger.info("🔐 Authenticating Gmail...")
     creds = None
     if TOKEN_PATH.exists():
         try:
             creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+            logger.debug("✅ Gmail token found.")
         except Exception:
             creds = None
             try:
@@ -46,6 +51,7 @@ def authenticate_gmail(interactive: bool = True):
                 creds.refresh(Request())
                 with open(TOKEN_PATH, 'w') as token:
                     token.write(creds.to_json())
+                logger.info("🔄 Gmail token refreshed.")
             except Exception:
                 creds = None
                 try:
@@ -54,6 +60,7 @@ def authenticate_gmail(interactive: bool = True):
                     pass
 
         if (not creds or not creds.valid) and interactive:
+            logger.info("🌐 Opening browser for Gmail OAuth...")
             webbrowser.open("https://jarvis-oauth-server.vercel.app/api/oauth/start?service=gmail")
             timeout = 120
             start_time = time.time()
@@ -62,6 +69,7 @@ def authenticate_gmail(interactive: bool = True):
                     try:
                         creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
                         if creds.valid:
+                            logger.info("✅ Gmail OAuth completed.")
                             break
                     except Exception:
                         pass
@@ -69,10 +77,13 @@ def authenticate_gmail(interactive: bool = True):
 
     if creds and creds.valid:
         return build('gmail', 'v1', credentials=creds)
+    logger.error("❌ Gmail authentication failed.")
     return None
 
 def send_email(to_address, subject, body, attachment_path=None):
+    logger.info(f"📧 Sending email to {to_address} | Subject: {subject}")
     if attachment_path and not os.path.exists(attachment_path):
+        logger.warning(f"Attachment not found: {attachment_path}")
         return False
 
     try:
@@ -102,11 +113,14 @@ def send_email(to_address, subject, body, attachment_path=None):
         create_message = {'raw': encoded_message}
 
         service.users().messages().send(userId="me", body=create_message).execute()
+        logger.info(f"✅ Email sent successfully to {to_address}")
         return True
-    except Exception:
+    except Exception as e:
+        logger.error(f"❌ Failed to send email: {e}")
         return False
 
 def delete_email(query):
+    logger.info(f"🗑️ Attempting to delete email with query: {query}")
     try:
         service = authenticate_gmail()
         if not service:
@@ -115,12 +129,15 @@ def delete_email(query):
         messages = results.get('messages', [])
 
         if not messages:
+            logger.warning(f"No email found for query: {query}")
             return False
 
         msg_id = messages[0]['id']
         service.users().messages().trash(userId='me', id=msg_id).execute()
+        logger.info(f"✅ Email deleted (trashed) with ID: {msg_id}")
         return True
-    except Exception:
+    except Exception as e:
+        logger.error(f"❌ Failed to delete email: {e}")
         return False
 
 if __name__ == "__main__":

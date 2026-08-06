@@ -7,6 +7,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from core.logger.logger import logger
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 COOKIES_DIR = BASE_DIR / "Data" / "SessionCookies"
 COOKIES_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,10 +31,12 @@ def helper_format_to_iso(time_str: str, default_time_suffix: str = "00:00:00") -
         return ""
 
 def authenticate_calendar(interactive: bool = True):
+    logger.info("🔐 Authenticating Google Calendar...")
     creds = None
     if TOKEN_PATH.exists():
         try:
             creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+            logger.debug("✅ Calendar token found.")
         except Exception:
             creds = None
             try:
@@ -46,6 +50,7 @@ def authenticate_calendar(interactive: bool = True):
                 creds.refresh(Request())
                 with open(TOKEN_PATH, 'w') as token:
                     token.write(creds.to_json())
+                logger.info("🔄 Calendar token refreshed.")
             except Exception:
                 creds = None
                 try:
@@ -54,6 +59,7 @@ def authenticate_calendar(interactive: bool = True):
                     pass
 
         if (not creds or not creds.valid) and interactive:
+            logger.info("🌐 Opening browser for Calendar OAuth...")
             webbrowser.open("https://jarvis-oauth-server.vercel.app/api/oauth/start?service=calendar")
             timeout = 120
             start_time = time.time()
@@ -62,6 +68,7 @@ def authenticate_calendar(interactive: bool = True):
                     try:
                         creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
                         if creds.valid:
+                            logger.info("✅ Calendar OAuth completed.")
                             break
                     except Exception:
                         pass
@@ -69,9 +76,11 @@ def authenticate_calendar(interactive: bool = True):
 
     if creds and creds.valid:
         return build('calendar', 'v3', credentials=creds), "Success"
+    logger.error("❌ Calendar authentication failed.")
     return None, "Observation: Error -> Authentication timed out or failed."
 
 def create_event(summary: str, start_time: str, end_time: str, description: str = "") -> str:
+    logger.info(f"📅 Creating calendar event: {summary}")
     service, auth_status = authenticate_calendar()
     if not service:
         return auth_status
@@ -80,6 +89,7 @@ def create_event(summary: str, start_time: str, end_time: str, description: str 
     end_iso = helper_format_to_iso(end_time, "23:59:59")
 
     if not start_iso or not end_iso:
+        logger.error("Invalid time format in create_event")
         return "Observation: Error -> Invalid time format provided. Use 'YYYY-MM-DD HH:MM:SS' format."
 
     try:
@@ -94,11 +104,14 @@ def create_event(summary: str, start_time: str, end_time: str, description: str 
             },
         }
         event = service.events().insert(calendarId='primary', body=event_body).execute()
+        logger.info(f"✅ Event created: {summary} (ID: {event.get('id')})")
         return f"Observation: Success -> Event '{summary}' scheduled successfully. Event ID: '{event.get('id')}'."
     except Exception as e:
+        logger.error(f"❌ Failed to create event: {e}")
         return f"Observation: API Error while creating event -> {e}"
 
 def check_events(start_time: str = None, end_time: str = None, max_results: int = 10) -> str:
+    logger.info("🔍 Checking calendar events...")
     service, auth_status = authenticate_calendar()
     if not service:
         return auth_status
@@ -122,6 +135,7 @@ def check_events(start_time: str = None, end_time: str = None, max_results: int 
 
         events = events_result.get('items', [])
         if not events:
+            logger.info("No events found in the given range.")
             return "Observation: Is time range mein calendar mein koi event ya reminder schedule nahi hai."
 
         output = "Observation: Found these scheduled events:\n"
@@ -130,21 +144,26 @@ def check_events(start_time: str = None, end_time: str = None, max_results: int 
             title = event.get('summary', 'Untitled Event')
             e_id = event.get('id')
             output += f"- Event: '{title}' | ID: '{e_id}' | Time: {start}\n"
+        logger.info(f"✅ Found {len(events)} events.")
         return output
     except Exception as e:
+        logger.error(f"❌ Failed to fetch events: {e}")
         return f"Observation: API Error while fetching events -> {e}"
 
 def delete_event(event_id: str = None, summary_query: str = None) -> str:
+    logger.info(f"🗑️ Deleting calendar event (ID: {event_id}, query: {summary_query})")
     service, auth_status = authenticate_calendar()
     if not service:
         return auth_status
 
     if not event_id and not summary_query:
+        logger.warning("Delete called without ID or query.")
         return "Observation: Error -> Deletion requires either an 'event_id' or a 'summary_query'."
 
     try:
         if event_id:
             service.events().delete(calendarId='primary', eventId=event_id).execute()
+            logger.info(f"✅ Deleted event with ID: {event_id}")
             return f"Observation: Success -> Event with ID '{event_id}' has been deleted successfully."
 
         if summary_query:
@@ -166,11 +185,14 @@ def delete_event(event_id: str = None, summary_query: str = None) -> str:
 
             if target_id:
                 service.events().delete(calendarId='primary', eventId=target_id).execute()
+                logger.info(f"✅ Deleted event '{matched_title}' (ID: {target_id})")
                 return f"Observation: Success -> Found and deleted the event '{matched_title}' (ID: {target_id}) successfully."
             else:
+                logger.warning(f"No future event found with summary containing '{summary_query}'")
                 return f"Observation: Error -> '{summary_query}' naam ka koi bhi event aane wale dino mein nahi mila."
 
     except Exception as e:
+        logger.error(f"❌ Failed to delete event: {e}")
         return f"Observation: API Error while deleting event -> {e}"
 
 if __name__ == '__main__':

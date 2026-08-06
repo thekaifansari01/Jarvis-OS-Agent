@@ -4,6 +4,7 @@ import json
 import requests
 from urllib.parse import urlparse, parse_qs
 from dotenv import load_dotenv
+from core.logger.logger import logger
 
 load_dotenv()
 
@@ -16,12 +17,12 @@ def handle_protocol(url):
         service = query_params.get('service', ['unknown'])[0]
 
         if not session_id:
-            print("Error: The 'session_id' parameter is missing from the provided URL.")
+            logger.error("The 'session_id' parameter is missing from the provided URL.")
             return
 
         api_base = os.getenv('API_BASE_URL', '').rstrip('/')
         if not api_base:
-            print("Error: 'API_BASE_URL' is not configured in the environment variables.")
+            logger.error("'API_BASE_URL' is not configured in the environment variables.")
             return
 
         exchange_url = f"{api_base}/api/oauth/exchange"
@@ -32,8 +33,8 @@ def handle_protocol(url):
         )
 
         if response.status_code != 200:
-            print(f"Error: Failed to exchange session ID for token. HTTP Status Code: {response.status_code}")
-            print(f"Response Payload: {response.text}")
+            logger.error(f"Failed to exchange session ID for token. HTTP Status Code: {response.status_code}")
+            logger.error(f"Response Payload: {response.text}")
             return
 
         tokens = response.json()
@@ -52,18 +53,18 @@ def handle_protocol(url):
         with open(save_path, "w") as f:
             json.dump(tokens, f, indent=4)
 
-        print(f"SUCCESS: OAuth token for '{service}' was successfully retrieved and saved.")
-        print(f"File Path: {save_path}")
+        logger.info(f"SUCCESS: OAuth token for '{service}' was successfully retrieved and saved.")
+        logger.info(f"File Path: {save_path}")
 
     except Exception as e:
-        print(f"Error: An unexpected exception occurred during token processing. Details: {e}")
+        logger.error(f"An unexpected exception occurred during token processing. Details: {e}")
 
 if __name__ == "__main__":
-    print("Initializing Jarvis Protocol Handler...\n")
+    logger.info("Initializing Jarvis Protocol Handler...")
     if len(sys.argv) > 1:
         jarvis_url = sys.argv[1]
         handle_protocol(jarvis_url)
     else:
-        print("Warning: Script was executed directly without a target URL argument.")
+        logger.warning("Script was executed directly without a target URL argument.")
 
     input("\nPress Enter to exit...")

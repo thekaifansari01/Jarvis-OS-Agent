@@ -8,19 +8,20 @@ import platform
 import re
 import sys
 import shlex
+from core.logger.logger import logger
 
 def get_user_approval(action_type: str, content: str) -> bool:
-    print(f"\n\033[91m[JARVIS REQUESTS CRITICAL PERMISSION]\033[0m")
-    print(f"Action: {action_type}")
-    print(f"Content:\n{content}\n")
-    
+    logger.warning(f"[JARVIS REQUESTS CRITICAL PERMISSION]")
+    logger.warning(f"Action: {action_type}")
+    logger.warning(f"Content:\n{content}")
+
     while True:
         choice = input("\033[92mAllow execution? (Y/N):\033[0m ").strip().upper()
         if choice == 'Y':
             return True
         elif choice == 'N':
             return False
-        print("Invalid input. Please enter Y or N.")
+        logger.info("Invalid input. Please enter Y or N.")
 
 def is_terminal_command_safe(command: str) -> bool:
     return True
@@ -142,14 +143,14 @@ class StatefulTerminal:
     def execute(self, command: str, timeout: int = 30) -> str:
         marker = f"__CMD_END_{time.time()}__"
         full_command = f"{command}\necho {marker}\n"
-            
+
         self.process.stdin.write(full_command)
         self.process.stdin.flush()
-        
+
         lines = []
         start_time = time.time()
         end_time = start_time + timeout
-        
+
         while time.time() < end_time:
             try:
                 line = self.output_queue.get(timeout=0.1)
@@ -159,28 +160,28 @@ class StatefulTerminal:
                     lines.append(line)
             except queue.Empty:
                 continue
-        
+
         output = "".join(lines).strip()
-        
+
         MAX_OUTPUT_LENGTH = 50000
         if len(output) > MAX_OUTPUT_LENGTH:
             output = output[:25000] + "\n\n... [OUTPUT TRUNCATED BY SYSTEM TO SAVE CONTEXT] ...\n\n" + output[-25000:]
-            
+
         return output
 
 terminal_session = StatefulTerminal()
 
 def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
     if _is_system_destroyer(command):
-        print(f"\n\033[91m[SYSTEM PROTECTION]\033[0m Auto-blocked lethal command: {command}")
+        logger.error(f"[SYSTEM PROTECTION] Auto-blocked lethal command: {command}")
         return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Command targets system core and was automatically blocked. No execution took place."
-    
+
     heavy_keywords = ['pip install', 'npm install', 'npm i ', 'git clone', 'yarn add', 'pnpm install', 'apt-get install']
     if any(kw in command.lower() for kw in heavy_keywords) and timeout_seconds <= 30:
         timeout_seconds = 180
-        print(f"\n\033[93m[HEAVY COMMAND DETECTED]\033[0m: Auto-extending terminal timeout to {timeout_seconds} seconds.")
+        logger.warning(f"[HEAVY COMMAND DETECTED]: Auto-extending terminal timeout to {timeout_seconds} seconds.")
 
-    print(f"\n\033[94m[AUTO-APPROVED TERMINAL COMMAND]\033[0m: {command}")
+    logger.info(f"[AUTO-APPROVED TERMINAL COMMAND]: {command}")
     try:
         output = terminal_session.execute(command, timeout=timeout_seconds)
         if output:
@@ -194,47 +195,47 @@ def run_python_code(code_string: str) -> str:
         if not get_user_approval("Python Code Execution (CRITICAL)", code_string):
             return "Observation: Action Denied by User."
     else:
-        print(f"\n\033[94m[AUTO-APPROVED PYTHON SCRIPT]\033[0m: Executing data processing script...")
-        
+        logger.info("[AUTO-APPROVED PYTHON SCRIPT]: Executing data processing script...")
+
     fd, temp_path = tempfile.mkstemp(suffix=".py")
-    
+
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write(code_string)
-            
+
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
-        
+
         python_path = sys.executable
-            
+
         result = subprocess.run(
-            [python_path, temp_path], 
-            capture_output=True, 
-            text=True, 
+            [python_path, temp_path],
+            capture_output=True,
+            text=True,
             encoding='utf-8',
             errors='replace',
             env=env,
             timeout=120
         )
-        
+
         output = result.stdout.strip()
         error = result.stderr.strip()
-        
+
         full_output = ""
         if output:
             full_output += f"Output:\n{output}\n"
         if error:
             full_output += f"Error:\n{error}\n"
-            
+
         MAX_OUTPUT_LENGTH = 50000
         if len(full_output) > MAX_OUTPUT_LENGTH:
             full_output = full_output[:25000] + "\n\n... [TRUNCATED] ...\n\n" + full_output[-25000:]
-            
+
         if result.returncode == 0:
             return f"Observation: Python code executed successfully.\n{full_output}"
         else:
             return f"Observation: Python script failed.\n{full_output}"
-            
+
     except subprocess.TimeoutExpired:
         return "Observation: Python script timed out after 120 seconds."
     except Exception as e:

@@ -10,6 +10,8 @@ import signal
 import time
 import ctypes
 
+from core.logger.logger import logger
+
 os.environ['PYTHONUNBUFFERED'] = '1'
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -54,7 +56,7 @@ _is_running = True
 def signal_handler(signum, frame):
     global _is_running
     _is_running = False
-    logging.info("Interrupt signal received. Initiating graceful shutdown.")
+    logger.info("Interrupt signal received. Initiating graceful shutdown.")
     try:
         remove_lock_file()
         from core.main.ServiceWatchdog import stop_watchdog
@@ -64,7 +66,7 @@ def signal_handler(signum, frame):
         stop_all_services()
         proc_manager.cleanup()
     except Exception as e:
-        logging.error(f"Error during signal cleanup: {e}")
+        logger.error(f"Error during signal cleanup: {e}")
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -89,8 +91,8 @@ def main() -> None:
         sys.exit(0)
 
     if is_jarvis_running():
-        print("\n❌ [ERROR] Jarvis is ALREADY running in another terminal window!")
-        print("⚠️  Please close the existing Jarvis instance before starting a new one.\n")
+        logger.error("Jarvis is ALREADY running in another terminal window!")
+        logger.error("Please close the existing Jarvis instance before starting a new one.")
         sys.exit(1)
 
     create_lock_file()
@@ -127,14 +129,14 @@ def main() -> None:
         try:
             start_rag_engine()
         except Exception as e:
-            logging.error(f"RAG engine startup failed: {e}")
+            logger.error(f"RAG engine startup failed: {e}")
 
     threading.Thread(target=start_rag_background, daemon=True).start()
 
     try:
         memory = ContextMemory()
     except Exception as e:
-        logging.warning(f"Failed to initialize ContextMemory, using fallback: {e}")
+        logger.warning(f"Failed to initialize ContextMemory, using fallback: {e}")
         class FakeMemory:
             def get_relevant_context(self, text): return ""
             def add_message(self, role, text, metadata=None): pass
@@ -148,7 +150,7 @@ def main() -> None:
         try:
             start_proactive_agent(memory, is_jarvis_busy)
         except Exception as e:
-            logging.error(f"Failed to start proactive agent: {e}")
+            logger.error(f"Failed to start proactive agent: {e}")
 
     threading.Thread(target=start_proactive_background, daemon=True).start()
 
@@ -156,7 +158,7 @@ def main() -> None:
         try:
             stt.start_background_wake_word_listener()
         except Exception as e:
-            logging.error(f"Failed to start wake word listener: {e}")
+            logger.error(f"Failed to start wake word listener: {e}")
 
     try:
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -174,7 +176,7 @@ def main() -> None:
 
                         if command.lower() in ["exit", "quit", "stop", "bye"]:
                             _is_running = False
-                            logging.info("Exit command received.")
+                            logger.info("Exit command received.")
                             try:
                                 tts.stop_speaking()
                             except Exception:
@@ -187,7 +189,7 @@ def main() -> None:
                                     memory.add_live_feedback(command)
                                     interrupt.clear_interrupt()
                                 except Exception as e:
-                                    logging.error(f"Failed to add live feedback: {e}")
+                                    logger.error(f"Failed to add live feedback: {e}")
                             else:
                                 try:
                                     hide_stt_popup()
@@ -198,18 +200,18 @@ def main() -> None:
 
                     except KeyboardInterrupt:
                         _is_running = False
-                        logging.info("Keyboard interrupt received.")
+                        logger.info("Keyboard interrupt received.")
                         break
                     except Exception as e:
-                        logging.error(f"Error in main event loop: {e}")
+                        logger.error(f"Error in main event loop: {e}")
                         continue
     finally:
-        logging.info("Starting shutdown sequence.")
+        logger.info("Starting shutdown sequence.")
         try:
             tts.cleanup_temp()
             pygame.quit()
         except Exception as e:
-            logging.error(f"Error cleaning up TTS/Pygame: {e}")
+            logger.error(f"Error cleaning up TTS/Pygame: {e}")
 
         remove_lock_file()
         stop_watchdog()
@@ -218,9 +220,9 @@ def main() -> None:
         try:
             proc_manager.cleanup()
         except Exception as e:
-            logging.error(f"Error cleaning up process manager: {e}")
+            logger.error(f"Error cleaning up process manager: {e}")
 
-        logging.info("Shutdown sequence complete.")
+        logger.info("Shutdown sequence complete.")
 
 if __name__ == "__main__":
     main()
