@@ -24,11 +24,8 @@ if not DEEPGRAM_API_KEY:
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
 
-ACTIVE_CONTEXT_WINDOW = 120
 WAKE_WORD_THRESHOLD = 0.22
 DEBUG_WAKE_WORD = False
-
-last_valid_command_time = 0
 
 class UnifiedVoiceAssistant:
     def __init__(self):
@@ -134,6 +131,7 @@ class UnifiedVoiceAssistant:
 
                 if not self.is_awake:
                     audio_array = np.frombuffer(pcm_data, dtype=np.int16)
+                    audio_array = np.clip(audio_array * 2.5, -32768, 32767).astype(np.int16)
                     prediction = self.oww_model.predict(audio_array)
                     
                     triggered = False
@@ -169,8 +167,6 @@ class UnifiedVoiceAssistant:
                 time.sleep(0.01)
 
     def process_final_command(self):
-        global last_valid_command_time
-
         if self.dg_connection:
             try:
                 self.dg_connection.finish()
@@ -187,15 +183,12 @@ class UnifiedVoiceAssistant:
 
         if full_command and full_command not in ignore_words and len(full_command) > 3:
             update_stt_status("understanding")
-            last_valid_command_time = time.time()
             self.command_queue.put(full_command)
         else:
             update_stt_status("idle")
             self.command_queue.put("")
 
     def get_command(self, is_retry=False):
-        global last_valid_command_time
-
         command = None
         while self.running:
             try:
@@ -205,24 +198,6 @@ class UnifiedVoiceAssistant:
                 continue
 
         if not self.running or command is None:
-            return ""
-
-        if command == "":
-            current_time = time.time()
-            time_since_last_cmd = current_time - last_valid_command_time
-
-            if last_valid_command_time > 0 and time_since_last_cmd < ACTIVE_CONTEXT_WINDOW and not is_retry:
-                try:
-                    from core.voice.tts import speak
-                    speak("[thinking] Ji sir? Main sun raha hu.")
-                except Exception:
-                    pass
-                time.sleep(0.5)
-
-                if self._setup_deepgram():
-                    self.is_awake = True
-                    update_stt_status("listening", "")
-                    return self.get_command(is_retry=True)
             return ""
 
         return command
