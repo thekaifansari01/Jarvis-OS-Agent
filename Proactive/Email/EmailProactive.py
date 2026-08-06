@@ -10,6 +10,7 @@ from google.cloud import pubsub_v1
 import tools.Messanger.email_manager as email_manager
 from tools.Messanger.email_manager import authenticate_gmail
 from Proactive.event_queue import push_proactive_event
+from core.logger.logger import logger
 
 PUBSUB_SCOPE = 'https://www.googleapis.com/auth/pubsub'
 if PUBSUB_SCOPE not in email_manager.SCOPES:
@@ -66,9 +67,9 @@ def _renew_watch():
         if _email_service:
             body = {'topicName': TOPIC_NAME, 'labelIds': ['INBOX'], 'labelFilterAction': 'include'}
             _email_service.users().watch(userId='me', body=body).execute()
-            print("🔄 Gmail Watch renewed.")
+            logger.info("Gmail Watch renewed.")
     except Exception as e:
-        print(f"⚠️ Watch renewal failed: {e}")
+        logger.warning(f"Watch renewal failed: {e}")
     finally:
         if not _stop_event.is_set():
             _watch_timer = threading.Timer(6 * 24 * 3600, _renew_watch)
@@ -118,7 +119,7 @@ def extract_email_content(service, msg_id, msg):
                 f.write(file_data)
             saved_attachments.append(os.path.abspath(save_path).replace("\\", "/"))
         except Exception as e:
-            print(f"⚠️ Attachment download error: {e}")
+            logger.warning(f"Attachment download error: {e}")
 
     def traverse_parts(parts):
         nonlocal plain_text, html_text
@@ -176,18 +177,18 @@ def get_all_unread_emails(service, start_time_ms, max_results=10):
             internal_date = int(full_msg.get('internalDate', 0))
             if internal_date < start_time_ms:
                 continue
-            name, email, sub, body, saved_attachments = extract_email_content(service, msg_id, full_msg)
+            name, email, sub, body, saved_attachments, msg_id = extract_email_content(service, msg_id, full_msg)
             emails.append((name, email, sub, body, saved_attachments, msg_id))
         return emails
     except Exception as e:
-        print(f"⚠️ Error fetching unread emails: {e}")
+        logger.warning(f"Error fetching unread emails: {e}")
         return []
 
 def mark_as_read(service, msg_id):
     try:
         service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
     except Exception as e:
-        print(f"⚠️ Failed to mark email {msg_id} as read: {e}")
+        logger.warning(f"Failed to mark email {msg_id} as read: {e}")
 
 def start_gmail_watch():
     global _email_service, _watch_timer
@@ -197,7 +198,7 @@ def start_gmail_watch():
             return None
         body = {'topicName': TOPIC_NAME, 'labelIds': ['INBOX'], 'labelFilterAction': 'include'}
         response = service.users().watch(userId='me', body=body).execute()
-        print(f"✅ Gmail Watch Active! History ID: {response.get('historyId')}")
+        logger.info(f"Gmail Watch Active! History ID: {response.get('historyId')}")
         _email_service = service
         if _watch_timer:
             _watch_timer.cancel()
@@ -206,7 +207,7 @@ def start_gmail_watch():
         _watch_timer.start()
         return service
     except Exception as e:
-        print(f"⚠️ Watch setup failed: {e}")
+        logger.warning(f"Watch setup failed: {e}")
         return None
 
 def listen_for_emails():
@@ -215,7 +216,7 @@ def listen_for_emails():
     if not service:
         return
 
-    print("🎧 Jarvis Universal Email Listener connected to Proactive Queue...")
+    logger.info("Jarvis Universal Email Listener connected to Proactive Queue...")
 
     def process_notification(message):
         try:
@@ -230,22 +231,16 @@ def listen_for_emails():
                         continue
                     _processed_ids.add(msg_id)
                 mark_as_read(service, msg_id)
-                print("\n" + "="*80)
-                print(f"👤 Name    : {name}")
-                print(f"📧 Email   : {email}")
-                print(f"📌 Subject : {sub}")
+                logger.info(f"Email from: {name} ({email}) | Subject: {sub}")
                 if saved_attachments:
-                    print(f"📎 Files   : {', '.join(saved_attachments)}")
-                print("-" * 80)
-                print(f"📝 Body    :\n{body}")
-                print("="*80 + "\n")
+                    logger.info(f"Attachments: {', '.join(saved_attachments)}")
                 event_data = f"Email from: {name} ({email})\nSubject: {sub}\nBody: {body}"
                 if saved_attachments:
                     att_str = ", ".join(saved_attachments)
                     event_data += f"\n[Attachments Saved]: {att_str}"
                 push_proactive_event("Gmail", event_data)
         except Exception as e:
-            print(f"⚠️ Error processing notification: {e}")
+            logger.error(f"Error processing notification: {e}")
 
     try:
         subscriber = pubsub_v1.SubscriberClient(credentials=service._http.credentials)
@@ -260,13 +255,13 @@ def listen_for_emails():
                 continue
             except Exception as e:
                 if not _stop_event.is_set():
-                    print(f"⚠️ Streaming error: {e}")
+                    logger.warning(f"Streaming error: {e}")
                 break
 
     except KeyboardInterrupt:
-        print("\n👋 Listener stopped.")
+        logger.info("Listener stopped.")
     except Exception as e:
-        print(f"⚠️ Critical error: {e}")
+        logger.error(f"Critical error: {e}")
     finally:
         if _streaming_future:
             _streaming_future.cancel()
