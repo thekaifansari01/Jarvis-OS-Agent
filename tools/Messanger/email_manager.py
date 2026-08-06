@@ -76,7 +76,7 @@ def authenticate_gmail(interactive: bool = True):
                 time.sleep(2)
 
     if creds and creds.valid:
-        return build('gmail', 'v1', credentials=creds)
+        return build('gmail', 'v1', credentials=creds, cache_discovery=False)
     logger.error("❌ Gmail authentication failed.")
     return None
 
