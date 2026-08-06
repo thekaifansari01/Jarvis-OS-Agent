@@ -14,20 +14,17 @@ from core.logger.logger import logger
 class SystemController:
     @staticmethod
     def _get_audio_interface():
-        """Helper to get Windows audio interface safely with COM Threading Fix"""
         comtypes.CoInitialize()
         devices = AudioUtilities.GetSpeakers()
-        if not hasattr(devices, 'Activate') and hasattr(devices, 'id'):
+        if hasattr(devices, '_dev'):
+            devices = devices._dev
+        elif not hasattr(devices, 'Activate') and hasattr(devices, 'id'):
             devices = pycaw_module.AudioUtilities.CreateDevice(devices.id)
         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         return cast(interface, POINTER(IAudioEndpointVolume))
 
     @staticmethod
     def change_volume(amount: int, relative: bool = True):
-        """
-        amount: integer (e.g., 10, -20, 50)
-        relative: True = Increase/Decrease by amount. False = Set exactly to amount.
-        """
         logger.info(f"🔊 Volume change: amount={amount}, relative={relative}")
         try:
             volume_interface = SystemController._get_audio_interface()
@@ -46,34 +43,35 @@ class SystemController:
 
         except Exception as pycaw_err:
             logger.warning(f"Pycaw volume error, trying fallback: {pycaw_err}")
-            if relative:
-                try:
-                    HWND_BROADCAST = 0xFFFF
-                    WM_APPCOMMAND = 0x0319
-                    APPCOMMAND_VOLUME_UP = 0x0a0000
-                    APPCOMMAND_VOLUME_DOWN = 0x090000
+            try:
+                HWND_BROADCAST = 0xFFFF
+                WM_APPCOMMAND = 0x0319
+                APPCOMMAND_VOLUME_UP = 0x0a0000
+                APPCOMMAND_VOLUME_DOWN = 0x090000
 
+                if relative:
                     steps = abs(amount) // 2
                     cmd = APPCOMMAND_VOLUME_UP if amount > 0 else APPCOMMAND_VOLUME_DOWN
-
-                    for _ in range(steps):
+                    for _ in range(max(1, steps)):
                         ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, cmd)
-
                     msg = f"Volume {'increased' if amount > 0 else 'decreased'} natively by ~{abs(amount)}%"
-                    logger.info(f"✅ {msg}")
-                    return msg
-                except Exception as native_err:
-                    msg = f"Volume control fully failed. Pycaw: {pycaw_err} | Native: {native_err}"
-                    logger.error(msg)
-                    return msg
-            else:
-                msg = f"Volume control error (Absolute setting needs pycaw, try relative commands like 'increase by 10'): {pycaw_err}"
+                else:
+                    steps = int(amount) // 2
+                    for _ in range(50):
+                        ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, APPCOMMAND_VOLUME_DOWN)
+                    for _ in range(steps):
+                        ctypes.windll.user32.SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, APPCOMMAND_VOLUME_UP)
+                    msg = f"Volume reset and set natively to ~{amount}%"
+
+                logger.info(f"✅ {msg}")
+                return msg
+            except Exception as native_err:
+                msg = f"Volume control fully failed. Pycaw: {pycaw_err} | Native: {native_err}"
                 logger.error(msg)
                 return msg
 
     @staticmethod
     def toggle_speaker_mute():
-        """Toggles System Audio (Speakers) Mute State"""
         logger.info("🔇 Toggling speaker mute")
         try:
             volume_interface = SystemController._get_audio_interface()
@@ -99,10 +97,6 @@ class SystemController:
 
     @staticmethod
     def change_brightness(amount: int, relative: bool = True):
-        """
-        amount: integer (e.g., 10, -20, 50)
-        relative: True = Increase/Decrease by amount. False = Set exactly to amount.
-        """
         logger.info(f"☀️ Brightness change: amount={amount}, relative={relative}")
         try:
             current_brightness = sbc.get_brightness()[0]
@@ -124,7 +118,6 @@ class SystemController:
 
     @staticmethod
     def lock_pc():
-        """Instantly locks the Windows PC (Win + L behavior)"""
         logger.info("🔒 Locking PC")
         try:
             ctypes.windll.user32.LockWorkStation()
@@ -138,7 +131,6 @@ class SystemController:
 
     @staticmethod
     def sleep_pc():
-        """Puts the Windows PC to Sleep securely"""
         logger.info("💤 Putting PC to sleep")
         try:
             os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
@@ -157,15 +149,22 @@ class SystemController:
             if not save_dir:
                 save_dir = "C:/Documents/Jarvis/Screenshots"
 
-            os.makedirs(save_dir, exist_ok=True)
-
             if filename:
-                if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    filename += ".png"
-                filepath = os.path.join(save_dir, filename)
+                clean_filename = filename.replace("/", os.sep).replace("\\", os.sep)
+                if not clean_filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    clean_filename += ".png"
+                
+                if os.path.isabs(clean_filename):
+                    filepath = clean_filename
+                else:
+                    filepath = os.path.join(save_dir, clean_filename)
             else:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filepath = os.path.join(save_dir, f"screenshot_{timestamp}.png")
+
+            parent_dir = os.path.dirname(filepath)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
 
             screenshot = ImageGrab.grab()
             screenshot.save(filepath)

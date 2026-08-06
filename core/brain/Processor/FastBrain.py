@@ -8,7 +8,6 @@ from groq import Groq
 from core.logger.logger import logger
 from core.brain.Processor.Prompts import SYSTEM_PROMPT
 from core.brain.config import GROQ_FAST_MODEL, GROQ_API_KEY
-
 from core.ui.typing_status import update_typing_status, launch_popup
 
 USER_NAME = os.getenv("USER_NAME", "Sir")
@@ -86,7 +85,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                         "properties": {
                             "agent_reply": {
                                 "type": "string",
-                                "description": "A natural, contextual reply to the user confirming the action (e.g., 'Okay, system locked', 'I will keep it locked until you return', 'Volume increased')."
+                                "description": "A natural, contextual reply to the user confirming the action."
                             },
                             "apps_to_open": {"type": "array", "items": {"type": "string"}},
                             "apps_to_close": {"type": "array", "items": {"type": "string"}},
@@ -115,17 +114,17 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 "type": "function",
                 "function": {
                     "name": "quick_web_search",
-                    "description": "Use this to search the web for simple, real-time facts (weather, scores, news).",
+                    "description": "Use this ONLY for simple, real-time facts like current weather, sports scores, stock prices, or breaking news headlines.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "agent_reply": {
                                 "type": "string",
-                                "description": "A natural, contextual reply to the user acknowledging the search (e.g., 'One moment, checking online', 'I will check the weather now')."
+                                "description": "A quick acknowledgment (e.g., 'Checking the weather now...', 'One moment, checking live score...')."
                             },
                             "query": {
                                 "type": "string",
-                                "description": "The exact SEO-optimized search keywords to look up on Google. MUST be clean English/Hinglish keywords (e.g., 'Mumbai weather today forecast', 'IPL live score'). NEVER pass long conversational sentences."
+                                "description": "Clean, concise search keywords (e.g., 'Mumbai weather today', 'IND vs AUS live score')."
                             }
                         },
                         "required": ["query"]
@@ -193,29 +192,29 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                     result["response"] = args.get("agent_reply", "Processing your request.")
             except Exception as e:
                 logger.error(f"Error parsing Groq tool args: {e}")
-            
+
         elif tool_call_name == "quick_web_search" and tool_call_args:
             try:
-                from tools.SearchTools.WebSearch import search_web
+                from tools.SearchTools.WebSearch import quick_snippet_search
                 
                 args = json.loads(tool_call_args)
                 query = args.get("query", "")
-                agent_reply = args.get("agent_reply", "One moment, checking...")
+                agent_reply = args.get("agent_reply", "One second, checking...")
                 
                 update_typing_status("typing", agent_reply)
                 
-                search_xml = search_web(query, max_results=2)
+                search_data = quick_snippet_search(query, max_results=2)
                 context_prompt = build_fast_brain_prompt(raw_command, memory_instance, ephemeral)
                 
-                print("\n\033[96mJarvis (Web Search):\033[0m ", end="", flush=True)
+                print("\n\033[96mJarvis (Quick Search):\033[0m ", end="", flush=True)
                 
                 final_completion = groq_client.chat.completions.create(
                     model=FAST_MODEL,
                     messages=[
-                        {"role": "system", "content": f"You are Jarvis. Answer the user's query naturally based ONLY on the provided Search Data and user context. Be direct, helpful, and do not use markdown.\n{context_prompt}"},
-                        {"role": "user", "content": f"Query: {raw_command}\nSearch Data: {search_xml[:4000]}"}
+                        {"role": "system", "content": f"You are Jarvis. Answer concisely and naturally in 1-2 lines based ONLY on this real-time snippet data. Do not mention that you searched.\n{context_prompt}"},
+                        {"role": "user", "content": f"Query: {raw_command}\nReal-Time Snippets:\n{search_data}"}
                     ],
-                    temperature=0.3,
+                    temperature=0.2,
                     stream=True
                 )
                 
@@ -231,8 +230,8 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 result["response"] = final_answer.strip()
                 
             except Exception as e:
-                logger.error(f"Error parsing Groq tool args for search: {e}")
-                result["response"] = "Error processing search data."
+                logger.error(f"Quick Search Error: {e}")
+                result["response"] = "Sorry sir, abhi real-time data check karne me dikkat aa rahi hai."
 
         update_typing_status("completed", result["response"])
         return result

@@ -23,6 +23,7 @@ import webbrowser
 import pywhatkit
 import traceback
 import tempfile
+import time
 
 file_editor = JarvisFileEditor()
 
@@ -111,17 +112,19 @@ def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str
         if result.get('system_action'):
             def sys_act():
                 action = result['system_action']
-                if action == 'lock':
-                    SystemController.lock_pc()
-                    log_action("🔒 PC Locked")
-                elif action == 'sleep':
-                    SystemController.sleep_pc()
-                    log_action("🌙 PC Sleep")
-                elif action == 'screenshot':
+                if action == 'screenshot':
                     temp_dir = tempfile.gettempdir()
                     msg = SystemController.capture_screenshot(save_dir=temp_dir)
                     log_action(f"📸 {msg}")
                     executor.submit(speak, "Screenshot save ho gaya sir.")
+                elif action in ['lock', 'sleep']:
+                    time.sleep(0.8)
+                    if action == 'lock':
+                        SystemController.lock_pc()
+                        log_action("🔒 PC Locked")
+                    elif action == 'sleep':
+                        SystemController.sleep_pc()
+                        log_action("🌙 PC Sleep")
             executor.submit(sys_act)
     except Exception as e:
         logger.error(f"❌ CRITICAL ERROR in execute_actions (Fast Brain): {e}\n{traceback.format_exc()}")
@@ -432,6 +435,34 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             except Exception as e:
                 logger.error(f"❌ YouTube playback error: {e}")
                 sys_observations.append(f"YouTube error: {e}")
+
+        vol_action = system_ctrl.get('volume_action') or system_ctrl.get('volume', {}).get('action')
+        vol_val = system_ctrl.get('volume_value') or system_ctrl.get('volume', {}).get('value', 10)
+        if vol_action:
+            try:
+                relative = vol_action in ['increase', 'decrease']
+                if vol_action == 'decrease':
+                    vol_val = -abs(int(vol_val))
+                msg = SystemController.change_volume(int(vol_val), relative)
+                sys_observations.append(msg)
+                logger.info(f"✅ System Controller Volume: {msg}")
+            except Exception as e:
+                logger.error(f"❌ Volume change error: {e}")
+                sys_observations.append(f"Volume error: {e}")
+
+        br_action = system_ctrl.get('brightness_action') or system_ctrl.get('brightness', {}).get('action')
+        br_val = system_ctrl.get('brightness_value') or system_ctrl.get('brightness', {}).get('value', 10)
+        if br_action:
+            try:
+                relative = br_action in ['increase', 'decrease']
+                if br_action == 'decrease':
+                    br_val = -abs(int(br_val))
+                msg = SystemController.change_brightness(int(br_val), relative)
+                sys_observations.append(msg)
+                logger.info(f"✅ System Controller Brightness: {msg}")
+            except Exception as e:
+                logger.error(f"❌ Brightness change error: {e}")
+                sys_observations.append(f"Brightness error: {e}")
 
         system_action = system_ctrl.get('system_action')
         if system_action:

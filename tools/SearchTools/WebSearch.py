@@ -65,3 +65,42 @@ def search_web(query, max_results=5):
         logging.error(f"Error in Tavily search_web: {e}")
         return f"<error>Web search failed: {e}</error>"
     
+def quick_snippet_search(query: str, max_results: int = 2) -> str:
+    try:
+        if not query:
+            return "No query provided."
+
+        api_key = os.getenv('TAVILY_API_KEY')
+        if not api_key:
+            return "Search API key missing."
+
+        client = TavilyClient(api_key=api_key)
+        
+        response = client.search(
+            query=query,
+            search_depth="basic",
+            max_results=max_results,
+            include_answer=True,         
+            include_raw_content=False    
+        )
+        
+        direct_answer = response.get("answer", "")
+        results = response.get("results", [])
+        
+        if not results and not direct_answer:
+            return "No real-time facts found."
+
+        output_lines = []
+        if direct_answer:
+            output_lines.append(f"Direct Answer: {direct_answer}")
+            
+        for i, r in enumerate(results[:max_results], 1):
+            title = r.get('title', 'N/A')
+            snippet = r.get('content', '').strip().replace('\n', ' ')
+            output_lines.append(f"[{i}] {title}: {snippet}")
+
+        return "\n".join(output_lines)
+
+    except Exception as e:
+        logging.error(f"Quick search error: {e}")
+        return "Real-time search unavailable right now."

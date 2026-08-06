@@ -31,34 +31,32 @@ class RegoloSemanticRouter:
         if not self.api_key:
             return None
         
-        trimmed_history = history_context[-500:].strip() if history_context else "No recent history."
+        trimmed_history = history_context[-350:].strip() if history_context else "No recent history."
 
         system_prompt = (
-            "You are an enterprise AI semantic router. Your task is to classify user commands into strict JSON "
+            "You are an enterprise AI semantic router. Classify the user command into strict JSON "
             "with a single key 'route' having value either 'FAST' or 'AGENTIC'.\n\n"
-            "### ROUTING RULES (ORDER OF PRIORITY)\n"
-            "1. ROUTE TO 'AGENTIC' IF THE COMMAND REQUIRES:\n"
-            "   - Sending emails or WhatsApp messages/fetching chat history.\n"
-            "   - Creating, reading, editing, or deleting local files (txt, md, code) or folders.\n"
-            "   - Writing or running Python code, terminal/CMD commands, or package installations (pip/npm).\n"
-            "   - Recalling past memories, instructions, personal vault notes, or calendar events.\n"
-            "   - Scraping webpages, summarizing YouTube links, academic paper search (arxiv), or deep research reports.\n"
-            "   - Creating/editing AI images or reading/writing system clipboard.\n"
-            "   - ANY compound command combining multiple steps (e.g., 'Open Chrome and send an email').\n\n"
-            "2. ROUTE TO 'FAST' IF THE COMMAND IS:\n"
-            "   - General conversation, greetings, jokes, or casual chat.\n"
-            "   - Simple real-time factual checks (weather, live sports scores, quick news).\n"
-            "   - DIRECT SYSTEM CONTROLS: Opening/closing standard desktop apps or websites (Chrome, Notepad, etc.).\n"
-            "   - Hardware controls: Volume up/down/mute, brightness, lock PC, sleep PC, or taking a screenshot.\n"
-            "   - DIRECT MEDIA PLAYBACK: 'Play [song/video] on YouTube' without requiring summary/analysis.\n\n"
-            "### FEW-SHOT EXAMPLES (ENGLISH & HINGLISH)\n"
+            "### STRICT NEGATIVE CONSTRAINTS (NEVER ROUTE TO AGENTIC)\n"
+            "- Casual conversation, greetings, jokes, time, date, or personal chit-chat.\n"
+            "- Simple hardware controls: volume up/down/mute, brightness, screen lock, sleep, or screenshots.\n"
+            "- Simple app/web launching or closing: 'Open Chrome', 'Close Notepad', 'Launch YouTube'.\n"
+            "- Direct media playback: 'Play [song/video] on YouTube'.\n"
+            "- Simple real-time web lookups: weather forecasts, live scores, quick definitions, or news.\n\n"
+            "### POSITIVE ROUTING RULES (ROUTE TO 'AGENTIC' ONLY IF REQUIRED)\n"
+            "- Email or WhatsApp messaging (sending, attaching files, or reading chat history).\n"
+            "- File system CRUD operations: creating, reading, replacing, or deleting local files/folders.\n"
+            "- Coding & Terminal: writing/executing Python scripts, CMD commands, pip/npm installs, or git.\n"
+            "- Long-term memory retrieval: searching personal vault notes, old episodic facts, or calendar management.\n"
+            "- Advanced research: webpage scraping, academic arxiv search, or multi-source deep research reports.\n"
+            "- Compound multi-step workflows combining apps and communications (e.g., 'Open Chrome and email the summary').\n\n"
+            "### FEW-SHOT EXAMPLES\n"
             "User: 'Volume badha do aur Youtube par Arijit Singh ka gana chalao' -> {\"route\": \"FAST\"}\n"
-            "User: 'Chrome kholo aur weather check karo' -> {\"route\": \"FAST\"}\n"
+            "User: 'Chrome kholo aur aaj ka weather search karo' -> {\"route\": \"FAST\"}\n"
+            "User: 'Ek joke sunao aur brightness kam kar do' -> {\"route\": \"FAST\"}\n"
             "User: 'Is YouTube link ka video summary batao' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Kaif ko mail bhejo ki meeting 5 baje hai' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Desktop par ek naya file bano test.txt nam se' -> {\"route\": \"AGENTIC\"}\n"
-            "User: 'Kal maine tumse kya kaha tha coffee ke bare me?' -> {\"route\": \"AGENTIC\"}\n"
-            "User: 'System lock kar do' -> {\"route\": \"FAST\"}"
+            "User: 'Kal maine tumse kya kaha tha coffee ke bare me?' -> {\"route\": \"AGENTIC\"}"
         )
 
         user_content = f"[RECENT CONVERSATION HISTORY]\n{trimmed_history}\n\n[USER COMMAND]\n\"{command}\""
@@ -70,7 +68,7 @@ class RegoloSemanticRouter:
                 {"role": "user", "content": user_content}
             ],
             "temperature": 0.0,
-            "max_tokens": 20,
+            "max_tokens": 15,
             "response_format": {"type": "json_object"}
         }
 
@@ -86,7 +84,7 @@ class RegoloSemanticRouter:
                 logger.info(f"⚡ Regolo Semantic Router [{latency_ms:.1f}ms] | Decision -> {route}")
                 return "AGENTIC" if route == "AGENTIC" else "FAST"
             else:
-                logger.warning(f"⚠️ Regolo Router API returned non-200 status ({response.status_code}): {response.text[:100]}")
+                logger.warning(f"⚠️ Regolo Router API non-200 status ({response.status_code}): {response.text[:100]}")
                 
         except Exception as e:
             logger.warning(f"⚠️ Regolo Router API failed ({e}). Switching to local fallback router.")
@@ -97,29 +95,36 @@ router_engine = RegoloSemanticRouter()
 
 
 def get_local_fallback_route(command: str) -> str:
-    if len(command.split()) > 25:
+    cmd_lower = command.lower().strip()
+    words = cmd_lower.split()
+
+    if len(words) > 30:
         return "AGENTIC"
-    cmd_lower = command.lower()
-    
-    agentic_overrides = [
-        "email", "mail", "whatsapp", "file", "terminal", "code", "python", "read", "padho",
-        "write", "likho", "summary", "search", "dhoondho", "memory", "yaad", "resume",
-        "bano", "bhejo"
-    ]
-    
-    fast_triggers = [
-        "volume", "awaaz", "brightness", "screenshot", "lock", "sleep", "mute",
-        "open", "kholo", "close", "band", "start", "launch",
-        "youtube", "play", "song", "chalao", "music",
-        "time", "date", "weather", "mausam", "hi", "hello", "kaise ho"
+
+    absolute_fast_patterns = [
+        r'\b(volume|awaaz|sound|brightness|screenshot|lock|sleep|mute)\b',
+        r'\b(open|kholo|close|band|start|launch)\b',
+        r'\b(play|chalao|song|gana|music|youtube)\b',
+        r'\b(weather|mausam|time|date|score|news|joke)\b',
+        r'^(hi|hello|hey|kaise ho|what is up|good morning|good evening)$'
     ]
 
-    for word in agentic_overrides:
-        if re.search(rf'\b{re.escape(word)}\b', cmd_lower):
+    agentic_strict_patterns = [
+        r'\b(email|mail|gmail|whatsapp|msg|message)\b',
+        r'\b(file|folder|directory|repo|test\.txt|\.py|\.html|\.json)\b',
+        r'\b(terminal|cmd|powershell|pip|npm|git|subprocess)\b',
+        r'\b(python|script|code|repl|compile)\b',
+        r'\b(arxiv|vault|deep research|scrape|webpage)\b',
+        r'\b(calendar|reminder|event|schedule)\b',
+        r'\b(memory|yaad|recall|history)\b'
+    ]
+
+    for pattern in agentic_strict_patterns:
+        if re.search(pattern, cmd_lower):
             return "AGENTIC"
 
-    for word in fast_triggers:
-        if re.search(rf'\b{re.escape(word)}\b', cmd_lower):
+    for pattern in absolute_fast_patterns:
+        if re.search(pattern, cmd_lower):
             return "FAST"
 
     return "FAST"
@@ -137,6 +142,8 @@ def get_route_decision(command: str, memory_instance=None) -> str:
                 memory_instance.ephemeral["waiting_for_confirmation"] = False
                 logger.info("⚡ Proactive Confirmation detected -> Routing directly to AGENTIC")
                 return "AGENTIC"
+            else:
+                memory_instance.ephemeral["waiting_for_confirmation"] = False
 
     history_context = ""
     if memory_instance and hasattr(memory_instance, "get_fast_history_context"):
@@ -174,7 +181,7 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
             
             return run_agentic_loop(raw_command, final_context, memory_instance)
         else:
-            logger.info("🚦 Smart Router: FAST (Direct Apps / Stateless Chat / File Open)")
+            logger.info("🚦 Smart Router: FAST (Direct Apps / Stateless Chat / Hardware)")
             
             if memory_instance and hasattr(memory_instance, 'get_and_clear_feedback'):
                 cleared_feedback = memory_instance.get_and_clear_feedback()
