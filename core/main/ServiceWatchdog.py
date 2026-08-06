@@ -28,14 +28,16 @@ class ServiceWatchdog:
                 "start_func": start_baileys_server,
                 "retries": 0,
                 "last_restart": 0,
-                "has_creds": lambda: os.path.exists(self._creds_path)
+                "has_creds": lambda: os.path.exists(self._creds_path),
+                "abandoned": False
             },
             "stt_popup": {
                 "is_running_check": is_stt_popup_running,
                 "start_func": start_stt_popup,
                 "retries": 0,
                 "last_restart": 0,
-                "has_creds": lambda: True
+                "has_creds": lambda: True,
+                "abandoned": False
             }
         }
         if ADB_HOST is not None:
@@ -44,7 +46,8 @@ class ServiceWatchdog:
                 "start_func": start_mobile_connection,
                 "retries": 0,
                 "last_restart": 0,
-                "has_creds": lambda: True
+                "has_creds": lambda: True,
+                "abandoned": False
             }
 
     def start(self):
@@ -68,6 +71,8 @@ class ServiceWatchdog:
             for service_name, service_data in self.services.items():
                 if not self._is_running:
                     break
+                if service_data.get("abandoned", False):
+                    continue
                 if current_time - service_data["last_restart"] < self.cooldown:
                     continue
                 try:
@@ -80,7 +85,8 @@ class ServiceWatchdog:
                     is_active = service_data["is_running_check"]()
                     if not is_active:
                         if service_data["retries"] >= self.max_retries:
-                            logging.error(f"Watchdog: {service_name} exceeded maximum retries. Abandoning restart.")
+                            logging.warning(f"Watchdog: {service_name} failed after {self.max_retries} attempts. Skipping permanently.")
+                            service_data["abandoned"] = True
                             continue
                         logging.warning(f"Watchdog: {service_name} process down. Attempting restart {service_data['retries'] + 1}/{self.max_retries}.")
                         service_data["start_func"]()
