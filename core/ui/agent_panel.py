@@ -60,7 +60,6 @@ class AgentPanel(QWidget):
         self.gradient_phase = 0.0
         self.current_action_type = "idle"
 
-        # Smooth RGB Color Lerping (Interpolation)
         self.current_rgb = [191, 90, 242]
         self.target_rgb = [191, 90, 242]
         
@@ -107,30 +106,28 @@ class AgentPanel(QWidget):
         self.container.setMinimumSize(0, 0) 
         self.container.setAttribute(Qt.WA_StyledBackground, True)
         
-        # 1. Specular Dynamic Glass Border Container (Top-left light reflection)
         self.default_wrapper_style = """
             #IslandWrapper {
                 background-color: qlineargradient(
                     x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba(255, 255, 255, 0.28),
-                    stop:0.35 rgba(255, 255, 255, 0.08),
-                    stop:0.75 rgba(191, 90, 242, 0.22),
-                    stop:1 rgba(255, 255, 255, 0.14)
+                    stop:0 rgba(255, 255, 255, 0.32),
+                    stop:0.35 rgba(255, 255, 255, 0.06),
+                    stop:0.75 rgba(191, 90, 242, 0.25),
+                    stop:1 rgba(255, 255, 255, 0.18)
                 );
                 border-radius: 28px;
             }
         """
         self.container.setStyleSheet(self.default_wrapper_style)
 
-        # 2. Soft Floating macOS Ambient Shadow
         self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(45) 
-        self.shadow.setColor(QColor(0, 0, 0, 160)) 
-        self.shadow.setOffset(0, 10) 
+        self.shadow.setBlurRadius(50) 
+        self.shadow.setColor(QColor(0, 0, 0, 170)) 
+        self.shadow.setOffset(0, 12) 
         self.container.setGraphicsEffect(self.shadow)
 
         self.wrapper_layout = QVBoxLayout(self.container)
-        self.wrapper_layout.setContentsMargins(1, 1, 1, 1)  # 1px padding reveals outer specular border
+        self.wrapper_layout.setContentsMargins(1, 1, 1, 1)
         self.wrapper_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
         self.inner_island = QFrame(self.container)
@@ -138,17 +135,16 @@ class AgentPanel(QWidget):
         self.inner_island.setMinimumSize(0, 0) 
         self.inner_island.setAttribute(Qt.WA_StyledBackground, True)
         
-        # 3. Deep Velvet Midnight Glass Inner Body
         self.inner_island.setStyleSheet("""
             #Island {
                 background-color: qlineargradient(
                     x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(22, 22, 28, 0.97), 
-                    stop:0.4 rgba(15, 15, 19, 0.98),
-                    stop:1 rgba(9, 9, 12, 0.99)
+                    stop:0 rgba(28, 28, 34, 0.98), 
+                    stop:0.45 rgba(18, 18, 22, 0.99),
+                    stop:1 rgba(10, 10, 13, 1.0)
                 );
                 border-radius: 27px;
-                border: 1px solid rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.08);
             }
         """)
         self.wrapper_layout.addWidget(self.inner_island)
@@ -169,28 +165,23 @@ class AgentPanel(QWidget):
         self.pulse_dot.setGraphicsEffect(self.pulse_opacity)
         self.start_pulse_animation()
         
-        # Sleek Glass Pill Badge
         self.status_tag = QLabel("AGENT IDLE")
-        self.status_tag.setFont(QFont(self.font_eng, 8, QFont.Bold))
+        self.status_tag.setFont(QFont(self.font_eng, 9, QFont.Bold))
         self.status_tag.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 0.92);
-                background-color: rgba(255, 255, 255, 0.07);
-                border: 1px solid rgba(255, 255, 255, 0.11);
-                border-radius: 10px;
-                padding: 3px 12px;
-                font-weight: 600;
-                letter-spacing: 0.9px;
+                background: transparent;
+                border: none;
+                letter-spacing: 1.2px;
             }
         """)
-        self.status_tag.setMaximumWidth(180)
+        self.status_tag.setMaximumWidth(310)
         self.status_tag.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         header_layout.addWidget(self.pulse_dot)
         header_layout.addWidget(self.status_tag)
         header_layout.addStretch()
         
-        # Token & Step Metadata
         self.token_label = QLabel("TOKENS: 0")
         self.token_label.setFont(QFont(self.font_eng, 9, QFont.Bold))
         self.token_label.setStyleSheet("color: rgba(255, 255, 255, 0.38); letter-spacing: 0.8px; border: none; background: transparent;")
@@ -227,7 +218,7 @@ class AgentPanel(QWidget):
         self.thought_label.setFont(thought_font) 
         self.thought_label.setStyleSheet("""
             QLabel {
-                color: rgba(246, 246, 252, 0.94); 
+                color: rgba(248, 248, 255, 0.95); 
                 line-height: 1.45; 
                 border: none;
                 background: transparent;
@@ -240,11 +231,10 @@ class AgentPanel(QWidget):
 
         self.separator = QFrame()
         self.separator.setFixedHeight(1)
-        self.separator.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255,255,255,0), stop:0.5 rgba(255,255,255,0.15), stop:1 rgba(255,255,255,0)); margin-top: 2px; margin-bottom: 2px;")
+        self.separator.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255,255,255,0), stop:0.5 rgba(255,255,255,0.18), stop:1 rgba(255,255,255,0)); margin-top: 2px; margin-bottom: 2px;")
         self.layout.addWidget(self.separator)
         self.separator.hide() 
 
-        # Clean Frosted Glass Card (No vertical line)
         self.obs_label = QLabel("")
         self.obs_label.setMinimumSize(0, 0) 
         self.obs_label.setWordWrap(True)
@@ -254,10 +244,10 @@ class AgentPanel(QWidget):
             QLabel {
                 color: rgba(235, 235, 245, 0.88); 
                 line-height: 1.4; 
-                border: 1px solid rgba(255, 255, 255, 0.07);
+                border: 1px solid rgba(255, 255, 255, 0.08);
                 padding: 10px 14px;
-                background-color: rgba(255, 255, 255, 0.04);
-                border-radius: 10px;
+                background-color: rgba(255, 255, 255, 0.045);
+                border-radius: 12px;
             }
         """)
         self.layout.addWidget(self.obs_label)
@@ -313,24 +303,21 @@ class AgentPanel(QWidget):
         }
         self.target_rgb = color_map.get(self.current_action_type, [255, 255, 255])
 
-        # Smooth linear interpolation (lerp) towards target color
         for i in range(3):
             self.current_rgb[i] += (self.target_rgb[i] - self.current_rgb[i]) * 0.15
 
         r, g, b = [int(c) for c in self.current_rgb]
         
-        # 1. Update pulse dot
         self.pulse_dot.setStyleSheet(f"background-color: rgb({r}, {g}, {b}); border-radius: 5px;")
 
-        # 2. Dynamically Lerp Outer Specular Glass Border
         self.container.setStyleSheet(f"""
             #IslandWrapper {{
                 background-color: qlineargradient(
                     x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba(255, 255, 255, 0.28),
-                    stop:0.35 rgba(255, 255, 255, 0.08),
-                    stop:0.75 rgba({r}, {g}, {b}, 0.22),
-                    stop:1 rgba(255, 255, 255, 0.14)
+                    stop:0 rgba(255, 255, 255, 0.32),
+                    stop:0.35 rgba(255, 255, 255, 0.06),
+                    stop:0.75 rgba({r}, {g}, {b}, 0.25),
+                    stop:1 rgba(255, 255, 255, 0.18)
                 );
                 border-radius: 28px;
             }}
@@ -503,7 +490,7 @@ class AgentPanel(QWidget):
             if full_tag_text != self.last_tag_text:
                 self.last_tag_text = full_tag_text
                 fm = QFontMetrics(self.status_tag.font())
-                elided_tag = fm.elidedText(full_tag_text, Qt.ElideRight, 175)
+                elided_tag = fm.elidedText(full_tag_text, Qt.ElideRight, 280)
                 self.status_tag.setText(elided_tag)
 
             if self.current_step != step:
