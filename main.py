@@ -97,6 +97,16 @@ def main() -> None:
 
     create_lock_file()
 
+   os.system('cls' if os.name == 'nt' else 'clear')
+    print(r"""
+        ██╗  █████╗ ██████╗ ██╗   ██╗██╗███████╗
+        ██║ ██╔══██╗██╔══██╗██║   ██║██║██╔════╝
+        ██║ ███████║██████╔╝██║   ██║██║███████╗
+    ██  ██║ ██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║
+    ╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
+    ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
+    """)
+
     import pygame
     from concurrent.futures import ThreadPoolExecutor
     from core.brain.Memory.Memory import ContextMemory
