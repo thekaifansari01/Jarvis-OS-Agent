@@ -24,7 +24,10 @@ if not DEEPGRAM_API_KEY:
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
 
-ACTIVE_CONTEXT_WINDOW = 120  
+ACTIVE_CONTEXT_WINDOW = 120
+WAKE_WORD_THRESHOLD = 0.22
+DEBUG_WAKE_WORD = False
+
 last_valid_command_time = 0
 
 class UnifiedVoiceAssistant:
@@ -65,7 +68,7 @@ class UnifiedVoiceAssistant:
     def play_wake_sound(self):
         try:
             winsound.Beep(2000, 150)
-        except:
+        except Exception:
             pass
 
     def _setup_deepgram(self):
@@ -120,7 +123,8 @@ class UnifiedVoiceAssistant:
                 return False
             return True
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"Deepgram setup failed: {e}")
             return False
 
     def _audio_loop(self):
@@ -134,7 +138,10 @@ class UnifiedVoiceAssistant:
                     
                     triggered = False
                     for model_name, score in prediction.items():
-                        if score > 0.5:
+                        if DEBUG_WAKE_WORD and score > 0.15:
+                            logger.info(f"Wake Word Score ({model_name}): {score:.3f}")
+                            
+                        if score > WAKE_WORD_THRESHOLD:
                             triggered = True
                             break
 
@@ -208,7 +215,7 @@ class UnifiedVoiceAssistant:
                 try:
                     from core.voice.tts import speak
                     speak("[thinking] Ji sir? Main sun raha hu.")
-                except:
+                except Exception:
                     pass
                 time.sleep(0.5)
 

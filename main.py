@@ -97,7 +97,7 @@ def main() -> None:
 
     create_lock_file()
 
-   os.system('cls' if os.name == 'nt' else 'clear')
+    os.system('cls' if os.name == 'nt' else 'clear')
     print(r"""
         ██╗  █████╗ ██████╗ ██╗   ██╗██╗███████╗
         ██║ ██╔══██╗██╔══██╗██║   ██║██║██╔════╝
