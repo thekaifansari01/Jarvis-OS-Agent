@@ -4,8 +4,8 @@ import threading
 import queue
 import winsound
 import pyaudio
-import numpy as np
-from openwakeword.model import Model
+import json
+from vosk import Model as VoskModel, KaldiRecognizer, SetLogLevel
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -16,6 +16,8 @@ from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 
 load_dotenv()
 
+SetLogLevel(-1)
+
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 if not DEEPGRAM_API_KEY:
@@ -24,21 +26,27 @@ if not DEEPGRAM_API_KEY:
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
 
-WAKE_WORD_THRESHOLD = 0.22
-DEBUG_WAKE_WORD = False
-
 class UnifiedVoiceAssistant:
     def __init__(self):
+        self.CHUNK = 2048
+        self.RATE = 16000
+        self.WAKE_WORDS = ["jarvis"]
+
+        model_path = "Data/model/vosk-model-small"
+        if not os.path.exists(model_path):
+            logger.error(f"Vosk model folder not found at: {model_path}")
+            raise FileNotFoundError(f"Vosk model not found at '{model_path}'.")
+        
+        logger.info("Loading Vosk wake word model...")
         try:
-            model_path = "Data/model/jarvis.onnx"
-            self.oww_model = Model(wakeword_models=[model_path])
+            self.vosk_model = VoskModel(model_path)
+            grammar = json.dumps(self.WAKE_WORDS + ["[unk]"])
+            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
+            logger.info("Vosk model loaded successfully.")
         except Exception as e:
-            logger.error(f"openWakeWord init error: {e}")
+            logger.error(f"Failed to initialize Vosk model: {e}")
             raise
 
-        self.CHUNK = 1280
-        self.RATE = 16000
-        
         self.audio = pyaudio.PyAudio()
         self.stream = self.audio.open(
             format=pyaudio.paInt16,
@@ -58,7 +66,7 @@ class UnifiedVoiceAssistant:
         self.command_done = threading.Event()
 
     def start(self):
-        logger.info("Unified Voice Engine Started with openWakeWord...")
+        logger.info("Wake Word Detection Activated -> Listening for 'Jarvis'...")
         self.listen_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.listen_thread.start()
 
@@ -130,20 +138,22 @@ class UnifiedVoiceAssistant:
                 pcm_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
 
                 if not self.is_awake:
-                    audio_array = np.frombuffer(pcm_data, dtype=np.int16)
-                    audio_array = np.clip(audio_array * 2.5, -32768, 32767).astype(np.int16)
-                    prediction = self.oww_model.predict(audio_array)
-                    
                     triggered = False
-                    for model_name, score in prediction.items():
-                        if DEBUG_WAKE_WORD and score > 0.15:
-                            logger.info(f"Wake Word Score ({model_name}): {score:.3f}")
-                            
-                        if score > WAKE_WORD_THRESHOLD:
+
+                    if self.vosk_recognizer.AcceptWaveform(pcm_data):
+                        res = json.loads(self.vosk_recognizer.Result())
+                        text = res.get("text", "").lower()
+                        if any(w in text for w in self.WAKE_WORDS):
                             triggered = True
-                            break
+                    else:
+                        partial = json.loads(self.vosk_recognizer.PartialResult())
+                        p_text = partial.get("partial", "").lower()
+                        if any(w in p_text for w in self.WAKE_WORDS):
+                            triggered = True
+                            self.vosk_recognizer.Reset()
 
                     if triggered:
+                        logger.info("Wake word 'Jarvis' triggered!")
                         try:
                             from core.voice import tts
                             tts.stop_speaking()
@@ -179,6 +189,7 @@ class UnifiedVoiceAssistant:
         ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you", "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
 
         self.is_awake = False
+        self.vosk_recognizer.Reset()
         interrupt.clear_interrupt()
 
         if full_command and full_command not in ignore_words and len(full_command) > 3:

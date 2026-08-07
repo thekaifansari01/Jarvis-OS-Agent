@@ -22,6 +22,7 @@ Data/jarvis_memory/
 Data/Jarvis_Workspace/
 Data/MediaVault/
 Data/RAG/
+Data/model/vosk-model-small/
 
 # Dependency installs and compiled application binaries
 node_modules/
