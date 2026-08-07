@@ -36,7 +36,7 @@ class UnifiedVoiceAssistant:
         self.WAKE_WORDS = ["jarvis", "hey jarvis"]
         self.DISTRACTORS = [
             "service", "travis", "harvest", "driver", "artists", 
-            "javascript", "garbage", "hello", "ha", "theek", "okay",
+            "javascript", "garbage", "hello", "ha", "okay",
             "ah", "uh", "eh", "hmm", "shh", "ch", "s", "oh", "m"
         ]
 
@@ -228,6 +228,15 @@ class UnifiedVoiceAssistant:
         self.is_awake = False
         self.vosk_recognizer.Reset()
         interrupt.clear_interrupt()
+
+        try:
+            if self.dg_connection:
+                self.dg_connection.finish()
+        except Exception:
+            pass
+        finally:
+            self.dg_connection = None
+            self.connection_established = False
 
         if full_command and full_command not in ignore_words and len(full_command) > 3:
             update_stt_status("understanding")
