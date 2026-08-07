@@ -5,6 +5,8 @@ import queue
 import winsound
 import pyaudio
 import json
+import struct
+import math
 from vosk import Model as VoskModel, KaldiRecognizer, SetLogLevel
 from datetime import datetime
 from dotenv import load_dotenv
@@ -30,10 +32,12 @@ class UnifiedVoiceAssistant:
     def __init__(self):
         self.CHUNK = 2048
         self.RATE = 16000
+        self.MIN_RMS_THRESHOLD = 400
         self.WAKE_WORDS = ["jarvis", "hey jarvis"]
         self.DISTRACTORS = [
             "service", "travis", "harvest", "driver", "artists", 
-            "javascript", "garbage", "hello", "ha", "theek", "okay"
+            "javascript", "garbage", "hello", "ha", "theek", "okay",
+            "ah", "uh", "eh", "hmm", "shh", "ch", "s", "oh", "m"
         ]
 
         model_path = "Data/model/vosk-model-small"
@@ -80,6 +84,15 @@ class UnifiedVoiceAssistant:
             winsound.Beep(2000, 150)
         except Exception:
             pass
+
+    def _get_rms(self, pcm_data):
+        try:
+            count = len(pcm_data) // 2
+            shorts = struct.unpack(f"{count}h", pcm_data)
+            sum_squares = sum(s**2 for s in shorts)
+            return math.sqrt(sum_squares / count)
+        except Exception:
+            return 0
 
     def _setup_deepgram(self):
         self.current_transcript = ""
@@ -155,6 +168,7 @@ class UnifiedVoiceAssistant:
                 pcm_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
 
                 if not self.is_awake:
+                    rms = self._get_rms(pcm_data)
                     triggered = False
 
                     if self.vosk_recognizer.AcceptWaveform(pcm_data):
@@ -165,7 +179,7 @@ class UnifiedVoiceAssistant:
                     else:
                         partial = json.loads(self.vosk_recognizer.PartialResult())
                         p_text = partial.get("partial", "")
-                        if self._check_wake_word(p_text):
+                        if self._check_wake_word(p_text) and rms >= self.MIN_RMS_THRESHOLD:
                             triggered = True
                             self.vosk_recognizer.Reset()
 
