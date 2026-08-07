@@ -31,7 +31,7 @@ SPAM_KEYWORDS = [
 
 def _get_event_hash(source: str, text: str) -> str:
     clean_text = re.sub(r'\s+', ' ', text.strip().lower())
-    time_context = time.strftime("%Y-%m-%d_%H")
+    time_context = time.strftime("%Y-%m-%d")
     return hashlib.md5(f"{source}_{time_context}_{clean_text}".encode('utf-8')).hexdigest()
 
 def is_event_already_processed(source: str, text: str) -> bool:
@@ -194,8 +194,10 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                             logger.warning(f"Failed to fetch memory context: {mem_err}")
                     decision_data = evaluate_events_batch(batched_data, recent_history, current_mood)
                     handle_proactive_decision(decision_data, batched_data, memory_instance, is_jarvis_busy_callback)
-                    for ev in valid_events:
-                        mark_event_as_processed(ev.source, ev.data)
+                    # ✅ Only mark as processed if decision is NOT IGNORE
+                    if decision_data.get("decision", "IGNORE").upper() != "IGNORE":
+                        for ev in valid_events:
+                            mark_event_as_processed(ev.source, ev.data)
         except Exception as e:
             logger.error(f"Error in Proactive Loop: {e}")
         time.sleep(2)

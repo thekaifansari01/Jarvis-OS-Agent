@@ -164,7 +164,7 @@ def extract_email_content(service, msg_id, msg):
     if not final_body:
         final_body = msg.get('snippet', 'No readable text found in this email.')
 
-    return sender_name, sender_email, subject, final_body, saved_attachments
+    return sender_name, sender_email, subject, final_body, saved_attachments, msg_id
 
 def get_all_unread_emails(service, start_time_ms, max_results=10):
     try:
