@@ -1,0 +1,100 @@
+name: "🐛 Bug Report"
+description: "Create a report to help us fix the bug in Jarvis-OS-Agent"
+title: "[BUG]: "
+labels: ["bug", "needs-triage"]
+assignees:
+  - thekaifansari01
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🧠 Jarvis-OS-Agent Bug Report
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible.
+
+  - type: input
+    id: os_version
+    attributes:
+      label: "🖥️ Windows Version"
+      description: "Which version of Windows are you using?"
+      placeholder: "e.g., Windows 11 Pro 23H2"
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: "🐍 Python Version"
+      description: "Output of `python --version`"
+      placeholder: "e.g., Python 3.11.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: "🧠 AI Provider Used"
+      description: "Which brain/provider were you using when the bug occurred?"
+      options:
+        - FastBrain (Groq)
+        - AgenticBrain (Regolo)
+        - AgenticBrain (Gemini)
+        - AgenticBrain (OpenRouter)
+        - AgenticBrain (Custom/Local Ollama)
+        - Not Sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: "💥 What happened?"
+      description: "A clear and concise description of what the bug is."
+      placeholder: "Jarvis crashed when I said 'Play Arijit Singh'..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: "📋 Steps To Reproduce"
+      description: "Steps to reproduce the behavior."
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Type command '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: "✅ Expected Behavior"
+      description: "What you expected to happen."
+      placeholder: "Jarvis should have opened YouTube..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "📜 Relevant Logs (Data/jarvis.log)"
+      description: "Copy and paste any relevant log output. This is required for debugging."
+      render: shell
+      placeholder: "Paste your logs here. Redact sensitive info (API keys)."
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: "🖼️ Screenshots / Error Popups"
+      description: "If applicable, add screenshots to help explain your problem."
+      placeholder: "Drag and drop images here."
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: "🧾 Code of Conduct"
+      description: "By submitting this issue, you agree to follow our Contributing Guidelines."
+      options:
+        - label: "I agree to follow this project's Code of Conduct."
+          required: true

@@ -1,0 +1,24 @@
+title: "[Q&A]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ❓ Question & Answer
+        Got a question about setting up Jarvis-OS-Agent or customizing it? Ask away!
+
+  - type: textarea
+    id: question
+    attributes:
+      label: "🤔 What do you need help with?"
+      description: "Describe your setup and what you're trying to achieve."
+      placeholder: "I am trying to connect my Android phone via ADB, but getting 'device not found'..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_tried
+    attributes:
+      label: "What have you already tried?"
+      description: "Let us know what steps you've already taken to troubleshoot."
+      placeholder: "I ran `adb devices` and it shows the device, but Jarvis isn't connecting..."

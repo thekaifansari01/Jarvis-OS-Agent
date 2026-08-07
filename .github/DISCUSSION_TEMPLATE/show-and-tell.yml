@@ -1,0 +1,24 @@
+title: "[SHOWCASE]: "
+labels: ["community"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🎉 Show and Tell
+        Did you build something cool with Jarvis-OS-Agent? Automated your home? Created a custom plugin? Show us!
+
+  - type: textarea
+    id: project
+    attributes:
+      label: "🛠️ What did you build?"
+      description: "Describe your setup, automation workflow, or custom integration."
+      placeholder: "I integrated Jarvis with Home Assistant..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: "📸 Screenshots / Video / Code Snippets"
+      description: "Share your work! (Images or links to code)"
+      placeholder: "Drop images here or paste GitHub gist links."

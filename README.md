@@ -1,9 +1,8 @@
-# 🧠 J.A.R.V.I.S. — The Autonomous AI Agent
-
-> **Windows‑first, voice‑enabled, hybrid‑intelligence AI Operating System**  
-> *Multi‑LLM failover · zero line‑drift code editing · lifelong memory · proactive HITL safety · native reactive UI*
-
 <div align="center">
+
+# 🧠 J.A.R.V.I.S. – The Autonomous AI Agent for Windows
+
+> **Zero line‑drift coding · Lifelong memory · Voice‑first · Proactive HITL · Mobile control**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -11,10 +10,10 @@
 [![Gemini](https://img.shields.io/badge/Reasoning-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
 [![Regolo AI](https://img.shields.io/badge/Agentic-Regolo%20MoE-FF6F00?style=for-the-badge)](https://regolo.ai)
 [![OpenRouter](https://img.shields.io/badge/Failover-OpenRouter-FF6B6B?style=for-the-badge)](https://openrouter.ai)
-[![Custom Provider](https://img.shields.io/badge/Custom-Any%20OpenAI%20Compatible-00BFFF?style=for-the-badge)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari)
+[![Custom Provider](https://img.shields.io/badge/Custom-Any%20OpenAI%20Compatible-00BFFF?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00e676?style=for-the-badge)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/jarvis-by-kaif-ansari/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent/pulls)
 
 **Built by a 18‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
 
@@ -22,35 +21,26 @@
 
 ---
 
-## 📖 Table of Contents
-
-<details>
-<summary><strong>Expand to navigate</strong></summary>
-
-- [🌟 What Makes JARVIS Special](#-what-makes-jarvis-special)
-- [🏗️ System Architecture](#️-system-architecture)
-- [⚡ FastBrain vs 🧠 AgenticBrain](#-fastbrain-vs--agenticbrain)
-- [🧠 Memory & Long-Term Recall](#-memory--long-term-recall)
-- [🎨 UI & Visualization Ecosystem](#-ui--visualization-ecosystem)
-- [🛡️ Resilience & Security Architecture](#️-resilience--security-architecture)
-- [🛠️ Integrated Tool Ecosystem](#️-integrated-tool-ecosystem)
+## 📌 Table of Contents
+- [🎯 The Hook – What Makes JARVIS Special](#-the-hook--what-makes-jarvis-special)
+- [🔥 Problem vs Solution – The "Claude Code Killer"](#-problem-vs-solution--the-claude-code-killer)
+- [🏗️ Technical Architecture (Trust Through Transparency)](#️-technical-architecture-trust-through-transparency)
+- [⚡ FastBrain vs 🧠 AgenticBrain – Dual‑Engine Magic](#-fastbrain-vs--agenticbrain--dualengine-magic)
+- [🧠 Memory & Long‑Term Recall](#-memory--longterm-recall)
 - [📱 Mobile Phone Control (Android)](#-mobile-phone-control-android)
-- [📋 Example Requests](#-example-requests--see-jarvis-in-action)
-- [🚀 Advanced Scenarios](#-advanced-scenarios)
-- [🚀 Getting Started](#-getting-started)
-- [⚙️ Configuration](#️-configuration--enterprise-security)
-- [📂 Repository Anatomy](#-repository-anatomy)
+- [🛠️ Integrated Tool Ecosystem](#️-integrated-tool-ecosystem)
+- [🚀 Getting Started (Zero Friction)](#-getting-started-zero-friction)
+- [📋 Real‑World Use Cases (Scenarios)](#-realworld-use-cases-scenarios)
+- [⚙️ CLI & Configuration](#️-cli--configuration)
 - [🔧 Troubleshooting](#-troubleshooting)
-- [🤝 Contributing](#-contributing)
+- [🤝 Contributing & Community](#-contributing--community)
 - [📄 License](#-license)
-
-</details>
 
 ---
 
-## 🌟 What Makes JARVIS Special
+## 🎯 The Hook – What Makes JARVIS Special
 
-JARVIS isn't just another ChatGPT wrapper — it's a **desktop-native AI Operating System** and **Autonomous Agent** that bridges low‑latency conversational AI with complex, multi‑step engineering execution.
+**JARVIS is not a ChatGPT wrapper.** It is a **desktop‑native AI Operating System** and **Autonomous Agent** that bridges low‑latency conversational AI with complex, multi‑step engineering execution.
 
 | Icon | Feature | Why It Matters |
 |:---:|:---|:---|
@@ -67,14 +57,23 @@ JARVIS isn't just another ChatGPT wrapper — it's a **desktop-native AI Operati
 | 🛡️ | **Human‑in‑the‑Loop (HITL) Safety** | Never executes irreversible actions (sending emails, deleting files, updating calendars) without explicit user consent. Pending confirmations auto‑expire after 60 seconds to prevent stale memory injections. |
 | 🛡️ | **Intelligent Command Security** | Uses `shlex` tokenization and `os.path.realpath` canonicalization to auto‑block only system‑destroying commands (`rm -rf /`, `format C:`, `dd` to `/dev/sda`, `diskpart`). Safe commands (`pip`, `git`, `mkdir`, `rm file.txt`) run without prompts — zero friction, enterprise safety. |
 | 🌐 | **Any Provider, Anywhere** | Works with Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint — including local models (Ollama, LM Studio, vLLM). 100% local inference possible — no internet required with local LLMs. |
-| 🧩 | **Extensible Tool Ecosystem** | Integrated with Gmail Pub/Sub, WhatsApp Baileys bridge, Google Calendar OAuth, Tavily search, ArXiv academic research, YouTube transcript summarization, system clipboard, hardware controls (volume/brightness/screenshot), and more. |
 | 🔐 | **Conditional Service Startup** | WhatsApp, Email, Calendar, and now **Mobile ADB** services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
 
 ---
 
-## 🏗️ System Architecture
+## 🔥 Problem vs Solution – The "Claude Code Killer"
 
-JARVIS uses a modular, event‑driven architecture that separates fast conversational inference from stateful, multi‑tool agentic engineering:
+| **Existing Tools / Pain Points** | **JARVIS Magic** |
+| :--- | :--- |
+| **Claude Code is expensive** & requires constant subscriptions. | **Free & Open Source.** Run it with local models (Ollama/LM Studio) or cloud APIs. |
+| **Line‑drift bugs** ruin code edits. LLMs often "miss" the exact line. | **`replace_block`** – Diff‑based exact matching. **Zero line‑drift.** Finds the exact code block, irrespective of line numbers. |
+| **Session‑based memory** – Bhool jaata hai 2 minutes baad ki aapne kya bola. | **Lifelong Memory (LTM)** – Episodic memory via ChromaDB. Yaad hai aapko coffee kaunsi pasand hai, aur kaunsi files pe kaam chal raha hai. |
+| **No tooling for real systems.** Sirf text generate kare, code execute na kare. | **Native Tool Execution** – Terminal, Python REPL, File CRUD, Email, WhatsApp, Calendar, Image Gen, and even **ADB (Android control)**. |
+| **Doesn't read your emails/chats.** | **Proactive HITL (Human-in-the-Loop)** – Jarvis reads your emails & WhatsApp in the background, *asks permission*, and takes action (e.g., rescheduling calendar events). |
+
+---
+
+## 🏗️ Technical Architecture (Trust Through Transparency)
 
 ```mermaid
 flowchart TD
@@ -154,9 +153,7 @@ flowchart TD
 
 ---
 
-## ⚡ FastBrain vs 🧠 AgenticBrain
-
-JARVIS uses a **Hybrid Semantic Router** (Regolo API + Local Keyword Fallback) to split commands. Here is exactly what each brain handles:
+## ⚡ FastBrain vs 🧠 AgenticBrain – Dual‑Engine Magic
 
 | Feature / Capability | ⚡ FastBrain (Groq LPU) | 🧠 AgenticBrain (Regolo/Gemini/OpenRouter/Custom) |
 | --- | --- | --- |
@@ -177,151 +174,24 @@ JARVIS uses a **Hybrid Semantic Router** (Regolo API + Local Keyword Fallback) t
 
 ## 🧠 Memory & Long‑Term Recall
 
-JARVIS employs a sophisticated three‑tier memory system to maintain context across sessions:
+JARVIS employs a sophisticated three‑tier memory system:
 
-### 1. 📜 Rolling JSONL History (Short‑Term)
-
-- Stores the last 15 days of conversation in `master_chat_history.jsonl`.
-- Append‑only architecture ensures zero data corruption during rapid write operations.
-- Automatically prunes messages older than 15 days and archives them to LTM.
-
-### 2. 🗄️ Lifetime Episodic Memory (Long‑Term)
-
-- Every 24 hours, the `LifetimeMemory` engine archives old chats.
-- Uses Groq (`GROQ_SUMMARY_MODEL`) to extract dense, third‑person factual summaries (ignoring small talk).
-- Embeds summaries using `gemini-embedding-2` (768 dims) and stores them in a **ChromaDB** collection (`jarvis_episodic_memory`).
-
-### 3. 📚 Workspace RAG (Vector Database)
-
-- Indexes files in `Documents/Jarvis/RAG/` (supports `.txt`, `.md`, `.json`, `.py`, `.js`, `.csv`).
-- **Smart Chunking:** Code files are split by `def`/`class`; text files by paragraphs.
-- **Hash‑Based Re‑indexing:** Only re‑indexes files that have changed (MD5 hash check), saving API costs.
-- **Local Keyword Search:** Uses ChromaDB's `$contains` operator for fast, API‑free local searches.
-
-### 4. 👤 User Profile & Mood Tracking
-
-- `user_bio.json`: Hard, unchanging facts about the user.
-- `preferences.json`: Actionable preferences (likes, dislikes).
-- `user_mood.json`: Mood history with timestamps.
-- The AI automatically extracts insights from conversations using Groq summarization.
-
----
-
-## 🎨 UI & Visualization Ecosystem
-
-JARVIS features a full‑fledged, reactive UI suite built with **PyQt5** and **ZMQ** for real‑time status updates, markdown rendering, and voice/text interactions.
-
-### 1. 🖥️ Agent Panel (`core/ui/agent_panel.py`)
-
-- Floating, glass‑morphism status panel that shows the agent's **thought process**, **current action**, and **observation** in real time.
-- Subscribes to ZMQ PUB socket (`tcp://127.0.0.1:5555`) – `agent_status.py` publishes `AGENT_UPDATE` messages.
-- Dynamic glow color changes based on action type (Search = Cyan, Deep Task = Pink, File Ops = Orange, Communication = Green, Vision = Teal, etc.).
-- Auto‑resize & animation, smart truncation (thought: 800 chars, observation: 200 chars), and automatic font fallback.
-
-### 2. 📝 Typing Popup (`core/ui/Popup/`)
-
-- Floating typewriter‑style popup that streams JARVIS's responses in real time with full markdown rendering.
-- Reads `Data/typing_status.json` (written by `typing_status.py`) every 50ms.
-- Async markdown rendering: syntax‑highlighted code blocks (Pygments Monokai), tables, lists, blockquotes, local/remote images (LRU cache), link previews via microlink.io, YouTube thumbnails.
-- Auto‑scroll, smart auto‑close for short messages.
-
-### 3. 🗣️ STT Popup (`Bin/SttPopup.exe`)
-
-- Small floating indicator that appears when voice input is active.
-- `BackgroundServices.start_stt_popup()` spawns it; `stt_status.py` controls visibility.
-
-### 4. ⌨️ Input Popup (`Bin/InputPopup.exe`)
-
-- Triggered by global hotkey `Ctrl+Shift+J` – opens a lightweight text input window.
-- `HotKeyManager.py` spawns the process, reads stdout for `JARVIS_CMD:::` prefix, and submits the command.
-
-### 5. ⚙️ Core Rendering Engines (`AsyncBrowser.py` & `TextParser.py`)
-
-- **AsyncBrowser:** Custom `QTextBrowser` subclass for async image downloading, fail‑safe cache, placeholders.
-- **TextParser:** Background `QThread` for markdown parsing, syntax highlighting, link preview token injection.
-
----
-
-## 🛡️ Resilience & Security Architecture
-
-### 1. 🔄 Multi‑LLM Auto‑Failover (Provider Abstraction)
-
-JARVIS does not rely on a single AI provider. The `BaseLLMProvider` abstract class implements **Regolo**, **Gemini**, **OpenRouter**, and a **CustomProvider** that works with any OpenAI‑compatible endpoint (including local models).
-
-- **Primary:** Configurable via `AGENT_PRIMARY_PROVIDER`.
-- **Fallback:** If quota is exhausted (429 error), it auto‑switches to `AGENT_FALLBACK_PROVIDER` without crashing the agent loop.
-- **Provider Support:** ☁️ Cloud (Regolo, Gemini, OpenRouter – Claude 3.7, o1, DeepSeek‑V3, 200+ models) and 🖥️ Local (Ollama, LM Studio, vLLM, any self‑hosted OpenAI‑compatible endpoint).
-
-### 2. 🛡️ ServiceWatchdog (Background Process Guardian)
-
-A dedicated daemon thread runs in the background, checking the health of critical subprocesses every 5 seconds:
-
-- **Baileys Server** (WhatsApp Bridge)
-- **STT Popup** (Voice Status UI)
-- **Mobile ADB Connection** (Android Phone)
-
-**Smart Monitoring:**
-
-- If a service is **not logged in** (credentials missing), the watchdog **skips monitoring** entirely and logs only **once per minute** to avoid spam.
-- If the service is logged in and crashes, it attempts a restart up to `max_retries=3` with a 15‑second cooldown period.
-
-### 3. 🔒 Human‑in‑the‑Loop (HITL) Consent Protocol
-
-- **Proactive Trigger Detection:** If the `Proactive Scout` detects an email/WhatsApp asking to reschedule a meeting, the AgenticBrain enters *Partner Confirmation Mode*.
-- **Zero Unauthorized Execution:** The agent never executes `calendar_action`, `email_action`, or `file_operations` for critical modifications without the user explicitly saying *"Yes do it"* or *"Go ahead"*.
-- **TTL Expiry:** Pending confirmations auto‑expire after 60 seconds to prevent stale memory injections.
-
-### 4. 🔄 Two‑Strike Error Recovery
-
-If a tool or script fails:
-
-- **Strike 1:** Reads stderr/stdout, fixes syntax/logic, and retries once with an improved script.
-- **Strike 2:** If it fails a second time, ABANDONS that approach immediately and pivots to an alternative strategy.
-- **Pragmatic Completion:** Avoids endless iterations for minor cosmetic perfection. Once the essential data/file is generated correctly, it invokes `complete_task`.
-
-### 5. 🔐 Conditional Service Startup & Manual Login
-
-- **Startup:** WhatsApp, Email, Calendar, and **Mobile ADB** services start **only if credentials exist** (for ADB, the environment variable `ADB_PHONE_IP` must be set). No unwanted browser or QR popups appear.
-- **Proactive Listeners:** Only start for services that are already logged in, preventing unnecessary background threads.
-- **Tool Calls:** When you explicitly ask to send an email or create a calendar event, the authentication flow opens as expected — preserving the interactive experience.
-- **Manual Login CLI:** Use `jarvis login --whatsapp/--mail/--calendar` to authenticate on demand (requires Jarvis to be stopped).
-
-### 6. 🛡️ Intelligent Terminal Command Security
-
-Uses `shlex` tokenization and `os.path.realpath` canonicalization to intelligently detect only system‑destroying commands:
-
-- **Auto‑Blocked (Never Executed):** `rm -rf /`, `rm -rf /*`, `del /s C:\*`, `format C:`, `diskpart`, `dd` to `/dev/sda`, `mkfs`, `fdisk`, `parted`.
-- **Auto‑Approved (Run Without Prompts):** `pip`, `git`, `npm`, `mkdir`, `cp`, `mv`, `rm file.txt`, `del mylog.log`, `wget`, `curl`, `>`.
-- **How It Works:** Parses the command, extracts the target path, resolves symlinks, and checks if the target is a system core directory (`/`, `C:\Windows`, `/boot`, `/etc`). Only when destructive flags (`-rf`, `/s`, `/q`) are combined with a system root target does it hard‑block execution — protecting your OS without interrupting your workflow.
-
----
-
-## 🛠️ Integrated Tool Ecosystem
-
-| Category | Supported Capabilities | Tech / API Bridge |
-| --- | --- | --- |
-| 💻 **Software Engineering** | Project `repo_map`, Exact `replace_block` diffs, Post‑edit syntax linting, Multi‑file batch creation (`create_many`). | Python AST / `py_compile` / `fileEditor.py` |
-| 📨 **Communication** | Send/read Gmails, Dispatch WhatsApp messages/files, Fetch WhatsApp chat history, Manage Google Calendar events. | Gmail Pub/Sub, Baileys Node.js Server, Calendar OAuth |
-| 📂 **Workspace & RAG** | Single‑file CRUD, Recursive directory scanning, Local markdown RAG indexing with hash‑based change detection. | Python `os`/`pathlib`, ChromaDB Vector Index |
-| 📱 **Mobile Phone Control** | Lock/unlock, Home/Back, Volume, Flashlight, Open Apps (WhatsApp, Chrome, etc.), Make calls, Send SMS, Screenshots, Toggle WiFi/Data, Battery status, Notification panel, Quick Settings, File transfer (pull/push). | ADB over Tailscale / local network |
-| 🌐 **Search & Research** | Live web scraping, Academic research (ArXiv), YouTube transcript summarization, Multi‑source synthesis reports. | Tavily Search, BeautifulSoup, ArXiv API |
-| ⚙️ **System Automation** | Launch/close desktop apps, Hardware volume/brightness, Screenshots, Clipboard CRUD (Read/Write). | Python OS Bindings, Win32 API, Pygame |
-| 👁️ **Multimodal Vision** | Image/Video analysis, Object detection, OCR extraction from scanned documents/photos. | Gemini/Regolo Vision models |
-| 🎨 **Image Generation** | Text‑to‑image generation, Image‑to‑image editing. | Regolo Qwen‑Image / Together FLUX / AI Horde |
+1. **📜 Rolling JSONL History (Short‑Term)** – 15‑day rolling context, auto‑pruned and archived.
+2. **🗄️ Lifetime Episodic Memory (Long‑Term)** – Daily Groq‑summarized facts stored in ChromaDB with Gemini embeddings.
+3. **📚 Workspace RAG (Vector Database)** – Indexes local documents (`Documents/Jarvis/RAG/`) with smart chunking and hash‑based re‑indexing.
+4. **👤 User Profile & Mood Tracking** – Automatically extracts bio, preferences, and mood from conversations.
 
 ---
 
 ## 📱 Mobile Phone Control (Android)
 
-JARVIS can now control your Android phone remotely via **ADB (Android Debug Bridge)** over **Tailscale** (or a local network). The connection is established automatically when Jarvis starts, and a dedicated **ServiceWatchdog** monitors the connection and reconnects if it drops.
-
-### 🔧 Capabilities
+JARVIS can control your Android phone via ADB over Tailscale:
 
 | Category | Example Commands |
 | --- | --- |
 | **System Actions** | Lock/Unlock, Home, Back, Recent Apps |
 | **Volume & Media** | Volume Up/Down, Mute, Flashlight Toggle |
-| **App Launcher** | WhatsApp, Chrome, YouTube, Spotify, Camera, Settings, Instagram, Telegram |
+| **App Launcher** | WhatsApp, Chrome, YouTube, Spotify, Camera, Settings |
 | **Calls & SMS** | Make a call (direct), Open dialer, Send SMS |
 | **Screenshots** | Take screenshot and save to PC |
 | **WiFi & Data** | Enable/Disable WiFi, Enable/Disable Mobile Data |
@@ -329,445 +199,202 @@ JARVIS can now control your Android phone remotely via **ADB (Android Debug Brid
 | **Battery** | Check battery level, charging status |
 | **File Transfer** | Pull files from phone to PC, Push files from PC to phone |
 
-### 🛠️ Setup Guide
+**Setup:** Enable USB debugging, run `adb tcpip 5555`, connect via Tailscale IP, and set `ADB_PHONE_IP` in `.env`.
 
-1. **Install ADB** on your PC and add it to your system `PATH`.
-2. **Enable USB Debugging** on your Android phone (tap Build Number 7 times, then enable in Developer Options).
-3. **Connect via USB** once, allow USB debugging, and run `adb tcpip 5555`.
-4. **Disconnect USB** and connect via Tailscale IP: `adb connect <phone-tailscale-ip>:5555`.
-5. **Set environment variable** in `.env`:
-   ```ini
-   ADB_PHONE_IP=<phone-tailscale-ip>
-   ADB_PHONE_PORT=5555   # optional
-   ```
-6. **Restart Jarvis** – the connection will be managed automatically.
+---
 
-### 💬 Example Natural Language Commands
+## 🛠️ Integrated Tool Ecosystem
 
-| You Say | Jarvis Executes |
+| Category | Supported Capabilities |
 | --- | --- |
-| "Lock the phone" | `adb shell input keyevent 26` |
-| "Go to the home screen" | `adb shell input keyevent 3` |
-| "Open WhatsApp" | `adb shell am start -n com.whatsapp/.Main` |
-| "Call 9876543210" | `adb shell am start -a android.intent.action.CALL -d tel:9876543210` |
-| "Send an SMS to 9876543210 saying 'Come here'" | `adb shell am start -a android.intent.action.SENDTO -d sms:9876543210 --es sms_body "Come here"` |
-| "Take a screenshot of the phone" | `adb shell screencap /sdcard/screenshot.png && adb pull /sdcard/screenshot.png Desktop/screenshot.png` |
-| "Turn off WiFi" | `adb shell svc wifi disable` |
-| "Check the battery status" | `adb shell dumpsys battery` |
-| "Open the notification panel" | `adb shell cmd statusbar expand-notifications` |
-
-### 🛡️ Security & Privacy
-
-- The ADB connection is encrypted by Tailscale (WireGuard).
-- No phone data leaves your Tailscale network – it all stays within your private VPN.
-- The watchdog only reconnects if the environment variable is set; otherwise it silently skips the service.
+| 💻 **Software Engineering** | `repo_map`, `replace_block` (zero drift), AST linting, `create_many` |
+| 📨 **Communication** | Gmail Pub/Sub (send/read), WhatsApp (send/fetch chats via Baileys), Calendar OAuth |
+| 📂 **Workspace & RAG** | Single‑file CRUD, recursive scanning, local markdown RAG indexing |
+| 📱 **Mobile Control** | ADB – lock/unlock, apps, calls, SMS, screenshots, WiFi/Data, file transfer |
+| 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript summarization, deep research reports |
+| ⚙️ **System Automation** | Launch/close apps, volume/brightness, screenshots, clipboard CRUD |
+| 👁️ **Multimodal Vision** | Image/Video analysis, object detection, OCR extraction |
+| 🎨 **Image Generation** | Text‑to‑image (Regolo/FLUX), image‑to‑image editing (AI Horde) |
 
 ---
 
-## 📋 Example Requests — See Jarvis in Action
+## 🚀 Getting Started (Zero Friction)
 
-### ⚡ FastBrain — Blazing Fast (< 1.5 sec response)
+### 📋 Prerequisites
 
-| Feature | Example Command | What Jarvis Does |
-| --- | --- | --- |
-| **System Automation** | `"Open Chrome, play 'Blinding Lights' on Spotify, and set volume to 70%"` | Opens Chrome, launches Spotify via URI, plays the song, and adjusts system volume — **all in one command.** |
-| **Hardware Toggles** | `"Set brightness to 50% and take a screenshot"` | Changes display brightness to 50% and captures a full‑screen screenshot in under 2 seconds. |
-| **Smart Web Search** | `"Get today's weather in Mumbai and the latest IPL 2025 final score"` | Performs two parallel web searches and returns a concise, combined summary — **no agentic overhead.** |
-| **YouTube Direct** | `"Play 'Arijit Singh latest song' on YouTube"` | Opens YouTube in browser and directly plays the song via `pywhatkit`. |
-| **System Control** | `"Lock the system and set an alarm for 5 minutes later"` | Locks PC immediately and schedules a system alarm/reminder. |
-| **Media Playback** | `"Play 'Atif Aslam hits' playlist on Spotify"` | Opens Spotify desktop app and starts the playlist via URI protocols. |
-| **Quick Info** | `"What is today's date and time?"` | Returns current system date/time with timezone info. |
-| **Clipboard** | `"Read the clipboard and write 'Hello World' to it"` | Reads clipboard, then writes text to it — **instant clipboard management.** |
-| **Power Actions** | `"Put the PC to sleep"` | Puts system to sleep instantly. |
-| **App Management** | `"Open Notepad and Calculator, then close VSCode"` | Launches multiple apps while closing another — **batch app control.** |
+- **Windows 10/11** (Primary)
+- **Python 3.10+**
+- **Node.js 18+**
 
----
+### 🛠️ Single Block Installation
 
-### 🧠 AgenticBrain — Deep Reasoning, Autonomous Engineering
-
-| Feature | Example Command | What Jarvis Does |
-| --- | --- | --- |
-| **Multi‑Step Software Engineering** | `"Give me a repo map of my project, install missing dependencies from requirements.txt, and fix the bug in main.py that has been crashing since yesterday"` | 1. Inspects project structure via `repo_map`.<br>2. Reads `requirements.txt` and runs `pip install` for missing packages.<br>3. Analyzes `main.py`, finds the bug, and uses `replace_block` to fix it — **all autonomously.** |
-| **Zero Line‑Drift Code Edit** | `"Convert the 'get_user_data' function in app.py to async and add error handling"` | Reads the exact block, replaces it with async version + try‑except — **without touching any other line.** |
-| **Self‑Correcting Python** | `"Write a Python function to generate the Fibonacci sequence. If there's a syntax error, fix it."` | Writes the function, catches `py_compile` errors, and **self‑corrects** in the next step. |
-| **Deep Research & Synthesis** | `"Research and compare NVIDIA's latest AI chips with AMD's MI400 series, and generate a benchmark report"` | Searches web, reads multiple sources, synthesizes data, and returns a **structured markdown report** with tables and citations. |
-| **Academic Research** | `"Search ArXiv for 'transformer attention optimization' papers and summarize the top 2025 papers"` | Searches ArXiv, fetches abstracts, and summarizes key findings — **researcher‑level automation.** |
-| **Multimodal Vision** | `"What is in this screenshot? Extract the text from this image."` | Inspects images/videos via Gemini vision, identifies objects, and extracts embedded text (OCR). |
-| **YouTube Deep Dive** | `"Summarize this YouTube link and extract 5 key takeaways"` | Fetches transcript, summarizes content, and extracts 5 bullet‑point insights. |
-| **Email + Calendar** | `"Send an email to Kaif that the meeting has been moved to 5 PM, and update the calendar accordingly"` | Sends email and updates Google Calendar — **with HITL consent gate.** |
-| **WhatsApp Automation** | `"Send a WhatsApp message to Rahul that I'll be 10 minutes late, and fetch yesterday's chat history"` | Sends message and fetches chat history via Baileys — **all in one command.** |
-| **Memory Recall** | `"What project did I discuss about AI agents three months ago?"` | Searches ChromaDB LTM, fetches episodic memory, and returns the conversation context. |
-| **Codebase Understanding** | `"Explain the architecture of this codebase and generate a dependency graph"` | Scans project, generates `repo_map`, analyzes imports, and creates a visual dependency graph. |
-| **Web Scraping & Analysis** | `"Scrape the content of this webpage and perform sentiment analysis"` | Reads the page, extracts key text, and performs sentiment/tonality analysis. |
-| **Image Generation** | `"Generate a cyberpunk JARVIS wallpaper with neon purple glow"` | Generates image via Flux/AI Horde and saves it to desktop. |
-| **System + File Operations** | `"Create a 'Projects' folder on the desktop, create 5 Python files inside it, and define a class in each file"` | Uses `run_python_code` to batch‑create multiple files with boilerplate classes — **all in 15 seconds.** |
-| **Mobile Control** | `"Phone lock kar do"` | Runs `adb shell input keyevent 26` to lock the phone. |
-| **Proactive HITL** | *(Jarvis detects email about meeting reschedule)* → `"Bro, Ram's email has arrived that the meeting has been shifted to 5 PM. Should I update the calendar?"` | Enters **Partner Confirmation Mode**, asks for consent, and executes only after user says *"Yes do it"*. |
-
----
-
-### 🆚 FastBrain vs AgenticBrain — Quick Summary
-
-| Command Type | Route | Typical Time |
-| --- | --- | --- |
-| System controls, hardware toggles, simple searches | ⚡ **FastBrain** | `< 1.5 sec` |
-| File editing, code generation, communication, research | 🧠 **AgenticBrain** | `15‑60 sec` |
-| Multi‑step tasks with tool calls | 🧠 **AgenticBrain** | `30‑120 sec` |
-| Commands with 25+ words or complex intent | 🧠 **AgenticBrain** | Automatic |
-
----
-
-## 🚀 Advanced Scenarios
-
-| Scenario | Example Command | Jarvis's Autonomous Action Plan |
-| --- | --- | --- |
-| **Autonomous Bug Fixing** | `"There is a project in F:/legacy-invoice-app. Run pytest -v, see the failures, then fix 3 bugs — convert tax_rate to float() in calculate_total() in utils.py, handle None in normalize_name(), call self.total() (instead of self.total) in Invoice.summary() in models.py — after each fix, run pytest -v to verify, and when all 10 tests pass, call complete_task."` | 1. Inspects project structure via `repo_map`.<br>2. Runs `pytest -v`, identifies 6 failures.<br>3. Uses `replace_block` to fix the first bug (`tax_rate` → `float(tax_rate)`).<br>4. Runs `pytest -v` → 4 failures.<br>5. Uses `replace_block` to fix the second bug (handle `None` in `normalize_name`).<br>6. Runs `pytest -v` → 2 failures.<br>7. Uses `replace_block` to fix the third bug (`self.total` → `self.total()`).<br>8. Runs `pytest -v` → **10/10 PASS**.<br>9. Calls `complete_task` with a detailed report. |
-| **Full‑Stack App with Testing** | `"Create a project named 'TaskFlow' on the Desktop. FastAPI backend with SQLite, React frontend with Tailwind, and 10+ unit tests. Then run pytest and make all tests pass."` | 1. Creates folder structure (`backend/`, `frontend/`, `tests/`).<br>2. Generates `requirements.txt` and `package.json`.<br>3. Writes FastAPI app with CRUD endpoints.<br>4. Writes React frontend with Tailwind components.<br>5. Writes `pytest` tests for all endpoints.<br>6. Runs `npm install` and `pip install`.<br>7. Runs `pytest` — if any fail, uses `replace_block` to fix.<br>8. When all tests pass, calls `complete_task`. |
-| **Production Debugging with Profiling** | `"There is a memory leak in main.py. Install memory_profiler, run the profile, identify the bottleneck, fix it, and verify that the leak is fixed."` | 1. Runs `pip install memory_profiler`.<br>2. Runs `mprof run main.py`.<br>3. Generates a graph via `mprof plot`.<br>4. Identifies the leak (e.g., unclosed file handles, large lists).<br>5. Applies the fix using `replace_block`.<br>6. Runs `mprof run main.py` again — verifies memory is stable.<br>7. Calls `complete_task` with a before/after comparison. |
-| **Data Analysis Pipeline** | `"Analyze this CSV file. Handle missing values, remove outliers, generate a correlation matrix, and create a plotly visualization. Then generate a summary report."` | 1. Reads the CSV with `pandas`.<br>2. Detects and handles missing values (mean/median imputation).<br>3. Detects and removes outliers (IQR method).<br>4. Generates a correlation matrix.<br>5. Creates interactive heatmap + scatter plots using `plotly`.<br>6. Generates a summary report (mean, median, std, skewness).<br>7. Saves all files to the `output/` folder.<br>8. Calls `complete_task` with the report. |
-| **Proactive HITL — Email + Calendar Automation** | *(Jarvis detects email: "Meeting rescheduled to 5 PM")* → `"Bro, Ram's email has arrived that the meeting has been shifted to 5 PM. Should I update the calendar?"` → *User: "Yes do it"* → `"Meeting updated to 5 PM. Sending confirmation email to Ram."` | 1. Proactive listener detects the email.<br>2. Scout agent classifies the email (important, action required).<br>3. Enters **Partner Confirmation Mode** — asks the user.<br>4. User says "Yes do it" → calls `calendar_action`.<br>5. Updates the calendar event (time change).<br>6. Sends a confirmation email to Ram via `email_action`.<br>7. Calls `complete_task` with the success report. |
-| **System Setup Automation** | `"Install Python, Node.js, Docker, VS Code extensions, and project dependencies on my new laptop. Then generate a .env file with the template."` | 1. Installs Python, Node.js, Docker via `winget` / `choco`.<br>2. Installs VS Code extensions (Python, JS/TS, Docker).<br>3. Runs `pip install -r requirements.txt`.<br>4. Runs `npm install`.<br>5. Generates `.env` from `.env.example`.<br>6. Verifies all installations (`python --version`, `node --version`).<br>7. Calls `complete_task` with the installation log. |
-
----
-
-## 🚀 Getting Started
-
-### 1. System Prerequisites
-
-- **OS:** Windows 10/11 (Required for full Win32/Registry protocol features)
-- **Python:** `>= 3.10`
-- **Node.js:** `>= 18.0` (Required for WhatsApp Baileys background service)
-- **Git:** Latest stable release
-- **Microphone:** For voice mode
-- **Local Assets:**
-  - `Data/model/vosk-model-small/` — Vosk Small English Model for KWS wake word detection (`"jarvis"` & phonetic twins)
-  - `Bin/InputPopup.exe` and `Bin/SttPopup.exe` — Optional but required for native popups
-
-### 2. Quick Install
+Copy and paste this entire block into your terminal (PowerShell recommended):
 
 ```powershell
-# Clone the repository
-git clone https://github.com/thekaifansari01/jarvis-by-kaif-ansari.git
-cd jarvis-by-kaif-ansari
+# 1. Clone and Enter
+git clone https://github.com/thekaifansari01/Jarvis-OS-Agent.git
+cd Jarvis-OS-Agent
 
-# Create and activate a Python Virtual Environment
+# 2. Python Virtual Env & Dependencies
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# Install required Python dependencies
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
-# Install Node.js dependencies for WhatsApp Service
+# 3. Node.js Dependencies (for WhatsApp Bridge)
+cd tools/Messanger/whatsapp/BaileysServer
 npm install
-npm --prefix tools/Messanger/whatsapp/BaileysServer install
-```
+cd ../../../..
 
-### 3. Setup CLI & URI Protocol (One‑Time)
-
-JARVIS includes a smart setup script that configures both the `jarvis://` URL protocol and the global `jarvis` terminal command.
-
-```powershell
-# Activate your virtual environment first
-.\.venv\Scripts\Activate.ps1
-
-# Run the setup script
+# 4. Global CLI Setup (Run this once)
 python SetupRegistry.py
 ```
 
-**What this does:**
+### 🌐 Global Command Magic
 
-- ✅ Registers `jarvis://` protocol for OAuth callbacks (Gmail/Calendar)
-- ✅ Installs the `jarvis` CLI command via editable pip install
-- ✅ Adds `.venv\Scripts` to your Windows PATH
-- ✅ Automatically detects if components are already set up and skips duplicates
+After running `SetupRegistry.py`, open a **new terminal** and simply type:
 
-After running, **open a new terminal** and type:
-
-```powershell
+```bash
 jarvis
 ```
 
-> 🚀 **Global Command:** After running `SetupRegistry.py`, the `jarvis` command becomes available globally. You can type `jarvis` in any terminal, from any folder, without activating the virtual environment. The script automatically adds `.venv\Scripts` to your Windows PATH. No need to activate the virtual environment each time.
+No need to activate the virtual environment every time – the `jarvis` command is available system‑wide.
 
-### 4. WhatsApp Bridge Setup
+### 📝 Configure Environment
 
-On the first run, scan the QR code displayed by the Baileys process. Keep the local service private; it is intended only for this machine.
+Copy `.env.example` to `.env` and fill in your API keys. For local models (Ollama), set:
 
-- Local service URL: `http://localhost:3000`
-- Session data: `Data/SessionCookies/auth_info_baileys/`
-
-> **Tip:** You can also set up WhatsApp manually using the terminal login command (see [Session & Memory Management CLI](#7-session--memory-management-cli)).
-
-### 5. WhatsApp Contacts (Optional)
-
-Create `Data/contacts.json` for named recipients:
-
-```json
-{
-  "kaif": "919876543210",
-  "work": "911234567890"
-}
-```
-
-### 6. Mobile Phone Control Setup (Android)
-
-> **Pre‑requisites:** ADB, USB debugging enabled on your phone, and Tailscale installed on both PC and phone.
-
-1. **Install ADB** and add it to your system PATH.
-2. **Connect your phone via USB** and run:
-```bash
-adb tcpip 5555
-```
-3. **Disconnect USB**, then connect via Tailscale IP:
-```bash
-adb connect <phone-tailscale-ip>:5555
-```
-4. **Add the environment variable** to your `.env`:
 ```ini
-ADB_PHONE_IP=<phone-tailscale-ip>
-ADB_PHONE_PORT=5555   # optional
-```
-5. **Restart Jarvis** – the connection will be managed automatically.
-
-### 7. Running JARVIS
-
-#### Full Autonomous Voice & Desktop Mode (Default)
-
-```powershell
-python main.py
+CUSTOM_API_KEY=EMPTY_KEY
+CUSTOM_BASE_URL=http://localhost:11434/v1
+CUSTOM_MODEL=llama3.2:3b
 ```
 
-or (if you ran `SetupRegistry.py`):
+---
 
-```powershell
-jarvis
-```
+## 📋 Real‑World Use Cases (Scenarios)
 
-This starts the agent panel, STT popup (when the binary exists), Baileys bridge (only if WhatsApp is logged in), service watchdog (smart monitoring), RAG engine, proactive listeners (only for logged-in services), global hotkey, and wake‑word listener. The Mobile ADB connection starts automatically if `ADB_PHONE_IP` is set.
+### 🐞 Scenario 1: Bug Fixing (The "Zero Line‑Drift" Power)
 
-#### Silent Mode (Wake Word Disabled, Trigger via Hotkeys Only)
+1. **User:** *"Run the tests in my project and fix any failing ones."*
+2. **Jarvis (AgenticBrain):** Runs `pytest -v`, sees 3 failing tests.
+3. **Jarvis:** Uses `view` to read the failing files.
+4. **Jarvis:** Uses `replace_block` (exact search & replace) to fix logic errors.
+5. **Jarvis:** Re‑runs `pytest -v` to verify.
+6. **Jarvis (Speaks):** *"Sir, sab tests pass ho gaye hain. Maine 3 files mein changes kiye hain. Kya aap review karna chahenge?"*
 
-```powershell
-python main.py no_wake
-```
+### 🚨 Scenario 2: Proactive HITL (Your Personal Secretary)
 
-This disables only the wake‑word listener. The agent panel, background services, proactive listeners, and `Ctrl + Shift + J` hotkey still start.
+1. **Background:** `EmailProactive` listener sees an email: *"Meeting shifted to 5 PM."*
+2. **Jarvis (Scout):** Evaluates and decides to ask for consent.
+3. **Jarvis (Speaks):** *"[alert] Bhai, Ram ki taraf se mail aaya hai ki meeting 5 baje shift ho gayi hai. Kya mai calendar update kar du?"*
+4. **User:** *"Ha kar de."*
+5. **Jarvis:** Triggers AgenticBrain → `calendar_action` to update the event.
+6. **Jarvis:** *"Done sir, calendar update ho gaya."*
 
-#### Development Bootstrap Mode
+### 📱 Scenario 3: Mobile & PC Unification (ADB Control)
 
-```powershell
-python main.py test_jarvis
-```
+1. **User:** *"Mera phone lock kar do."*
+2. **Jarvis:** Executes `adb shell input keyevent 26`.
+3. **Jarvis:** *"Phone lock ho gaya sir."*
+4. **User:** *"Aaj ka OTP batao."*
+5. **Jarvis:** Reads the latest SMS via ADB content provider and speaks the OTP.
 
-This mode skips the one‑second startup delay. It does **not** disable STT, Baileys, the agent panel, RAG, or proactive services. Combine it with `no_wake` if you do not want wake‑word listening.
+### 🧪 Scenario 4: Full‑Stack App Generation
 
-#### Stop JARVIS
+**User:** *"Create a project named 'TaskFlow' on the Desktop. FastAPI backend with SQLite, React frontend with Tailwind, and 10+ unit tests. Then run pytest and make all tests pass."*
 
-- Say `exit`, `quit`, `stop`, or `bye` after voice activation, or
-- Press `Ctrl + C` in the terminal running JARVIS.
+**Jarvis:**
+1. Creates folder structure.
+2. Generates `requirements.txt` and `package.json`.
+3. Writes FastAPI CRUD endpoints.
+4. Writes React frontend with Tailwind.
+5. Writes `pytest` tests.
+6. Runs `npm install` and `pip install`.
+7. Runs `pytest` – if any fail, uses `replace_block` to fix.
+8. When all tests pass, calls `complete_task`.
 
-### 8. Session & Memory Management CLI
+---
 
-JARVIS includes powerful CLI subcommands to manage sessions, memory, and reset the system.
+## ⚙️ CLI & Configuration
 
-> **⚠️ IMPORTANT:** All logout, memory clear, login, and reset commands require Jarvis to be **OFF** (not running). Stop Jarvis first (`Ctrl + C` or say `exit`) before running these.
+### Session & Memory Management CLI
+
+> **⚠️ Important:** All logout, memory clear, login, and reset commands require Jarvis to be **OFF** (not running).
 
 | Command | Action |
 | --- | --- |
-| `jarvis login --whatsapp` | Start WhatsApp QR login (manual scan — opens popup) |
-| `jarvis login --mail` | Start Gmail OAuth login (opens browser) |
-| `jarvis login --calendar` | Start Google Calendar OAuth login (opens browser) |
-| `jarvis login --all` | Login to all services sequentially |
-| `jarvis logout --whatsapp` | Logout WhatsApp & clear `chats.db` |
-| `jarvis logout --mail` | Logout Gmail session & clear token |
-| `jarvis logout --calendar` | Logout Google Calendar session |
-| `jarvis logout --mail --calendar` | Logout multiple services at once |
-| `jarvis logout --all` | Logout from **ALL** connected services |
-| `jarvis memory --clear` | Clear AI contextual memory & chat history (keeps sessions intact) |
-| `jarvis reset --hard` | **FACTORY RESET:** Wipe memory AND all sessions |
-| `jarvis -h` or `jarvis --help` | Display the complete CLI help menu |
+| `jarvis login --whatsapp` | Start WhatsApp QR login |
+| `jarvis login --mail` | Start Gmail OAuth login |
+| `jarvis login --calendar` | Start Google Calendar OAuth |
+| `jarvis login --all` | Login to all services |
+| `jarvis logout --whatsapp` | Logout WhatsApp & clear session |
+| `jarvis logout --mail` | Logout Gmail |
+| `jarvis logout --calendar` | Logout Calendar |
+| `jarvis logout --all` | Logout from **ALL** services |
+| `jarvis memory --clear` | Clear AI contextual memory (keep sessions) |
+| `jarvis reset --hard` | **FACTORY RESET** – wipe memory AND all sessions |
+| `jarvis --help` | Display help menu |
 
-**Examples:**
-
-```powershell
-# View help menu
-jarvis -h
-
-# Login to WhatsApp only
-jarvis login --whatsapp
-
-# Login to Gmail + Calendar together
-jarvis login --mail --calendar
-
-# Logout WhatsApp only
-jarvis logout --whatsapp
-
-# Clear memory (keep sessions)
-jarvis memory --clear
-
-# Factory reset (wipe everything)
-jarvis reset --hard
-```
-
-> 💡 **After logging in:** Restart Jarvis. The service will now start automatically on every launch, and its proactive listener will begin monitoring.
-
-### 9. Keyboard Shortcuts
-
-- `Ctrl + Shift + J`: Open Floating Text Input & Markdown UI Popup (Runs `InputPopup.exe`).
-
----
-
-## ⚙️ Configuration & Enterprise Security
-
-Create a `.env` file in your root project directory:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-### Full Environment Variables & Hidden Configs (`config.py`)
+### Environment Variables (`.env`)
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `GROQ_API_KEY` | FastBrain & Summarization API. | (Required) |
-| `GEMINI_API_KEY` | Embeddings, Vision, Reasoning. | (Required) |
-| `REGOLO_API_KEY` | Agentic Primary Provider. | (Required) |
-| `OPENROUTER_API_KEY` | Fallback Agentic Provider. | (Optional) |
-| `TAVILY_API_KEY` | Web search tool. | (Required for search) |
-| `DEEPGRAM_API_KEY` | Live speech‑to‑text. | (Required for voice) |
-| `TOGETHER_AI` | FLUX image‑generation fallback. | (Optional) |
-| `AGENT_PRIMARY_PROVIDER` | Choose `regolo`, `gemini`, `openrouter`, or `custom`. | `regolo` |
-| `AGENT_FALLBACK_PROVIDER` | Auto‑fallback when primary fails. | `gemini` |
-| **🖥️ Custom Provider Variables (Cloud or Local)** |  |  |
-| `CUSTOM_API_KEY` | API key for custom provider (use `EMPTY_KEY` for local models like Ollama). | `EMPTY_KEY` |
-| `CUSTOM_BASE_URL` | Base URL of the OpenAI‑compatible endpoint.<br>• **Local Ollama:** `http://localhost:11434/v1`<br>• **LM Studio:** `http://localhost:1234/v1`<br>• **vLLM:** `http://localhost:8000/v1`<br>• **Any self‑hosted:** Your custom URL | `http://localhost:11434/v1` |
-| `CUSTOM_MODEL` | Model name to use with the custom provider.<br>• **Ollama example:** `llama3.2:3b`, `mistral:7b`, `deepseek‑coder:6.7b`<br>• **LM Studio:** Model name as shown in UI | `default‑model` |
-| `CUSTOM_THINKING_ENABLED` | Enable reasoning content if supported by the model. | `True` |
-| **📱 Mobile Control (Android)** |  |  |
-| `ADB_PHONE_IP` | Tailscale (or local) IP of your Android phone. | (Optional) |
-| `ADB_PHONE_PORT` | Port for ADB over TCP/IP. | `5555` |
-| **Other** |  |  |
-| `EMBEDDING_DIM` | Dimension for ChromaDB vectors. | `768` |
-| `DEEP_RESEARCH_TIMEOUT` | Max seconds for deep research synthesis. | `420` |
-| `AGENT_MAX_STEPS` | Max agent loop iterations. | `50` |
-| `AGENT_TIMEOUT` | Max seconds for agent loop. | `1800` |
-| `AGENT_RETRY_LIMIT` | Retries on tool failure before abort. | `2` |
-
-> **Security Note:** Never commit your `.env` or `Data/SessionCookies/` directory to public version control. They are excluded via `.gitignore` by default.
-
----
-
-## 📂 Repository Anatomy
-
-```
-jarvis-by-kaif-ansari/
-├── Bin/                           # Compiled Executables
-│   ├── InputPopup.exe             # Text input UI (Hotkey trigger)
-│   └── SttPopup.exe               # Voice status floating indicator
-├── core/
-│   ├── brain/
-│   │   ├── Processor/             # Routing & Intelligence
-│   │   │   ├── Processor.py       # RegoloSemanticRouter + Local Fallback
-│   │   │   ├── FastBrain.py       # Groq LPU integration (Stateless)
-│   │   │   ├── AgenticBrain.py    # Agent Loop, 4‑Pillar Contract, Two‑Strike
-│   │   │   └── Prompts.py         # System Prompts & Safety Contracts
-│   │   ├── Providers/             # Multi‑LLM Abstraction Layer
-│   │   │   ├── baseProvider.py    # Abstract Class
-│   │   │   ├── regoloProvider.py
-│   │   │   ├── geminiProvider.py
-│   │   │   ├── openrouterProvider.py
-│   │   │   └── customProvider.py  # Any OpenAI‑compatible endpoint (Ollama, LM Studio, etc.)
-│   │   ├── Memory/                # Persistence Ecosystem
-│   │   │   ├── Memory.py          # JSONL Context, User Bio/Mood, LTM Archiver
-│   │   │   ├── LifetimeMemory.py  # ChromaDB Episodic Memory (Daily Summaries)
-│   │   │   └── RagEngine.py       # Smart Chunking, Hash‑based RAG Indexing
-│   │   ├── executor.py            # Tool Dispatcher (System, File, Comms, Mobile)
-│   │   └── config.py              # Enterprise Configurations
-│   ├── main/
-│   │   ├── CommandHandler.py      # Main command bus, _is_busy state
-│   │   ├── HotKeyManager.py       # Ctrl+Shift+J binding
-│   │   ├── BackgroundServices.py  # Spawn/Kill STT, Baileys, Agent Panel, Mobile ADB (conditional)
-│   │   └── ServiceWatchdog.py     # Auto‑Restart daemon with smart monitoring (includes mobile)
-│   ├── voice/                     # STT, TTS, Wake Word
-│   │   ├── stt.py (Deepgram + Vosk KWS)
-│   │   ├── tts.py (Edge TTS)
-│   │   └── stt_status.py          # Popup visibility controller
-│   ├── ui/                        # PyQt5 UI Suite
-│   │   ├── agent_panel.py         # ZMQ‑based floating status panel
-│   │   ├── agent_status.py        # ZMQ publisher for agent updates
-│   │   ├── typing_status.py       # JSON file writer for typing popup
-│   │   └── Popup/                 # Markdown rendering popup
-│   │       ├── Popup.py           # Entry point
-│   │       ├── PopupUI.py         # Main UI (glass‑morphism, resize, animations)
-│   │       ├── AsyncBrowser.py    # Async image loading, cache, preview engine
-│   │       └── TextParser.py      # Background markdown parser, syntax highlighter
-│   └── utils/
-│       ├── utils.py               # resolve_pronouns, helpers
-│       └── ProcessManager.py      # Safe subprocess tree spawning/killing
-├── tools/
-│   ├── Messanger/                 # Gmail Pub/Sub & Baileys WhatsApp
-│   │   └── whatsapp/BaileysServer/ (Node.js)
-│   ├── SystemTools/               # Win32 OS controls, File Editor
-│   │   ├── fileEditor.py          # repo_map, replace_block, create_many
-│   │   └── clipboard_tool.py      # OS Clipboard CRUD
-│   ├── SearchTools/               # Tavily, ArXiv, DeepResearch
-│   ├── Vision/                    # Multimodal image/video handlers
-│   └── ImageGeneration/           # Text‑to‑image, image‑to‑image
-├── Proactive/                     # HITL Scout & Event Queue
-│   ├── proactive_agent.py         # Conditional listener startup
-│   ├── Email/                     # Gmail Pub/Sub listener (non‑interactive auth)
-│   ├── WhatsApp/                  # WhatsApp alert listener
-│   └── Reminders/                 # Calendar reminder listener (non‑interactive auth)
-├── Data/                          # Local State (Vectors, Profile, Cookies)
-│   ├── jarvis_memory/             # ChromaDB LTM & JSONL history
-│   └── SessionCookies/            # Baileys creds, OAuth tokens
-├── fonts/                         # UI fonts (English, Devanagari)
-├── SetupRegistry.py               # Registers jarvis:// URI protocol + CLI command
-├── main.py                        # Primary Entry Point
-└── requirements.txt               # Production dependencies
-```
+| `GROQ_API_KEY` | FastBrain & Summarization | (Required) |
+| `GEMINI_API_KEY` | Embeddings, Vision, Reasoning | (Required) |
+| `REGOLO_API_KEY` | Agentic Primary Provider | (Required) |
+| `OPENROUTER_API_KEY` | Fallback Agentic Provider | (Optional) |
+| `TAVILY_API_KEY` | Web search tool | (Required) |
+| `DEEPGRAM_API_KEY` | Live speech‑to‑text | (Required) |
+| `ADB_PHONE_IP` | Tailscale IP of Android phone | (Optional) |
+| `CUSTOM_BASE_URL` | Local/cloud OpenAI‑compatible endpoint | `http://localhost:11434/v1` |
+| `CUSTOM_MODEL` | Model name for custom provider | `default‑model` |
 
 ---
 
 ## 🔧 Troubleshooting
 
-| Problem | Checks and Fix |
+| Problem | Solution |
 | --- | --- |
-| `ModuleNotFoundError` on startup | Activate `.venv`, run `pip install -r requirements.txt`. |
-| `Vosk` / `KaldiRecognizer` error | Confirm `Data/model/vosk-model-small/` exists and contains the extracted small English model. |
-| Wake word starts but speech is not transcribed | Set `DEEPGRAM_API_KEY`, allow microphone access in Windows. |
-| Gmail/Calendar sign‑in does not finish | Run `python SetupRegistry.py`, check `API_BASE_URL`, retry browser flow. |
-| WhatsApp cannot send | Run both `npm install` commands, complete QR login, ensure port 3000 is free. |
-| Agent panel/STT/Input popup is absent | Ensure the relevant executable exists in `Bin/`; otherwise build from `core/UiSrc/`. |
-| RAG returns no results | Put supported files in `Documents/Jarvis/RAG/`, set `GEMINI_API_KEY`, allow background indexer time. |
-| Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. For local models, ensure Ollama/LM Studio is running. Check `Data/jarvis.log` for details. |
-| `jarvis` command not recognised | Run `SetupRegistry.py` from the activated virtual environment, then open a **new terminal**. |
-| Unwanted browser/QR popup on startup | Log out of the service (`jarvis logout --service`). The system now starts services only when credentials exist. |
-| Watchdog logs spam | Already fixed — watchdog now logs unlogged services only once per minute. If you see frequent logs, ensure you are using the latest version. |
-| Mobile ADB fails to connect | Check `ADB_PHONE_IP` is set correctly in `.env`. Ensure Tailscale is running on both devices. Run `adb devices` manually to verify the connection. The watchdog will attempt to reconnect automatically; if it fails, check `Data/jarvis.log` for details. |
-| Need diagnostic information | Read `Data/jarvis.log` — console also prints service/tool errors. |
+| `ModuleNotFoundError` | Activate `.venv` and `pip install -r requirements.txt`. |
+| Vosk model missing | Run `jarvis` once to auto‑download, or manually place in `Data/model/vosk-model-small/`. |
+| WhatsApp fails | Ensure Node.js 18+, run `npm install` in BaileysServer, complete QR login, port 3000 free. |
+| `jarvis` command not recognized | Run `python SetupRegistry.py` from activated venv, then open a **new terminal**. |
+| Unwanted browser/QR popup | Logout of the service (`jarvis logout --service`). Services start only when credentials exist. |
+| Mobile ADB fails | Check `ADB_PHONE_IP` in `.env`, ensure Tailscale is running, run `adb devices` manually. |
+| Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. |
 
 ---
 
-## 🤝 Contributing
+## 🤝 Contributing & Community
 
-1. **Fork** the repository.
-2. **Create** a feature branch (`git checkout -b feature/AdvancedTooling`).
-3. **Commit** your changes with clear, descriptive messages.
-4. **Push** to your fork (`git push origin feature/AdvancedTooling`).
-5. **Open** a Pull Request for review.
+We welcome contributions! Whether it's a bug fix, new provider, or documentation:
 
-> **Note:** Do not commit `.env`, `Data/SessionCookies/`, generated media, or local memory. They are excluded via `.gitignore`.
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
 
 ---
 
 ## 📄 License
 
-This project is released under the **MIT License** — see the [LICENSE](LICENSE) file for complete details.
+Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-**Built with ❤️ and pragmatic engineering by Kaif Ansari**
+## 🌟 Show Your Support
 
-*If this project inspired your own AI architecture, consider leaving a ⭐ on the repository!*
+If this project made you smile, saved you time, or inspired you:
+
+- ⭐ **Star** this repository.
+- 🐦 Tweet about it tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
+- ☕ Buy me a coffee (coming soon) – because late nights are expensive.
+
+---
+
+<h3 align="center">
+  <i>"Just late nights, coffee, and a burning passion to build the impossible."</i>
+</h3>
+```
