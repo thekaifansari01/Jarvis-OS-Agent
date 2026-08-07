@@ -21,7 +21,7 @@ GEMINI_AGENT_MODEL = "gemma-4-31b-it"
 GEMINI_EMBEDDING_MODEL = "gemini-embedding-2"
 
 REGOLO_BASE_URL = "https://api.regolo.ai/v1"
-REGOLO_MODEL = "mistral-small-4-119b"
+REGOLO_MODEL = "glm5.2"
 REGOLO_THINKING_ENABLED = True
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
