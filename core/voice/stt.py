@@ -30,7 +30,11 @@ class UnifiedVoiceAssistant:
     def __init__(self):
         self.CHUNK = 2048
         self.RATE = 16000
-        self.WAKE_WORDS = ["jarvis"]
+        self.WAKE_WORDS = ["jarvis", "hey jarvis"]
+        self.DISTRACTORS = [
+            "service", "travis", "harvest", "driver", "artists", 
+            "javascript", "garbage", "hello", "ha", "theek", "okay"
+        ]
 
         model_path = "Data/model/vosk-model-small"
         if not os.path.exists(model_path):
@@ -40,7 +44,8 @@ class UnifiedVoiceAssistant:
         logger.info("Loading Vosk wake word model...")
         try:
             self.vosk_model = VoskModel(model_path)
-            grammar = json.dumps(self.WAKE_WORDS + ["[unk]"])
+            grammar_list = self.WAKE_WORDS + self.DISTRACTORS + ["[unk]"]
+            grammar = json.dumps(grammar_list)
             self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
             logger.info("Vosk model loaded successfully.")
         except Exception as e:
@@ -132,6 +137,18 @@ class UnifiedVoiceAssistant:
             logger.error(f"Deepgram setup failed: {e}")
             return False
 
+    def _check_wake_word(self, text):
+        words = text.lower().split()
+        for phrase in self.WAKE_WORDS:
+            phrase_words = phrase.split()
+            if len(phrase_words) == 1:
+                if phrase_words[0] in words:
+                    return True
+            else:
+                if phrase in text.lower():
+                    return True
+        return False
+
     def _audio_loop(self):
         while self.running:
             try:
@@ -142,18 +159,18 @@ class UnifiedVoiceAssistant:
 
                     if self.vosk_recognizer.AcceptWaveform(pcm_data):
                         res = json.loads(self.vosk_recognizer.Result())
-                        text = res.get("text", "").lower()
-                        if any(w in text for w in self.WAKE_WORDS):
+                        text = res.get("text", "")
+                        if self._check_wake_word(text):
                             triggered = True
                     else:
                         partial = json.loads(self.vosk_recognizer.PartialResult())
-                        p_text = partial.get("partial", "").lower()
-                        if any(w in p_text for w in self.WAKE_WORDS):
+                        p_text = partial.get("partial", "")
+                        if self._check_wake_word(p_text):
                             triggered = True
                             self.vosk_recognizer.Reset()
 
                     if triggered:
-                        logger.info("Wake word 'Jarvis' triggered!")
+                        logger.info("Wake word 'Jarvis' triggered accurately!")
                         try:
                             from core.voice import tts
                             tts.stop_speaking()
