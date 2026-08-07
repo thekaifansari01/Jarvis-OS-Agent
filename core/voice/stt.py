@@ -73,6 +73,7 @@ class UnifiedVoiceAssistant:
         self.current_transcript = ""
         self.live_text = ""
         self.command_done = threading.Event()
+        self.connection_established = False
 
     def start(self):
         logger.info("Wake Word Detection Activated -> Listening for 'Jarvis'...")
@@ -80,10 +81,7 @@ class UnifiedVoiceAssistant:
         self.listen_thread.start()
 
     def play_wake_sound(self):
-        try:
-            winsound.Beep(2000, 150)
-        except Exception:
-            pass
+        pass
 
     def _get_rms(self, pcm_data):
         try:
@@ -194,12 +192,28 @@ class UnifiedVoiceAssistant:
                         interrupt.set_interrupt()
                         self.play_wake_sound()
 
-                        if self._setup_deepgram():
-                            self.is_awake = True
-                            update_stt_status("listening", "")
+                        self.current_transcript = ""
+                        self.live_text = ""
+                        self.command_done.clear()
+
+                        if not self.connection_established or self.dg_connection is None:
+                            if self._setup_deepgram():
+                                self.connection_established = True
+                            else:
+                                self.connection_established = False
+                                continue
+
+                        self.is_awake = True
+                        update_stt_status("listening", "")
                 else:
                     if self.dg_connection:
-                        self.dg_connection.send(pcm_data)
+                        try:
+                            self.dg_connection.send(pcm_data)
+                        except Exception:
+                            self.dg_connection = None
+                            self.connection_established = False
+                            self.is_awake = False
+                            continue
 
                     if self.command_done.is_set():
                         self.process_final_command()
@@ -208,14 +222,6 @@ class UnifiedVoiceAssistant:
                 time.sleep(0.01)
 
     def process_final_command(self):
-        if self.dg_connection:
-            try:
-                self.dg_connection.finish()
-            except Exception:
-                pass
-            finally:
-                self.dg_connection = None
-
         full_command = self.live_text.lower().strip()
         ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you", "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
 
@@ -246,6 +252,11 @@ class UnifiedVoiceAssistant:
 
     def stop(self):
         self.running = False
+        try:
+            if self.dg_connection:
+                self.dg_connection.finish()
+        except Exception:
+            pass
         try:
             self.stream.stop_stream()
             self.stream.close()
