@@ -269,24 +269,6 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             logger.error(f"❌ Python Execution failed: {e}\n{traceback.format_exc()}")
             return f"Observation: Python Execution error -> {e}"
 
-    vision_cmd = action_dict.get('vision')
-    if vision_cmd and isinstance(vision_cmd, dict):
-        try:
-            from tools.Vision.vision import inspect_media_files
-            from core.brain.config import AGENT_PRIMARY_PROVIDER, GEMINI_AGENT_MODEL, REGOLO_MODEL, OPENROUTER_MODEL
-            
-            active_model = GEMINI_AGENT_MODEL if AGENT_PRIMARY_PROVIDER == "gemini" else (
-                REGOLO_MODEL if AGENT_PRIMARY_PROVIDER == "regolo" else OPENROUTER_MODEL
-            )
-            has_vision = getattr(active_model, "vision", False)
-            
-            file_paths = vision_cmd.get('file_paths', [])
-            query = vision_cmd.get('query', '')
-            logger.info(f"🤖 Agent executing vision tool (has_vision={has_vision})")
-            return inspect_media_files(file_paths, query, has_vision=has_vision)
-        except Exception as e:
-            logger.error(f"❌ vision crashed: {e}")
-            return f"Observation: vision error -> {e}"
 
     email_action = action_dict.get('email_action', {})
     if email_action and isinstance(email_action, dict) and email_action.get('to'):

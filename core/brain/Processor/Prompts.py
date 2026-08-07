@@ -95,7 +95,7 @@ print(res.stdout[:1500])
       <directive>STRICT PRIORITY: Always use built-in native tools first ('whatsapp_action', 'email_action', 'search_actions', 'calendar_action', 'memory_actions').</directive>
     </rule>
     <rule level="2" type="file_operations">
-      <directive>USE 'file_operations' FOR FILE CRUD & REPO MAP: Use 'repo_map' to inspect project architecture before coding. Use 'view' to read files (single or batch via 'file_paths'). Use 'replace_block' for exact search-and-replace block edits. Use 'create' to create single file (with 'file_path' + 'content') or multiple files (with 'files' array) in one step. Always use full absolute file paths.</directive>
+      <directive>USE 'file_operations' FOR FILE CRUD, REPO MAP & IMAGE VIEWING: Use 'repo_map' to inspect project architecture before coding. Use 'view' to read text/code files OR visually inspect image files (.png, .jpg, .jpeg, .webp, .gif) inline (single or batch via 'file_paths'). Use 'replace_block' for exact search-and-replace block edits. Use 'create' to create single file (with 'file_path' + 'content') or multiple files (with 'files' array) in one step. Always use full absolute file paths.</directive>
     </rule>
     <rule level="3" type="python_repl">
       <directive>USE 'run_python_code' FOR COMPLEX OS, DATA & MULTI-FILE PROJECTS: Preferred for recursive folder searching, file filtering, regex parsing, math, custom scripts, and multi-step logic.</directive>
@@ -258,45 +258,15 @@ def get_native_tools():
                     )
                 ),
                 types.FunctionDeclaration(
-                    name="vision",
-                    description=(
-                        "[WHEN TO USE]: Use when the user asks to analyze, describe, extract information from, or answer questions about an image, photo, screenshot, or video file.\n"
-                        "[CAPABILITIES]: This tool uses multimodal AI vision to inspect visual content including:\n"
-                        "  - Object detection and recognition\n"
-                        "  - Text extraction from images (OCR)\n"
-                        "  - Scene description and analysis\n"
-                        "  - Visual question answering\n"
-                        "  - Document understanding (scanned PDFs, forms, bills)\n"
-                        "  - Video frame analysis\n"
-                        "[WHEN NOT TO USE]: Do not use for text-based documents that can be read directly (TXT, JSON, CSV, etc.). For those, use 'file_operations'.\n"
-                        "[RULE]: Always pass absolute local file paths and a clear, specific query about what to extract or analyze."
-                    ),
-                    parameters=types.Schema(
-                        type=types.Type.OBJECT,
-                        properties={
-                            "file_paths": types.Schema(
-                                type=types.Type.ARRAY,
-                                items=types.Schema(type=types.Type.STRING),
-                                description="List of absolute local file paths to images, photos, screenshots, or videos to inspect. Supported formats: JPG, PNG, WEBP, GIF, MP4, AVI, MOV, MKV, PDF (scanned documents)."
-                            ),
-                            "query": types.Schema(
-                                type=types.Type.STRING,
-                                description="Exact question or extraction instruction about the visual media (e.g., 'What objects are in this image?', 'Extract all text from this bill', 'Describe what is happening in this video')."
-                            )
-                        },
-                        required=["file_paths", "query"]
-                    )
-                ),
-                types.FunctionDeclaration(
                     name="file_operations",
                     description=(
-                        "[WHEN TO USE]: Use for CRUD operations on local files.\n"
+                        "[WHEN TO USE]: Use for CRUD operations on local files and visually inspecting images.\n"
                         "Supported actions:\n"
                         "1. 'repo_map': Get an architectural tree overview of files in the workspace.\n"
-                        "2. 'view': Read files.\n"
-                        "   - To read a SINGLE file, pass 'file_path'.\n"
-                        "   - To read MULTIPLE files in ONE step (batch), pass 'file_paths' (list) instead of 'file_path'.\n"
-                        "   - [CRITICAL]: To read the ENTIRE file, completely OMIT 'start_line' and 'end_line'. Output is truncated at 15,000 characters for safety.\n"
+                        "2. 'view': Read text/code files OR visually inspect image files (.png, .jpg, .jpeg, .webp, .gif) inline.\n"
+                        "   - To read/view a SINGLE file, pass 'file_path'.\n"
+                        "   - To read/view MULTIPLE files in ONE step (batch), pass 'file_paths' (list) instead of 'file_path'.\n"
+                        "   - [CRITICAL]: To read an ENTIRE file, completely OMIT 'start_line' and 'end_line'. Output is truncated at 15,000 characters for safety.\n"
                         "3. 'replace_block': EXACT diff search-replace. ALWAYS prefer this over line numbers to avoid line-drift bugs.\n"
                         "4. 'create': Create new file(s).\n"
                         "   - To create a SINGLE file, pass 'file_path' and 'content'.\n"

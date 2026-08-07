@@ -1,4 +1,5 @@
 import os
+import base64
 import py_compile
 from core.logger.logger import logger
 
@@ -144,14 +145,53 @@ class JarvisFileEditor:
             if file_path and file_paths:
                 return "[ERROR] Provide either 'file_path' (single) or 'file_paths' (list), not both."
 
+            image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+
+            if file_path:
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext in image_extensions:
+                    clean_path = os.path.abspath(file_path.replace("\\", "/"))
+                    if not os.path.exists(clean_path):
+                        return f"[ERROR] Image file '{clean_path}' does not exist."
+                    mime_type = "image/jpeg"
+                    if ext == ".png":
+                        mime_type = "image/png"
+                    elif ext == ".webp":
+                        mime_type = "image/webp"
+                    elif ext == ".gif":
+                        mime_type = "image/gif"
+                    with open(clean_path, "rb") as img_file:
+                        b64_data = base64.b64encode(img_file.read()).decode('utf-8')
+                    logger.info(f"👁️ Loaded image inline for visual inspection: {clean_path}")
+                    return {
+                        "type": "image_payload",
+                        "data": [{
+                            "mime_type": mime_type,
+                            "data": b64_data,
+                            "path": clean_path
+                        }],
+                        "observation": f"[SUCCESS] Loaded image '{clean_path}' inline for visual inspection."
+                    }
+
             if file_paths:
-                results = []
+                image_payloads = []
+                text_results = []
                 for fp in file_paths:
                     res = self.view(fp, start_line=start_line, end_line=end_line)
-                    results.append(f"=== {fp} ===\n{res}")
-                combined = "\n\n".join(results)
+                    if isinstance(res, dict) and res.get("type") == "image_payload":
+                        image_payloads.extend(res.get("data", []))
+                        text_results.append(f"=== {fp} ===\n" + res.get("observation", ""))
+                    else:
+                        text_results.append(f"=== {fp} ===\n{res}")
+                combined = "\n\n".join(text_results)
                 truncated = self._truncate_text(combined, self.MAX_VIEW_CHARS, "Combined output")
                 logger.info(f"✅ Batch view of {len(file_paths)} files done.")
+                if image_payloads:
+                    return {
+                        "type": "image_payload",
+                        "data": image_payloads,
+                        "observation": f"[SUCCESS] Batch view of {len(file_paths)} files:\n\n{truncated}"
+                    }
                 return f"[SUCCESS] Batch view of {len(file_paths)} files:\n\n{truncated}"
 
             try:

@@ -48,7 +48,8 @@ class RegoloSemanticRouter:
             "- Coding & Terminal: writing/executing Python scripts, CMD commands, pip/npm installs, or git.\n"
             "- Long-term memory retrieval: searching personal vault notes, old episodic facts, or calendar management.\n"
             "- Advanced research: webpage scraping, academic arxiv search, or multi-source deep research reports.\n"
-            "- Compound multi-step workflows combining apps and communications (e.g., 'Open Chrome and email the summary').\n\n"
+            "- Compound multi-step workflows combining apps and communications (e.g., 'Open Chrome and email the summary').\n"
+            "- Image/Screen analysis: inspecting, describing, extracting text from images, photos, screenshots, or visual content.\n\n"
             "### FEW-SHOT EXAMPLES\n"
             "User: 'Volume badha do aur Youtube par Arijit Singh ka gana chalao' -> {\"route\": \"FAST\"}\n"
             "User: 'Chrome kholo aur aaj ka weather search karo' -> {\"route\": \"FAST\"}\n"
@@ -56,7 +57,10 @@ class RegoloSemanticRouter:
             "User: 'Is YouTube link ka video summary batao' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Kaif ko mail bhejo ki meeting 5 baje hai' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Desktop par ek naya file bano test.txt nam se' -> {\"route\": \"AGENTIC\"}\n"
-            "User: 'Kal maine tumse kya kaha tha coffee ke bare me?' -> {\"route\": \"AGENTIC\"}"
+            "User: 'Kal maine tumse kya kaha tha coffee ke bare me?' -> {\"route\": \"AGENTIC\"}\n"
+            "User: 'Is image mein kya likha hai?' -> {\"route\": \"AGENTIC\"}\n"
+            "User: 'Is photo ko describe karo' -> {\"route\": \"AGENTIC\"}\n"
+            "User: 'Mere screenshot mein kya dikh raha hai?' -> {\"route\": \"AGENTIC\"}"
         )
 
         user_content = f"[RECENT CONVERSATION HISTORY]\n{trimmed_history}\n\n[USER COMMAND]\n\"{command}\""
@@ -110,6 +114,7 @@ def get_local_fallback_route(command: str) -> str:
     ]
 
     agentic_strict_patterns = [
+        r'\b(image|photo|picture|screenshot|screen|visual|vision|analyse|analyze|dekho|dikhao)\b',
         r'\b(email|mail|gmail|whatsapp|msg|message)\b',
         r'\b(file|folder|directory|repo|test\.txt|\.py|\.html|\.json)\b',
         r'\b(terminal|cmd|powershell|pip|npm|git|subprocess)\b',
@@ -165,7 +170,7 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
         decision = get_route_decision(raw_command, memory_instance)
         
         if decision == "AGENTIC":
-            logger.info("🚦 Smart Router: AGENTIC (Deep Tasks, Memory & Comms)")
+            logger.info("🚦 Smart Router: AGENTIC (Deep Tasks, Memory, Comms & Visual Analysis)")
             context_blocks = []
             
             if memory_instance:
