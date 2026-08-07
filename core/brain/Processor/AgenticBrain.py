@@ -783,7 +783,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
 """
 
             step += 1
-            time.sleep(0.1)
+            time.sleep(1.0)
 
         except Exception as e:
             error_msg = str(e)

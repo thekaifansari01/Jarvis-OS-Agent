@@ -44,7 +44,8 @@ const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
 const binDir = path.join(__dirname, '..', '..', '..', '..', 'Bin');
-const mediaVaultDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'MediaVault', 'WhatsApp_Media');
+const os = require('os');
+const mediaVaultDir = path.join(os.homedir(), 'Documents', 'Jarvis', 'MediaVault', 'WhatsApp_Media');
 
 try {
     if (!fs.existsSync(sessionDir)) {

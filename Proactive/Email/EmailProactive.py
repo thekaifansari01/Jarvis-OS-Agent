@@ -102,7 +102,7 @@ def extract_email_content(service, msg_id, msg):
     html_text = ""
     saved_attachments = []
 
-    media_vault_dir = os.path.join(project_root, 'Data', 'MediaVault', 'Email_Attachments')
+    media_vault_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'Jarvis', 'MediaVault', 'Email_Attachments')
     os.makedirs(media_vault_dir, exist_ok=True)
 
     def download_attachment(att_id, filename):
