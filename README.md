@@ -1,6 +1,6 @@
-<div align="center">
-
 # 🧠 J.A.R.V.I.S. – The Autonomous AI Agent for Windows
+
+> *"We call it an AI Operating System because it controls your PC, Phone, Files, and Memory — not just your code."*
 
 > **Zero line‑drift coding · Lifelong memory · Voice‑first · Proactive HITL · Mobile control**
 
@@ -17,7 +17,7 @@
 
 **Built by a 18‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
 
-</div>
+<!-- TODO: Add a 5-second demo GIF here showing voice-controlled code editing, ADB phone lock, and WhatsApp automation in action -->
 
 ---
 
@@ -246,9 +246,11 @@ cd tools/Messanger/whatsapp/BaileysServer
 npm install
 cd ../../../..
 
-# 4. Global CLI Setup (Run this once)
+# 4. Global CLI Setup (Run this once from the root project directory)
 python SetupRegistry.py
 ```
+
+> ⚠️ **Ensure you are in the root project directory** (`Jarvis-OS-Agent/`) before running `python SetupRegistry.py`.
 
 ### 🌐 Global Command Magic
 
@@ -359,7 +361,7 @@ CUSTOM_MODEL=llama3.2:3b
 | `ModuleNotFoundError` | Activate `.venv` and `pip install -r requirements.txt`. |
 | Vosk model missing | Run `jarvis` once to auto‑download, or manually place in `Data/model/vosk-model-small/`. |
 | WhatsApp fails | Ensure Node.js 18+, run `npm install` in BaileysServer, complete QR login, port 3000 free. |
-| `jarvis` command not recognized | Run `python SetupRegistry.py` from activated venv, then open a **new terminal**. |
+| `jarvis` command not recognized | Run `python SetupRegistry.py` from activated venv and from the **root project directory**, then open a **new terminal**. |
 | Unwanted browser/QR popup | Logout of the service (`jarvis logout --service`). Services start only when credentials exist. |
 | Mobile ADB fails | Check `ADB_PHONE_IP` in `.env`, ensure Tailscale is running, run `adb devices` manually. |
 | Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. |
@@ -397,4 +399,3 @@ If this project made you smile, saved you time, or inspired you:
 <h3 align="center">
   <i>"Just late nights, coffee, and a burning passion to build the impossible."</i>
 </h3>
-```
