@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 import datetime
 from typing import Dict, Optional
 from groq import Groq
@@ -134,7 +135,8 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
         ]
 
         launch_popup()
-        update_typing_status("typing", "")
+        time.sleep(0.12)
+        update_typing_status("typing", "...")
 
         completion = groq_client.chat.completions.create(
             model=FAST_MODEL,
@@ -147,6 +149,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
         
         final_text = ""
         tool_calls_map = {}
+        last_ui_update = time.time()
         
         print("\n\033[96mJarvis:\033[0m ", end="", flush=True)
 
@@ -155,7 +158,11 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
             if delta.content:
                 final_text += delta.content
                 print(delta.content, end="", flush=True)
-                update_typing_status("typing", final_text)
+                
+                now = time.time()
+                if (now - last_ui_update) >= 0.08 or len(final_text) < 15:
+                    update_typing_status("typing", final_text)
+                    last_ui_update = now
 
             if delta.tool_calls:
                 for tc in delta.tool_calls:
@@ -167,6 +174,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                     if tc.function.arguments:
                         tool_calls_map[idx]["arguments"] += tc.function.arguments
 
+        update_typing_status("typing", final_text)
         print("\n")
         result["response"] = final_text.strip()
 
@@ -211,7 +219,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 final_completion = groq_client.chat.completions.create(
                     model=FAST_MODEL,
                     messages=[
-                        {"role": "system", "content": f"You are Jarvis. Answer concisely and naturally in 1-2 lines based ONLY on this real-time snippet data. Do not mention that you searched.\n{context_prompt}"},
+                        {"role": "system", "content": f"You are Jarvis. Provide a clear, well-structured, and informative response using Markdown based ONLY on this real-time snippet data. Do not mention that you searched.\n{context_prompt}"},
                         {"role": "user", "content": f"Query: {raw_command}\nReal-Time Snippets:\n{search_data}"}
                     ],
                     temperature=0.2,
@@ -219,13 +227,18 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 )
                 
                 final_answer = ""
+                last_ui_update = time.time()
                 for chunk in final_completion:
                     delta = chunk.choices[0].delta
                     if delta.content:
                         final_answer += delta.content
                         print(delta.content, end="", flush=True)
-                        update_typing_status("typing", final_answer)
+                        now = time.time()
+                        if (now - last_ui_update) >= 0.08 or len(final_answer) < 15:
+                            update_typing_status("typing", final_answer)
+                            last_ui_update = now
                 
+                update_typing_status("typing", final_answer)
                 print("\n")
                 result["response"] = final_answer.strip()
                 

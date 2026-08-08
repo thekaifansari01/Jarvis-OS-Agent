@@ -15,7 +15,8 @@ class ParserWorker(QThread):
         self.full_text = full_text
         self.eng_font = eng_font
         self.hin_font = hin_font
-        self.protected_elements = {} 
+        self.protected_elements = {}
+        self.is_cancelled = False
 
     def protect(self, html):
         token = f"<jarvis-token-{len(self.protected_elements)}/>"
@@ -29,9 +30,9 @@ class ParserWorker(QThread):
             raw_code = match.group(2)
             formatter = HtmlFormatter(style='monokai', noclasses=True, nowrap=True)
             
-            if not lang: 
+            if not lang:
                 lang = "text"
-            try: 
+            try:
                 lexer = get_lexer_by_name(lang, stripall=True)
             except pygments.util.ClassNotFound:
                 lexer = get_lexer_by_name("text")
@@ -58,10 +59,8 @@ class ParserWorker(QThread):
         pattern = r'\[([^\]]+)\]\(([^)]+)\)'
         def replacer(match):
             display_text, url = match.groups()
-            
             if "<jarvis-token-" in display_text:
                 return self.protect(f'<p style="margin-top: 10px;"><a href="{url}">{display_text}</a></p>')
-                
             if "youtube.com" in url or "youtu.be" in url:
                 yt_match = re.search(r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
                 if yt_match:
@@ -73,7 +72,6 @@ class ParserWorker(QThread):
                         f'<span style="color: #FFFFFF; font-size: 11pt; font-weight: bold;">{display_text}</span><br>'
                         f'<span style="color: #A0A0A5; font-size: 9pt;">🔗 youtube.com</span></a></p>'
                     )
-            
             domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
             return self.protect(
                 f'<p style="margin-top: 12px; margin-bottom: 4px; line-height: 1.3;">'
@@ -82,21 +80,17 @@ class ParserWorker(QThread):
                 f'<span style="color: #FFFFFF; font-size: 11pt; font-weight: bold;">{display_text}</span><br>'
                 f'<span style="color: #A0A0A5; font-size: 9pt;">🔗 {domain}</span></a></p>'
             )
-            
         return re.sub(pattern, replacer, text)
 
     def process_raw_direct_images(self, text):
         web_pattern = r'(?<!=["\'])(https?://[^\s<>"\']+?\.(?:png|jpg|jpeg|gif|webp))(?!\))'
         text = re.sub(web_pattern, lambda m: self.protect(f'<p style="margin-top: 10px;"><a href="{m.group(1)}"><img src="{m.group(1)}" width="380" alt="img_preview"></a></p>'), text, flags=re.IGNORECASE)
-        
         win_pattern = r'(?<!=["\'])([a-zA-Z]:[\\/][^\n<>"]+?\.(?:png|jpg|jpeg|gif|webp))(?!\))'
         def win_replacer(m):
             raw_path = m.group(1).replace(chr(92), "/")
             encoded_path = urllib.parse.quote(raw_path, safe=":/")
             return self.protect(f'<p style="margin-top: 10px;"><a href="file:///{encoded_path}"><img src="file:///{encoded_path}" width="380" alt="img_preview"></a></p>')
-            
-        text = re.sub(win_pattern, win_replacer, text, flags=re.IGNORECASE)
-        return text
+        return re.sub(win_pattern, win_replacer, text, flags=re.IGNORECASE)
 
     def process_youtube_links(self, text):
         pattern = r'(?<!=["\'])(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})(?:[&?][a-zA-Z0-9_=.-]*)?)'
@@ -119,23 +113,18 @@ class ParserWorker(QThread):
     def get_styled_html(self, content):
         return f"""
         <html><head><style>
-            /* Premium Typography & Spacing */
             body {{ 
                 margin: 0px; padding: 0px; 
                 color: #E0E0E6; 
                 font-family: '{self.eng_font}', '{self.hin_font}', sans-serif; 
                 font-size: 13pt; 
-                line-height: 1.65; /* Better line spacing */
+                line-height: 1.65;
                 word-wrap: break-word; 
             }}
-            
-            /* Cleaner Headings */
             h1 {{ font-size: 20pt; color: #FFFFFF; font-weight: 800; margin-top: 16px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; letter-spacing: 0.5px; }}
             h2 {{ font-size: 17pt; color: #F5F5FA; font-weight: 700; margin-top: 14px; margin-bottom: 10px; }}
             h3 {{ font-size: 14pt; color: #DADAEE; font-weight: 600; margin-top: 12px; margin-bottom: 8px; }}
             p {{ margin-top: 0px; margin-bottom: 14px; }}
-            
-            /* Modern Mac-style Blockquote */
             blockquote {{ 
                 margin: 10px 0px 16px 0px; 
                 padding: 10px 16px; 
@@ -145,16 +134,12 @@ class ParserWorker(QThread):
                 background: linear-gradient(90deg, rgba(191, 90, 242, 0.08) 0%, transparent 100%);
                 border-radius: 0px 8px 8px 0px; 
             }}
-            
-            /* Lists & Tables */
             ul, ol {{ margin-top: 4px; margin-bottom: 14px; padding-left: 24px; }}
             li {{ margin-bottom: 8px; }}
             hr {{ border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 18px 0px; }}
             table {{ border-collapse: collapse; margin-bottom: 16px; width: 100%; border-radius: 8px; overflow: hidden; }}
             th, td {{ border: 1px solid rgba(255,255,255,0.08); padding: 12px; text-align: left; font-size: 12pt; }}
             th {{ background-color: rgba(255,255,255,0.05); font-weight: 700; color: #FFF; }}
-            
-            /* Code & Links */
             strong, b {{ color: #FFFFFF; font-weight: 700; }}
             code {{ background-color: #1C1C20; color: #E5A4FA; padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); font-family: Consolas, monospace; font-size: 11.5pt; }}
             pre code {{ background-color: transparent; padding: 0; border: none; }}
@@ -164,8 +149,9 @@ class ParserWorker(QThread):
         """
 
     def run(self):
+        if self.is_cancelled:
+            return
         text = self.process_markdown_code_blocks(self.full_text)
-        
         text = self.process_md_images(text)
         text = self.process_md_links(text)
         text = self.process_raw_direct_images(text)
@@ -178,9 +164,12 @@ class ParserWorker(QThread):
         for token, value in self.protected_elements.items():
             md_html = md_html.replace(token, value)
                 
+        if self.is_cancelled:
+            return
+
         html_tokens = re.split(r'(<[^>]+>)', md_html)
         html_tokens = [t for t in html_tokens if t]
         
         final_html = self.get_styled_html(md_html)
-        
-        self.finished_signal.emit(html_tokens, final_html)
+        if not self.is_cancelled:
+            self.finished_signal.emit(html_tokens, final_html)
