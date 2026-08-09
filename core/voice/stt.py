@@ -41,9 +41,7 @@ class UnifiedVoiceAssistant:
         
         try:
             self.vosk_model = VoskModel(model_path)
-            grammar_list = self.WAKE_WORDS + ["[unk]"]
-            grammar = json.dumps(grammar_list)
-            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
+            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE)
         except Exception as e:
             logger.error(f"Failed to initialize Vosk model: {e}")
             raise
@@ -162,14 +160,9 @@ class UnifiedVoiceAssistant:
                     if self.vosk_recognizer.AcceptWaveform(pcm_data):
                         res = json.loads(self.vosk_recognizer.Result())
                         text = res.get("text", "")
-                        if self._check_wake_word(text):
+                        
+                        if self._check_wake_word(text) and rms >= self.MIN_RMS_THRESHOLD:
                             triggered = True
-                    else:
-                        partial = json.loads(self.vosk_recognizer.PartialResult())
-                        p_text = partial.get("partial", "").strip()
-                        if p_text in self.WAKE_WORDS and rms >= (self.MIN_RMS_THRESHOLD + 200):
-                            triggered = True
-                            self.vosk_recognizer.Reset()
 
                     if triggered:
                         try:
