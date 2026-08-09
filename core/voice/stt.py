@@ -17,7 +17,6 @@ from core.voice import interrupt
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 
 load_dotenv()
-
 SetLogLevel(-1)
 
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
@@ -34,24 +33,17 @@ class UnifiedVoiceAssistant:
         self.RATE = 16000
         self.MIN_RMS_THRESHOLD = 400
         self.WAKE_WORDS = ["jarvis", "hey jarvis"]
-        self.DISTRACTORS = [
-            "service", "travis", "harvest", "driver", "artists", 
-            "javascript", "garbage", "hello", "ha", "okay",
-            "ah", "uh", "eh", "hmm", "shh", "ch", "s", "oh", "m"
-        ]
 
         model_path = "Data/model/vosk-model-small"
         if not os.path.exists(model_path):
             logger.error(f"Vosk model folder not found at: {model_path}")
             raise FileNotFoundError(f"Vosk model not found at '{model_path}'.")
         
-        logger.info("Loading Vosk wake word model...")
         try:
             self.vosk_model = VoskModel(model_path)
-            grammar_list = self.WAKE_WORDS + self.DISTRACTORS + ["[unk]"]
+            grammar_list = self.WAKE_WORDS + ["[unk]"]
             grammar = json.dumps(grammar_list)
             self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
-            logger.info("Vosk model loaded successfully.")
         except Exception as e:
             logger.error(f"Failed to initialize Vosk model: {e}")
             raise
@@ -76,7 +68,6 @@ class UnifiedVoiceAssistant:
         self.connection_established = False
 
     def start(self):
-        logger.info("Wake Word Detection Activated -> Listening for 'Jarvis'...")
         self.listen_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.listen_thread.start()
 
@@ -103,17 +94,16 @@ class UnifiedVoiceAssistant:
 
             def on_message(dg_self, result, **kwargs):
                 sentence = result.channel.alternatives[0].transcript
-                if result.is_final:
-                    if sentence:
+                if sentence:
+                    if result.is_final:
                         assistant.current_transcript += " " + sentence
-                    assistant.live_text = assistant.current_transcript.strip()
-                    update_stt_status("listening", assistant.live_text)
-                    if getattr(result, 'speech_final', False):
-                        assistant.command_done.set()
-                else:
-                    if sentence:
+                        assistant.live_text = assistant.current_transcript.strip()
+                    else:
                         assistant.live_text = (assistant.current_transcript + " " + sentence).strip()
-                        update_stt_status("listening", assistant.live_text)
+                    update_stt_status("listening", assistant.live_text)
+
+                if getattr(result, 'speech_final', False) and assistant.live_text.strip():
+                    assistant.command_done.set()
 
             def on_utterance_end(dg_self, utterance_end, **kwargs):
                 if assistant.live_text.strip():
@@ -133,8 +123,8 @@ class UnifiedVoiceAssistant:
                 smart_format=True,
                 interim_results=True,
                 vad_events=True,
-                endpointing=300,
-                utterance_end_ms="1500",
+                endpointing=600,
+                utterance_end_ms="1000",
                 encoding="linear16",
                 channels=1,
                 sample_rate=self.RATE,
@@ -176,13 +166,12 @@ class UnifiedVoiceAssistant:
                             triggered = True
                     else:
                         partial = json.loads(self.vosk_recognizer.PartialResult())
-                        p_text = partial.get("partial", "")
-                        if self._check_wake_word(p_text) and rms >= self.MIN_RMS_THRESHOLD:
+                        p_text = partial.get("partial", "").strip()
+                        if p_text in self.WAKE_WORDS and rms >= (self.MIN_RMS_THRESHOLD + 200):
                             triggered = True
                             self.vosk_recognizer.Reset()
 
                     if triggered:
-                        logger.info("Wake word 'Jarvis' triggered accurately!")
                         try:
                             from core.voice import tts
                             tts.stop_speaking()
