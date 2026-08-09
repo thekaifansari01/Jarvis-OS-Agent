@@ -4,6 +4,7 @@ import shutil
 import time
 import subprocess
 import platform
+import tempfile
 from pathlib import Path
 from core.logger.logger import logger
 
@@ -137,16 +138,100 @@ def login_service(service: str):
             
     elif service == "telegram":
         try:
-            logger.info("Starting Telegram login. Please enter your Phone Number and OTP below.")
-            subprocess.run([
-                sys.executable, "-c",
-                "import os, sys; sys.path.append(os.getcwd()); "
-                "from tools.Messanger.telegram.telegram import send_telegram_message; "
-                "send_telegram_message('me', 'Jarvis Telegram Session Authenticated Successfully!')"
-            ], check=False)
+            logger.info("Initializing Telegram Interactive Setup...")
+            
+            # Beautiful & Safe Interactive CLI Script
+            auth_script = f"""
+import os, sys, asyncio
+from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError, PhoneNumberInvalidError
+from telethon.utils import get_display_name
+from dotenv import load_dotenv
+import logging
+
+# Silence default raw logs from telethon
+logging.getLogger('telethon').setLevel(logging.CRITICAL)
+
+PROJECT_ROOT = r"{PROJECT_ROOT}"
+SESSION_DIR = os.path.join(PROJECT_ROOT, "Data", "SessionCookies")
+os.makedirs(SESSION_DIR, exist_ok=True)
+SESSION_FILE = os.path.join(SESSION_DIR, "jarvis_telegram_session")
+
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+API_ID = os.getenv("TELEGRAM_API_ID")
+API_HASH = os.getenv("TELEGRAM_API_HASH")
+
+async def do_login():
+    print('\\n' + '='*65)
+    print(' 📱 \033[1;36mJARVIS TELEGRAM SECURE AUTHENTICATION\033[0m')
+    print('='*65)
+    
+    if not API_ID or not API_HASH:
+        print(' ❌ \033[1;31mERROR: TELEGRAM_API_ID or TELEGRAM_API_HASH missing in .env\033[0m')
+        print('='*65 + '\\n')
+        return
+
+    client = TelegramClient(SESSION_FILE, int(API_ID), API_HASH)
+    await client.connect()
+    
+    if not await client.is_user_authorized():
+        print(' 💡 \033[1;33mTIP: You MUST include your country code (e.g., +919876543210)\033[0m')
+        print('-'*65)
+        phone = input(' 📞 Enter Phone Number : ').strip()
+        
+        if not phone.startswith('+'):
+            print(' ⚠️ \033[1;33mWarning: Country code missing! This might cause an error.\033[0m')
+            
+        try:
+            await client.send_code_request(phone)
+            print(' 📩 \033[1;32mOTP sent successfully! Please check your Telegram app.\033[0m')
+            code = input(' 🔑 Enter OTP Code     : ').strip()
+            
+            try:
+                await client.sign_in(phone, code)
+            except SessionPasswordNeededError:
+                print('\\n 🔐 \033[1;33mTwo-Step Verification (2FA) is enabled.\033[0m')
+                password = input(' 🔑 Enter 2FA Password : ').strip()
+                await client.sign_in(password=password)
+                
+        except PhoneNumberInvalidError:
+            print('\\n ❌ \033[1;31mERROR: Invalid Phone Number! Did you forget the +91?\033[0m')
+            await client.disconnect()
+            print('='*65 + '\\n')
+            return
+        except Exception as e:
+            print(f'\\n ❌ \033[1;31mAUTHENTICATION FAILED: {{e}}\033[0m')
+            await client.disconnect()
+            print('='*65 + '\\n')
+            return
+
+    me = await client.get_me()
+    name = get_display_name(me)
+    print(f'\\n ✅ \033[1;32mSUCCESS: Logged in successfully as {{name}}!\033[0m')
+    print(' 📁 Session securely saved to: Data/SessionCookies/')
+    print('='*65 + '\\n')
+    
+    try:
+        await client.send_message('me', '🤖 **Jarvis Telegram Session Authenticated Successfully!**')
+    except:
+        pass
+        
+    await client.disconnect()
+
+if __name__ == '__main__':
+    asyncio.run(do_login())
+"""
+            # Using a secure temporary file to avoid Windows command line character escaping issues
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+                f.write(auth_script)
+                temp_script_path = f.name
+            
+            subprocess.run([sys.executable, temp_script_path])
+            os.remove(temp_script_path)
+            
             logger.info("Telegram login process completed.")
         except KeyboardInterrupt:
-            logger.info("Telegram login process cancelled.")
+            logger.info("Telegram login process cancelled by user.")
         except Exception as e:
             logger.error(f"Telegram login failed: {e}")
             
