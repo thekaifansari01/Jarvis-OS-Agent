@@ -80,6 +80,10 @@ def deleteSessionCookies(*targets):
             ],
             "mail": [
                 os.path.join(session_dir, "token.json")
+            ],
+            "telegram": [
+                os.path.join(session_dir, "jarvis_telegram_session.session"),
+                os.path.join(session_dir, "jarvis_telegram_session.session-journal")
             ]
         }
         services_logged_out = []
@@ -99,7 +103,8 @@ def deleteSessionCookies(*targets):
                 service_name = {
                     "whatsapp": "WhatsApp",
                     "calendar": "Calendar",
-                    "mail": "Gmail"
+                    "mail": "Gmail",
+                    "telegram": "Telegram"
                 }.get(key, key.capitalize())
                 services_logged_out.append(service_name)
             else:
@@ -129,6 +134,22 @@ def login_service(service: str):
             logger.info("WhatsApp login process completed.")
         except Exception:
             logger.error("WhatsApp login failed.")
+            
+    elif service == "telegram":
+        try:
+            logger.info("Starting Telegram login. Please enter your Phone Number and OTP below.")
+            subprocess.run([
+                sys.executable, "-c",
+                "import os, sys; sys.path.append(os.getcwd()); "
+                "from tools.Messanger.telegram.telegram import send_telegram_message; "
+                "send_telegram_message('me', 'Jarvis Telegram Session Authenticated Successfully!')"
+            ], check=False)
+            logger.info("Telegram login process completed.")
+        except KeyboardInterrupt:
+            logger.info("Telegram login process cancelled.")
+        except Exception as e:
+            logger.error(f"Telegram login failed: {e}")
+            
     elif service == "mail":
         try:
             from tools.Messanger.email_manager import authenticate_gmail
@@ -140,6 +161,7 @@ def login_service(service: str):
                 logger.error("Gmail login failed or timed out.")
         except Exception:
             logger.error("Gmail login failed.")
+            
     elif service == "calendar":
         try:
             from tools.Calendar.CalendarTool import authenticate_calendar
@@ -166,12 +188,14 @@ USAGE:
 
 LOGIN COMMANDS (Jarvis must be OFF):
     jarvis login --whatsapp    Login to WhatsApp
+    jarvis login --telegram    Login to Telegram
     jarvis login --mail        Login to Gmail
     jarvis login --calendar    Login to Google Calendar
     jarvis login --all         Login to all services
 
 LOGOUT COMMANDS (Jarvis must be OFF):
     jarvis logout --whatsapp   Logout from WhatsApp
+    jarvis logout --telegram   Logout from Telegram
     jarvis logout --mail       Logout from Gmail
     jarvis logout --calendar   Logout from Google Calendar
     jarvis logout --all        Logout from all services
@@ -220,50 +244,53 @@ def handle_cli_commands():
         logger.error("Jarvis is currently running! Please stop Jarvis first.")
         sys.exit(1)
     logger.info("Executing command...")
+    
     if "login" in non_dev_args:
         services = []
-        if "--whatsapp" in non_dev_args:
-            services.append("whatsapp")
-        if "--mail" in non_dev_args:
-            services.append("mail")
-        if "--calendar" in non_dev_args:
-            services.append("calendar")
+        if "--whatsapp" in non_dev_args: services.append("whatsapp")
+        if "--telegram" in non_dev_args: services.append("telegram")
+        if "--mail" in non_dev_args: services.append("mail")
+        if "--calendar" in non_dev_args: services.append("calendar")
         if "--all" in non_dev_args:
-            services = ["whatsapp", "mail", "calendar"]
+            services = ["whatsapp", "telegram", "mail", "calendar"]
+            
         if not services:
-            logger.warning("Please specify a service: --whatsapp, --mail, --calendar, or --all")
+            logger.warning("Please specify a service: --whatsapp, --telegram, --mail, --calendar, or --all")
             logger.info("Type 'jarvis --help' for usage.")
         else:
             for svc in services:
                 login_service(svc)
+                
     if "logout" in non_dev_args:
         targets = []
-        if "--whatsapp" in non_dev_args:
-            targets.append("whatsapp")
-        if "--mail" in non_dev_args:
-            targets.append("mail")
-        if "--calendar" in non_dev_args:
-            targets.append("calendar")
+        if "--whatsapp" in non_dev_args: targets.append("whatsapp")
+        if "--telegram" in non_dev_args: targets.append("telegram")
+        if "--mail" in non_dev_args: targets.append("mail")
+        if "--calendar" in non_dev_args: targets.append("calendar")
         if "--all" in non_dev_args:
-            targets = ["whatsapp", "mail", "calendar"]
+            targets = ["whatsapp", "telegram", "mail", "calendar"]
+            
         if not targets:
-            logger.warning("Please specify a service: --whatsapp, --mail, --calendar, or --all")
+            logger.warning("Please specify a service: --whatsapp, --telegram, --mail, --calendar, or --all")
             logger.info("Type 'jarvis --help' for usage.")
         else:
             deleteSessionCookies(*targets)
+            
     if "memory" in non_dev_args:
         if "--clear" in non_dev_args or "--purge" in non_dev_args:
             deleteMemory()
         else:
             logger.warning("Use 'jarvis memory --clear' to clear memory.")
             logger.info("Type 'jarvis --help' for usage.")
+            
     if "reset" in non_dev_args:
         if "--hard" in non_dev_args:
             logger.info("Factory reset in progress...")
             deleteMemory()
-            deleteSessionCookies("whatsapp", "mail", "calendar")
+            deleteSessionCookies("whatsapp", "telegram", "mail", "calendar")
             logger.info("Factory reset completed.")
         else:
             logger.warning("Use 'jarvis reset --hard' to factory reset.")
             logger.info("Type 'jarvis --help' for usage.")
+            
     return True

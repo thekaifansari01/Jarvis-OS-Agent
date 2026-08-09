@@ -16,6 +16,7 @@ from Proactive.prompts import PROACTIVE_SCOUT_PROMPT
 from Proactive.Email.EmailProactive import listen_for_emails, stop_email_listener
 from Proactive.Whatsapp.WhatsappProactive import listen_for_whatsapp
 from Proactive.Reminder.ReminderProactive import listen_for_reminders
+from Proactive.Telegram.TelegramProactive import listen_for_telegram, stop_telegram_listener
 
 PROACTIVE_AGENT = AGENT_PROACTIVE
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -64,6 +65,7 @@ def mark_event_as_processed(source: str, text: str):
 def stop_proactive_agent():
     _stop_proactive.set()
     stop_email_listener()
+    stop_telegram_listener()
 
 def is_instant_spam(text: str) -> bool:
     text_lower = text.lower()
@@ -116,8 +118,10 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
     decision = decision_data.get("decision", "IGNORE").upper()
     announcement = decision_data.get("announcement", "").strip()
     agent_command = decision_data.get("agent_command", "").strip()
+    
     if "IGNORE" in decision:
         return
+        
     if is_jarvis_busy_callback:
         was_busy = False
         while is_jarvis_busy_callback() and not _stop_proactive.is_set():
@@ -125,6 +129,7 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
             time.sleep(1)
         if was_busy:
             time.sleep(5)
+            
     if decision in ["SUGGEST_ACTION", "ACT_AND_ANNOUNCE"] and agent_command:
         logger.info(f"⚡ Proactive Triggering Silent Agentic Brain: {agent_command}")
         def _run_silent_agent():
@@ -149,6 +154,7 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
                 logger.error(f"Failed to execute background Agentic Brain: {e}")
         threading.Thread(target=_run_silent_agent, daemon=True).start()
         return
+        
     if decision == "ANNOUNCE" and announcement:
         logger.info(f"📢 Proactive Announcement: {announcement}")
         threading.Thread(target=speak, args=(announcement,), daemon=True).start()
@@ -192,9 +198,10 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                                 current_mood = mood_history[-1].get("mood", "Neutral")
                         except Exception as mem_err:
                             logger.warning(f"Failed to fetch memory context: {mem_err}")
+                            
                     decision_data = evaluate_events_batch(batched_data, recent_history, current_mood)
                     handle_proactive_decision(decision_data, batched_data, memory_instance, is_jarvis_busy_callback)
-                    # ✅ Only mark as processed if decision is NOT IGNORE
+                    
                     if decision_data.get("decision", "IGNORE").upper() != "IGNORE":
                         for ev in valid_events:
                             mark_event_as_processed(ev.source, ev.data)
@@ -212,10 +219,12 @@ def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
     email_token = os.path.join(session_dir, "token.json")
     calendar_token = os.path.join(session_dir, "calendar_token.json")
     whatsapp_creds = os.path.join(session_dir, "auth_info_baileys", "creds.json")
+    telegram_session = os.path.join(session_dir, "jarvis_telegram_session.session")
 
     listener_checks = [
         ("Email", listen_for_emails, email_token),
         ("WhatsApp", listen_for_whatsapp, whatsapp_creds),
+        ("Telegram", listen_for_telegram, telegram_session),
         ("Calendar Reminder", listen_for_reminders, calendar_token),
     ]
 

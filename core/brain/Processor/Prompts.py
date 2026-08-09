@@ -420,6 +420,45 @@ def get_native_tools():
                     )
                 ),
                 types.FunctionDeclaration(
+                    name="telegram_action",
+                    description=(
+                        "[WHEN TO USE]: Mode 1 ('send'): Send a Telegram message or multiple documents/images. "
+                        "Mode 2 ('fetch'): Read and retrieve past Telegram chat history with a username/number.\n"
+                        "[CRITICAL RULE]: Never mix parameters from 'send' mode with 'fetch' mode."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "action": types.Schema(
+                                type=types.Type.STRING, 
+                                description="MANDATORY. Must be exactly 'send' or 'fetch'."
+                            ),
+                            "to": types.Schema(
+                                type=types.Type.STRING, 
+                                description="MANDATORY. Telegram username (e.g., 'durov') OR full phone number with country code."
+                            ),
+                            "message": types.Schema(
+                                type=types.Type.STRING, 
+                                description="[SEND MODE ONLY] Text message to send. Leave empty if only sending files."
+                            ),
+                            "file_paths": types.Schema(
+                                type=types.Type.ARRAY, 
+                                items=types.Schema(type=types.Type.STRING),
+                                description="[SEND MODE ONLY] Array of exact absolute local file paths to attach."
+                            ),
+                            "start_date": types.Schema(
+                                type=types.Type.STRING, 
+                                description="[FETCH MODE ONLY] Start date (YYYY-MM-DD)."
+                            ),
+                            "end_date": types.Schema(
+                                type=types.Type.STRING, 
+                                description="[FETCH MODE ONLY] End date (YYYY-MM-DD)."
+                            )
+                        },
+                        required=["action", "to"] 
+                    )
+                ),
+                types.FunctionDeclaration(
                     name="image_command",
                     description=(
                         "[WHEN TO USE]: Use to generate a new AI image from a text prompt ('generate') "

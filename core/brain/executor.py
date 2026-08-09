@@ -7,6 +7,7 @@ from tools.ImageGeneration.generate_image import handle_image_command
 from tools.SearchTools.SearchHub import execute_search_actions
 from tools.Messanger.email_manager import send_email, delete_email
 from tools.Messanger.whatsapp.whatsapp import send_whatsapp_message, fetch_whatsapp_chats
+from tools.Messanger.telegram import send_telegram_message, fetch_telegram_chats
 from core.voice.tts import speak
 from tools.SystemTools.clipboard_tool import read_clipboard, write_clipboard
 from tools.SystemTools.SystemTools import SystemController
@@ -364,6 +365,39 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
         except Exception as e:
             logger.error(f"❌ ERROR in WhatsApp action: {e}\n{traceback.format_exc()}")
             return f"Observation: WhatsApp action crashed -> {e}"
+
+    telegram_action = action_dict.get('telegram_action', {})
+    if telegram_action and isinstance(telegram_action, dict) and telegram_action.get('to'):
+        try:
+            action_type = telegram_action.get('action', 'send')
+            to_name = telegram_action.get('to')
+
+            if action_type == 'fetch':
+                start_date = telegram_action.get('start_date')
+                end_date = telegram_action.get('end_date')
+                if not start_date or not end_date:
+                    return "Observation: Error -> 'start_date' and 'end_date' are required for fetching chats."
+
+                logger.info(f"🤖 Agent Fetching Telegram chat for: {to_name} from {start_date} to {end_date}")
+                tg_result = fetch_telegram_chats(to_name, start_date, end_date)
+                return f"Observation: {tg_result}"
+
+            else:
+                msg_body = telegram_action.get('message', '')
+                file_paths = telegram_action.get('file_paths', [])
+
+                logger.info(f"🤖 Agent Sending Telegram to: {to_name}")
+                tg_result = send_telegram_message(to_name, msg_body, file_paths)
+
+                if "Error" in tg_result or "failed" in tg_result.lower():
+                    logger.error(f"❌ Telegram message failed: {tg_result}")
+                else:
+                    logger.info(f"✅ Telegram result: {tg_result}")
+
+                return f"Observation: {tg_result}"
+        except Exception as e:
+            logger.error(f"❌ ERROR in Telegram action: {e}\n{traceback.format_exc()}")
+            return f"Observation: Telegram action crashed -> {e}"
 
     system_ctrl = action_dict.get('system_controller', {})
     if system_ctrl and isinstance(system_ctrl, dict):

@@ -12,12 +12,15 @@
 [![OpenRouter](https://img.shields.io/badge/Failover-OpenRouter-FF6B6B?style=for-the-badge)](https://openrouter.ai)
 [![Custom Provider](https://img.shields.io/badge/Custom-Any%20OpenAI%20Compatible-00BFFF?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
+[![WhatsApp](https://img.shields.io/badge/WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://whatsapp.com)
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.org)
+[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](https://mail.google.com)
+[![Google Calendar](https://img.shields.io/badge/Google%20Calendar-4285F4?style=for-the-badge&logo=google-calendar&logoColor=white)](https://calendar.google.com)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-00e676?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent/pulls)
 
-**Built by a 18‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
-
-<!-- TODO: Add a 5-second demo GIF here showing voice-controlled code editing, ADB phone lock, and WhatsApp automation in action -->
+**Built by an 18‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
 
 ---
 
@@ -45,7 +48,7 @@
 | Icon | Feature | Why It Matters |
 |:---:|:---|:---|
 | 💻 | **Zero Line‑Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers — eliminates the classic "line‑drift bug" that plagues Claude Code and other AI agents. Automatically catches syntax errors via AST linter and self‑corrects without human intervention. |
-| 📨 | **Proactive Email + WhatsApp + Calendar Automation** | Background listeners for Gmail, WhatsApp, and Calendar detect important emails, meeting reschedules, and messages in real time. The agent never modifies critical data without explicit user consent — asks before acting. |
+| 📨 | **Proactive Email + WhatsApp + Telegram + Calendar Automation** | Background listeners for Gmail, WhatsApp, Telegram, and Calendar detect important messages, emails, and reschedules in real time. The agent never modifies critical data without explicit user consent — asks before acting. |
 | 📱 | **Mobile Phone Control (Android)** | Control your Android phone remotely via ADB over Tailscale — lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, take screenshots, adjust volume, and more. Automatically connects on startup and reconnects if the connection drops. |
 | 🔄 | **Multi‑LLM Auto‑Failover** | Seamlessly switches between Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. Zero downtime — no interruption to your workflow. |
 | 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule‑based fallback — intelligently routes commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep‑reasoning **AgenticBrain** for complex multi‑step engineering, coding, and research tasks. |
@@ -57,7 +60,7 @@
 | 🛡️ | **Human‑in‑the‑Loop (HITL) Safety** | Never executes irreversible actions (sending emails, deleting files, updating calendars) without explicit user consent. Pending confirmations auto‑expire after 60 seconds to prevent stale memory injections. |
 | 🛡️ | **Intelligent Command Security** | Uses `shlex` tokenization and `os.path.realpath` canonicalization to auto‑block only system‑destroying commands (`rm -rf /`, `format C:`, `dd` to `/dev/sda`, `diskpart`). Safe commands (`pip`, `git`, `mkdir`, `rm file.txt`) run without prompts — zero friction, enterprise safety. |
 | 🌐 | **Any Provider, Anywhere** | Works with Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint — including local models (Ollama, LM Studio, vLLM). 100% local inference possible — no internet required with local LLMs. |
-| 🔐 | **Conditional Service Startup** | WhatsApp, Email, Calendar, and now **Mobile ADB** services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
+| 🔐 | **Conditional Service Startup** | WhatsApp, Telegram, Email, Calendar, and now **Mobile ADB** services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
 
 ---
 
@@ -67,9 +70,9 @@
 | :--- | :--- |
 | **Claude Code is expensive** & requires constant subscriptions. | **Free & Open Source.** Run it with local models (Ollama/LM Studio) or cloud APIs. |
 | **Line‑drift bugs** ruin code edits. LLMs often "miss" the exact line. | **`replace_block`** – Diff‑based exact matching. **Zero line‑drift.** Finds the exact code block, irrespective of line numbers. |
-| **Session‑based memory** – Bhool jaata hai 2 minutes baad ki aapne kya bola. | **Lifelong Memory (LTM)** – Episodic memory via ChromaDB. Yaad hai aapko coffee kaunsi pasand hai, aur kaunsi files pe kaam chal raha hai. |
-| **No tooling for real systems.** Sirf text generate kare, code execute na kare. | **Native Tool Execution** – Terminal, Python REPL, File CRUD, Email, WhatsApp, Calendar, Image Gen, and even **ADB (Android control)**. |
-| **Doesn't read your emails/chats.** | **Proactive HITL (Human-in-the-Loop)** – Jarvis reads your emails & WhatsApp in the background, *asks permission*, and takes action (e.g., rescheduling calendar events). |
+| **Session‑based memory** – Forgets what you said within 2 minutes. | **Lifelong Memory (LTM)** – Episodic memory via ChromaDB. Remembers your coffee preference and which files you are working on. |
+| **No tooling for real systems.** Only generates text, does not execute code. | **Native Tool Execution** – Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and even **ADB (Android control)**. |
+| **Doesn't read your emails/chats.** | **Proactive HITL (Human-in-the-Loop)** – Jarvis reads your emails, WhatsApp & Telegram in the background, *asks permission*, and takes action (e.g., rescheduling calendar events). |
 
 ---
 
@@ -106,7 +109,7 @@ flowchart TD
     
     subgraph Tools[🛠️ Native Tool Ecosystem]
         Code[💻 Repo-Map / Replace-Block / AST Linter]
-        Comms[📨 Gmail / WhatsApp / Calendar]
+        Comms[📨 Gmail / WhatsApp / Telegram / Calendar]
         System[⚙️ OS Control / Apps / Clipboard]
         Search[🌐 Tavily / ArXiv / Scraper]
         Vision[👁️ Vision Multimodal / OCR]
@@ -131,7 +134,7 @@ flowchart TD
     InputPopup --> Router
     
     subgraph Proactive[🛡️ Proactive HITL Watchdog]
-        Listeners[📡 Gmail / WhatsApp / Reminders]
+        Listeners[📡 Gmail / WhatsApp / Telegram / Reminders]
         Scout[🛡️ Proactive Scout Agent]
         Consent[🔒 HITL Consent Gate]
     end
@@ -149,6 +152,7 @@ flowchart TD
     Watchdog -.->|Smart Skip| System
     Failover -.-> Providers
     Recovery -.-> AgenticBrain
+
 ```
 
 ---
@@ -162,7 +166,7 @@ flowchart TD
 | **System Controls** | Open/Close Apps, URLs, YouTube direct play. | Full system automation via Python scripts & Terminal. |
 | **Hardware Toggles** | Volume (Set/Inc/Dec), Brightness, Mute, Screenshot, Lock/Sleep. | *(Same as FastBrain, but part of complex workflows)* |
 | **File Operations** | ❌ Cannot modify files. | ✅ Full CRUD, `repo_map`, `replace_block` (Zero Drift), `create_many`. |
-| **Communication** | ❌ No email/WhatsApp. | ✅ Send Gmails, WhatsApp messages, Fetch chat history. |
+| **Communication** | ❌ No email/WhatsApp/Telegram. | ✅ Send Gmails, WhatsApp & Telegram messages, Fetch chat history. |
 | **Code Execution** | ❌ No Python/Terminal execution. | ✅ `run_python_code` (preferred), `execute_terminal_command`. |
 | **Memory Recall** | ❌ No personal LTM memory. | ✅ `memory_actions` (15‑day logs + Lifetime episodic recall). |
 | **Multimodal** | ❌ No vision. | ✅ `vision` (Image/Video analysis, OCR, object detection). |
@@ -208,7 +212,7 @@ JARVIS can control your Android phone via ADB over Tailscale:
 | Category | Supported Capabilities |
 | --- | --- |
 | 💻 **Software Engineering** | `repo_map`, `replace_block` (zero drift), AST linting, `create_many` |
-| 📨 **Communication** | Gmail Pub/Sub (send/read), WhatsApp (send/fetch chats via Baileys), Calendar OAuth |
+| 📨 **Communication** | Gmail Pub/Sub (send/read), WhatsApp & Telegram (send/fetch chats), Calendar OAuth |
 | 📂 **Workspace & RAG** | Single‑file CRUD, recursive scanning, local markdown RAG indexing |
 | 📱 **Mobile Control** | ADB – lock/unlock, apps, calls, SMS, screenshots, WiFi/Data, file transfer |
 | 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript summarization, deep research reports |
@@ -222,9 +226,9 @@ JARVIS can control your Android phone via ADB over Tailscale:
 
 ### 📋 Prerequisites
 
-- **Windows 10/11** (Primary)
-- **Python 3.10+**
-- **Node.js 18+**
+* **Windows 10/11** (Primary)
+* **Python 3.10+**
+* **Node.js 18+**
 
 ### 🛠️ Single Block Installation
 
@@ -232,7 +236,7 @@ Copy and paste this entire block into your terminal (PowerShell recommended):
 
 ```powershell
 # 1. Clone and Enter
-git clone https://github.com/thekaifansari01/Jarvis-OS-Agent.git
+git clone [https://github.com/thekaifansari01/Jarvis-OS-Agent.git](https://github.com/thekaifansari01/Jarvis-OS-Agent.git)
 cd Jarvis-OS-Agent
 
 # 2. Python Virtual Env & Dependencies
@@ -248,6 +252,7 @@ cd ../../../..
 
 # 4. Global CLI Setup (Run this once from the root project directory)
 python SetupRegistry.py
+
 ```
 
 > ⚠️ **Ensure you are in the root project directory** (`Jarvis-OS-Agent/`) before running `python SetupRegistry.py`.
@@ -258,6 +263,7 @@ After running `SetupRegistry.py`, open a **new terminal** and simply type:
 
 ```bash
 jarvis
+
 ```
 
 No need to activate the virtual environment every time – the `jarvis` command is available system‑wide.
@@ -270,6 +276,7 @@ Copy `.env.example` to `.env` and fill in your API keys. For local models (Ollam
 CUSTOM_API_KEY=EMPTY_KEY
 CUSTOM_BASE_URL=http://localhost:11434/v1
 CUSTOM_MODEL=llama3.2:3b
+
 ```
 
 ---
@@ -283,23 +290,23 @@ CUSTOM_MODEL=llama3.2:3b
 3. **Jarvis:** Uses `view` to read the failing files.
 4. **Jarvis:** Uses `replace_block` (exact search & replace) to fix logic errors.
 5. **Jarvis:** Re‑runs `pytest -v` to verify.
-6. **Jarvis (Speaks):** *"Sir, sab tests pass ho gaye hain. Maine 3 files mein changes kiye hain. Kya aap review karna chahenge?"*
+6. **Jarvis (Speaks):** *"Sir, all tests have passed. I have made changes to 3 files. Would you like to review them?"*
 
 ### 🚨 Scenario 2: Proactive HITL (Your Personal Secretary)
 
 1. **Background:** `EmailProactive` listener sees an email: *"Meeting shifted to 5 PM."*
 2. **Jarvis (Scout):** Evaluates and decides to ask for consent.
-3. **Jarvis (Speaks):** *"[alert] Bhai, Ram ki taraf se mail aaya hai ki meeting 5 baje shift ho gayi hai. Kya mai calendar update kar du?"*
-4. **User:** *"Ha kar de."*
+3. **Jarvis (Speaks):** *"[alert] Brother, there's an email from Ram saying the meeting has been moved to 5 PM. Should I update the calendar?"*
+4. **User:** *"Yes, do it."*
 5. **Jarvis:** Triggers AgenticBrain → `calendar_action` to update the event.
-6. **Jarvis:** *"Done sir, calendar update ho gaya."*
+6. **Jarvis:** *"Done sir, the calendar has been updated."*
 
 ### 📱 Scenario 3: Mobile & PC Unification (ADB Control)
 
-1. **User:** *"Mera phone lock kar do."*
+1. **User:** *"Lock my phone."*
 2. **Jarvis:** Executes `adb shell input keyevent 26`.
-3. **Jarvis:** *"Phone lock ho gaya sir."*
-4. **User:** *"Aaj ka OTP batao."*
+3. **Jarvis:** *"Phone locked, sir."*
+4. **User:** *"Tell me today's OTP."*
 5. **Jarvis:** Reads the latest SMS via ADB content provider and speaks the OTP.
 
 ### 🧪 Scenario 4: Full‑Stack App Generation
@@ -307,6 +314,7 @@ CUSTOM_MODEL=llama3.2:3b
 **User:** *"Create a project named 'TaskFlow' on the Desktop. FastAPI backend with SQLite, React frontend with Tailwind, and 10+ unit tests. Then run pytest and make all tests pass."*
 
 **Jarvis:**
+
 1. Creates folder structure.
 2. Generates `requirements.txt` and `package.json`.
 3. Writes FastAPI CRUD endpoints.
@@ -327,10 +335,12 @@ CUSTOM_MODEL=llama3.2:3b
 | Command | Action |
 | --- | --- |
 | `jarvis login --whatsapp` | Start WhatsApp QR login |
+| `jarvis login --telegram` | Start Telegram login (Phone + OTP) |
 | `jarvis login --mail` | Start Gmail OAuth login |
 | `jarvis login --calendar` | Start Google Calendar OAuth |
 | `jarvis login --all` | Login to all services |
 | `jarvis logout --whatsapp` | Logout WhatsApp & clear session |
+| `jarvis logout --telegram` | Logout Telegram & clear session |
 | `jarvis logout --mail` | Logout Gmail |
 | `jarvis logout --calendar` | Logout Calendar |
 | `jarvis logout --all` | Logout from **ALL** services |
@@ -349,6 +359,8 @@ CUSTOM_MODEL=llama3.2:3b
 | `TAVILY_API_KEY` | Web search tool | (Required) |
 | `DEEPGRAM_API_KEY` | Live speech‑to‑text | (Required) |
 | `ADB_PHONE_IP` | Tailscale IP of Android phone | (Optional) |
+| `TELEGRAM_API_ID` | Telegram App API ID | (Optional) |
+| `TELEGRAM_API_HASH` | Telegram App API Hash | (Optional) |
 | `CUSTOM_BASE_URL` | Local/cloud OpenAI‑compatible endpoint | `http://localhost:11434/v1` |
 | `CUSTOM_MODEL` | Model name for custom provider | `default‑model` |
 
@@ -361,6 +373,7 @@ CUSTOM_MODEL=llama3.2:3b
 | `ModuleNotFoundError` | Activate `.venv` and `pip install -r requirements.txt`. |
 | Vosk model missing | Run `jarvis` once to auto‑download, or manually place in `Data/model/vosk-model-small/`. |
 | WhatsApp fails | Ensure Node.js 18+, run `npm install` in BaileysServer, complete QR login, port 3000 free. |
+| Telegram fails | Ensure `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` are set in `.env` and you ran `jarvis login --telegram`. |
 | `jarvis` command not recognized | Run `python SetupRegistry.py` from activated venv and from the **root project directory**, then open a **new terminal**. |
 | Unwanted browser/QR popup | Logout of the service (`jarvis logout --service`). Services start only when credentials exist. |
 | Mobile ADB fails | Check `ADB_PHONE_IP` in `.env`, ensure Tailscale is running, run `adb devices` manually. |
@@ -390,12 +403,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 If this project made you smile, saved you time, or inspired you:
 
-- ⭐ **Star** this repository.
-- 🐦 Tweet about it tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
-- ☕ Buy me a coffee (coming soon) – because late nights are expensive.
-
----
-
-<h3 align="center">
-  <i>"Just late nights, coffee, and a burning passion to build the impossible."</i>
-</h3>
+* ⭐ **Star** this repository.
+* 🐦 Tweet about it tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
+* ☕ Buy me a coffee (coming soon) – because late nights are expensive.
