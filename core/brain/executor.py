@@ -1,6 +1,7 @@
 from typing import Dict, List
 from concurrent.futures import ThreadPoolExecutor
 from core.logger.logger import logger
+from core.utils.shutdown import is_shutdown
 from tools.OpenCloseApps.open_any import open_any_app
 from tools.OpenCloseApps.close_any import close_any_app
 from tools.ImageGeneration.generate_image import handle_image_command
@@ -29,6 +30,10 @@ import time
 file_editor = JarvisFileEditor()
 
 def execute_actions(result: Dict[str, any], executor: ThreadPoolExecutor) -> str:
+    if is_shutdown():
+        logger.info("🛑 Shutdown in progress, skipping action execution.")
+        return ""
+
     def log_action(message: str) -> None:
         logger.info(message)
 
