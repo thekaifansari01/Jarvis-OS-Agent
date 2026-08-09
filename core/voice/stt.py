@@ -22,13 +22,16 @@ SetLogLevel(-1)
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 if not DEEPGRAM_API_KEY:
-    logger.error("DEEPGRAM_API_KEY missing in .env")
+    logger.error("❌ [bold red]DEEPGRAM_API_KEY missing in .env file![/bold red]")
+else:
+    logger.info("🔑 [green]Deepgram API Key found.[/green]")
 
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
 
 class UnifiedVoiceAssistant:
     def __init__(self):
+        logger.info("🎤 [bold cyan]Initializing Unified Voice Assistant...[/bold cyan]")
         self.CHUNK = 2048
         self.RATE = 16000
         self.MIN_RMS_THRESHOLD = 800
@@ -36,26 +39,33 @@ class UnifiedVoiceAssistant:
 
         model_path = "Data/model/vosk-model-small"
         if not os.path.exists(model_path):
-            logger.error(f"Vosk model folder not found at: {model_path}")
+            logger.error(f"📁 [bold red]Vosk model folder not found at:[/bold red] {model_path}")
             raise FileNotFoundError(f"Vosk model not found at '{model_path}'.")
         
         try:
+            logger.info("⏳ [cyan]Loading Vosk wake-word model...[/cyan]")
             self.vosk_model = VoskModel(model_path)
             grammar_list = self.WAKE_WORDS + ["[unk]", "hello", "hi", "computer"]
             grammar = json.dumps(grammar_list)
             self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
+            logger.info("🧠 [bold green]Vosk model loaded successfully.[/bold green]")
         except Exception as e:
-            logger.error(f"Failed to initialize Vosk model: {e}")
+            logger.error(f"❌ [bold red]Failed to initialize Vosk model:[/bold red] {e}")
             raise
 
-        self.audio = pyaudio.PyAudio()
-        self.stream = self.audio.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=self.RATE,
-            input=True,
-            frames_per_buffer=self.CHUNK
-        )
+        try:
+            self.audio = pyaudio.PyAudio()
+            self.stream = self.audio.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=self.RATE,
+                input=True,
+                frames_per_buffer=self.CHUNK
+            )
+            logger.info("🎛️ [bold green]Audio stream opened successfully.[/bold green]")
+        except Exception as e:
+            logger.error(f"❌ [bold red]Failed to open audio stream:[/bold red] {e}")
+            raise
 
         self.is_awake = False
         self.running = True
@@ -66,8 +76,10 @@ class UnifiedVoiceAssistant:
         self.live_text = ""
         self.command_done = threading.Event()
         self.connection_established = False
+        logger.info("✅ [bold green]Unified Voice Assistant initialized and ready.[/bold green]")
 
     def start(self):
+        logger.info("▶️ [bold cyan]Starting background wake-word listener...[/bold cyan]")
         self.listen_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.listen_thread.start()
 
@@ -84,6 +96,7 @@ class UnifiedVoiceAssistant:
             return 0
 
     def _setup_deepgram(self):
+        logger.info("🌐 [cyan]Setting up Deepgram Live Connection...[/cyan]")
         self.current_transcript = ""
         self.live_text = ""
         self.command_done.clear()
@@ -110,6 +123,7 @@ class UnifiedVoiceAssistant:
                     assistant.command_done.set()
 
             def on_error(dg_self, error, **kwargs):
+                logger.error(f"❌ [bold red]Deepgram Error:[/bold red] {error}")
                 assistant.command_done.set()
 
             self.dg_connection.on(LiveTranscriptionEvents.Transcript, on_message)
@@ -131,11 +145,14 @@ class UnifiedVoiceAssistant:
             )
 
             if not self.dg_connection.start(options):
+                logger.warning("⚠️ [bold yellow]Failed to start Deepgram connection.[/bold yellow]")
                 return False
+            
+            logger.info("🚀 [bold green]Deepgram live connection established successfully![/bold green]")
             return True
 
         except Exception as e:
-            logger.error(f"Deepgram setup failed: {e}")
+            logger.error(f"❌ [bold red]Deepgram setup failed:[/bold red] {e}")
             return False
 
     def _check_wake_word(self, text):
@@ -151,6 +168,7 @@ class UnifiedVoiceAssistant:
         return False
 
     def _audio_loop(self):
+        logger.info("🎧 [cyan]Listening for wake word...[/cyan]")
         while self.running:
             try:
                 pcm_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
@@ -164,12 +182,14 @@ class UnifiedVoiceAssistant:
                         text = res.get("text", "")
                         
                         if self._check_wake_word(text) and rms >= self.MIN_RMS_THRESHOLD:
+                            logger.info(f"🔔 [bold yellow]Wake word detected (Final):[/bold yellow] '{text}' [cyan](RMS: {rms:.2f})[/cyan]")
                             triggered = True
                     else:
                         partial = json.loads(self.vosk_recognizer.PartialResult())
                         p_text = partial.get("partial", "").strip()
                         
                         if p_text in self.WAKE_WORDS and rms >= (self.MIN_RMS_THRESHOLD + 200):
+                            logger.info(f"⏳ [bold yellow]Wake word detected (Partial):[/bold yellow] '{p_text}' [cyan](RMS: {rms:.2f})[/cyan]")
                             triggered = True
                             self.vosk_recognizer.Reset()
 
@@ -177,6 +197,7 @@ class UnifiedVoiceAssistant:
                         try:
                             from core.voice import tts
                             tts.stop_speaking()
+                            logger.info("🛑 [cyan]Stopped TTS playback due to wake word.[/cyan]")
                         except Exception:
                             pass 
                             
@@ -192,18 +213,22 @@ class UnifiedVoiceAssistant:
                                 self.connection_established = True
                             else:
                                 self.connection_established = False
+                                logger.warning("⚠️ [yellow]Retrying wake word detection due to Deepgram failure.[/yellow]")
                                 continue
 
                         self.is_awake = True
                         update_stt_status("listening", "")
+                        logger.info("👂 [bold green]System Awake. Listening for command...[/bold green]")
                 else:
                     if self.dg_connection:
                         try:
                             self.dg_connection.send(pcm_data)
-                        except Exception:
+                        except Exception as e:
+                            logger.error(f"⚠️ [bold red]Lost connection to Deepgram while streaming:[/bold red] {e}")
                             self.dg_connection = None
                             self.connection_established = False
                             self.is_awake = False
+                            logger.info("🎧 [cyan]Reverting to wake word detection mode...[/cyan]")
                             continue
 
                     if self.command_done.is_set():
@@ -223,18 +248,27 @@ class UnifiedVoiceAssistant:
         try:
             if self.dg_connection:
                 self.dg_connection.finish()
-        except Exception:
-            pass
+                logger.info("🔌 [cyan]Deepgram connection closed gracefully.[/cyan]")
+        except Exception as e:
+            logger.warning(f"⚠️ [yellow]Error closing Deepgram connection:[/yellow] {e}")
         finally:
             self.dg_connection = None
             self.connection_established = False
 
         if full_command and full_command not in ignore_words and len(full_command) > 3:
+            logger.info(f"🗣️ [bold green]Final Command Received:[/bold green] '{full_command}'")
             update_stt_status("understanding")
             self.command_queue.put(full_command)
         else:
+            if full_command:
+                logger.info(f"🛑 [yellow]Command ignored (too short or in ignore list):[/yellow] '{full_command}'")
+            else:
+                logger.info("🛑 [yellow]No valid command detected. Returning to idle.[/yellow]")
+            
             update_stt_status("idle")
             self.command_queue.put("")
+        
+        logger.info("🎧 [cyan]Listening for wake word...[/cyan]")
 
     def get_command(self, is_retry=False):
         command = None
@@ -251,6 +285,7 @@ class UnifiedVoiceAssistant:
         return command
 
     def stop(self):
+        logger.info("🛑 [bold red]Stopping Unified Voice Assistant...[/bold red]")
         self.running = False
         try:
             if self.dg_connection:
@@ -261,8 +296,10 @@ class UnifiedVoiceAssistant:
             self.stream.stop_stream()
             self.stream.close()
             self.audio.terminate()
-        except Exception:
-            pass
+            logger.info("🎛️ [green]Audio stream closed.[/green]")
+        except Exception as e:
+            logger.error(f"⚠️ [red]Error closing audio stream:[/red] {e}")
+        logger.info("👋 [bold cyan]Voice Assistant stopped successfully.[/bold cyan]")
 
 engine = UnifiedVoiceAssistant()
 
@@ -280,4 +317,5 @@ if __name__ == "__main__":
             if command:
                 pass
     except KeyboardInterrupt:
+        logger.warning("\n⚠️ [bold yellow]KeyboardInterrupt detected![/bold yellow]")
         engine.stop()
