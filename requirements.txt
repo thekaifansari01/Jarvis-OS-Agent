@@ -42,3 +42,6 @@ black>=24.0.0
 aiohttp>=3.9.0
 nest-asyncio>=1.5.0
 telebot>=24.0.0
+networkx
+rank-bm25
+cryptg

@@ -25,7 +25,7 @@ def set_telegram_remote_context(executor: ThreadPoolExecutor, memory):
 
 def start_telegram_remote_listener():
     global _bot_instance, _bot_thread, _is_polling
-    
+
     token_path = get_token_path()
     if not os.path.exists(token_path):
         return False
@@ -76,7 +76,11 @@ def start_telegram_remote_listener():
             try:
                 _bot_instance.infinity_polling(timeout=20, long_polling_timeout=10)
             except Exception as e:
-                logger.error(f"Telegram Bot Polling Error: {e}")
+                error_msg = str(e).lower()
+                if "polling exited" in error_msg or "break infinity polling" in error_msg:
+                    logger.debug("Telegram polling stopped gracefully.")
+                else:
+                    logger.error(f"Telegram Bot Polling Error: {e}")
             finally:
                 global _is_polling
                 _is_polling = False

@@ -180,21 +180,20 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="memory_actions",
                     description=(
-                        "[WHEN TO USE]: Use to recall past user conversations, personal preferences, instructions, or stored facts.\n"
-                        "[WHEN NOT TO USE]: Do not use for web search or real-time online facts.\n"
-                        "[RULE]: MANDATORY to pass EXACTLY ONE key-value pair. Use 'recent_logs' for last 15 days raw chat history; "
-                        "use 'lifetime_recall' for older episodic facts, ideas, or topics."
+                        "[WHEN TO USE]: Retrieve past knowledge. Use for personal facts, user preferences, project connections, or past relationship queries.\n"
+                        "[WHEN NOT TO USE]: Do not use for real-time web data or immediate conversational context (use 'search_actions' or history instead).\n"
+                        "[RULE]: Pass EXACTLY ONE key. The system uses advanced retrieval (frequency weighting, temporal decay, and alias expansion)."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "recent_logs": types.Schema(
-                                type=types.Type.STRING, 
-                                description="[Target: Short-term 15-Day Memory] Use to inspect recent chat logs. Value = reason for lookup (e.g., 'check yesterday instruction')."
+                                type=types.Type.STRING,
+                                description="[TARGET: Short-term 15-Day Raw History]: Fetches chronological chat transcripts. Use when you need the exact sequence of past conversations, user corrections, or recent instructions. Value = specific topic, date, or keyword (e.g., 'project discussion', 'yesterday's code')."
                             ),
                             "lifetime_recall": types.Schema(
-                                type=types.Type.STRING, 
-                                description="[Target: Long-term Episodic Memory] Use to search facts, ideas, or topics discussed months/years ago. Value = target query (e.g., 'favorite coffee brand')."
+                                type=types.Type.STRING,
+                                description="[TARGET: Weighted Relational Knowledge Graph]: Fetches structured relationships (e.g., Person -> OWNS -> Object). Automatically expands synonyms and ranks results by frequency (how often mentioned) and recency (decay over time). Value = entity names or a short descriptive phrase (e.g., 'user vehicle', 'favorite framework', 'project collaborators')."
                             )
                         }
                     )
@@ -232,7 +231,7 @@ def get_native_tools():
                                 type=types.Type.STRING, 
                                 description=(
                                     "[Target: YouTube Video Transcripts] Use ONLY when the user asks to summarize, explain, or extract info from a YouTube video. "
-                                    "Format: Must be an exact, valid HTTPS YouTube link (e.g., 'https://www.youtube.com/watch?v=...')."
+                                    "Format: Must be an exact, valid HTTPS YouTube link."
                                 )
                             ),
                             "read_webpage": types.Schema(
