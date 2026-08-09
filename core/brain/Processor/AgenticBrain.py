@@ -19,6 +19,7 @@ from core.brain.Providers import get_provider
 from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
 from core.brain.Processor.FastBrain import make_result, clean_json_string
 from core.ui.typing_status import launch_popup, update_typing_status
+from core.utils.shutdown import is_shutdown
 
 FAST_MODEL = GROQ_FAST_MODEL
 
@@ -186,6 +187,23 @@ User Command: "{raw_command}"
                 timeout_msg = "Background task timeout."
             return make_result(
                 timeout_msg, priority="high", agent_executed=True
+            )
+
+        if is_shutdown():
+            logger.warning("🛑 Shutdown signal detected. Aborting Agentic Loop immediately.")
+            if not silent:
+                update_agent_status(
+                    step=0,
+                    total_steps=max_steps,
+                    thought="Shutdown requested",
+                    action="ABORT",
+                    action_detail="",
+                    tokens=total_loop_tokens,
+                )
+            return make_result(
+                "Shutdown signal received. Task aborted.",
+                priority="high",
+                agent_executed=True
             )
 
         logger.info(
