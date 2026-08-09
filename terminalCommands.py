@@ -5,11 +5,21 @@ import time
 import subprocess
 import platform
 import tempfile
+import json
+import requests
 from pathlib import Path
 from core.logger.logger import logger
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 LOCK_FILE = os.path.join(PROJECT_ROOT, ".jarvis.lock")
+SESSION_DIR = os.path.join(PROJECT_ROOT, "Data", "SessionCookies")
+
+CRED_PATHS = {
+    "whatsapp": os.path.join(SESSION_DIR, "auth_info_baileys", "creds.json"),
+    "telegram": os.path.join(SESSION_DIR, "jarvis_telegram_session.session"),
+    "mail": os.path.join(SESSION_DIR, "token.json"),
+    "calendar": os.path.join(SESSION_DIR, "calendar_token.json")
+}
 
 def is_jarvis_running():
     return os.path.exists(LOCK_FILE)
@@ -55,92 +65,118 @@ def safe_delete(path, retries=3, delay=0.5):
             return False
     return False
 
+def get_user_confirmation(prompt_text: str) -> bool:
+    while True:
+        ans = input(f"{prompt_text} (y/n): ").strip().lower()
+        if ans in ['y', 'yes']:
+            return True
+        elif ans in ['n', 'no']:
+            return False
+        else:
+            print("Invalid input. Please enter 'y' or 'n'.")
+
 def deleteMemory():
     try:
         target_folder = os.path.join(PROJECT_ROOT, "Data", "jarvis_memory")
+        if not os.path.exists(target_folder):
+            logger.info("ℹ️ Memory is already clear. Nothing to delete.")
+            return
+            
         if safe_delete(target_folder):
-            logger.info("Memory cleared successfully.")
+            logger.info("✅ Memory cleared successfully.")
         else:
-            logger.warning("Could not clear memory. Please close Jarvis and try again.")
-    except Exception:
-        logger.warning("Could not clear memory. Please close Jarvis and try again.")
+            logger.warning("❌ Could not clear memory completely. Please check permissions.")
+    except Exception as e:
+        logger.error(f"❌ Error while clearing memory: {e}")
 
 def deleteSessionCookies(*targets):
     if not targets:
         logger.warning("No service specified.")
         return
-    try:
-        session_dir = os.path.join(PROJECT_ROOT, "Data", "SessionCookies")
-        paths_map = {
-            "whatsapp": [
-                os.path.join(session_dir, "auth_info_baileys"),
-                os.path.join(session_dir, "chats.db")
-            ],
-            "calendar": [
-                os.path.join(session_dir, "calendar_token.json")
-            ],
-            "mail": [
-                os.path.join(session_dir, "token.json")
-            ],
-            "telegram": [
-                os.path.join(session_dir, "jarvis_telegram_session.session"),
-                os.path.join(session_dir, "jarvis_telegram_session.session-journal")
-            ]
-        }
-        services_logged_out = []
-        failed_services = []
-        for target in targets:
-            key = str(target).strip().lower()
-            if key not in paths_map:
-                failed_services.append(target)
-                continue
-            path_list = paths_map[key]
-            all_deleted = True
-            for item_path in path_list:
+        
+    paths_map = {
+        "whatsapp": [
+            os.path.join(SESSION_DIR, "auth_info_baileys"),
+            os.path.join(SESSION_DIR, "chats.db")
+        ],
+        "calendar": [
+            os.path.join(SESSION_DIR, "calendar_token.json")
+        ],
+        "mail": [
+            os.path.join(SESSION_DIR, "token.json")
+        ],
+        "telegram": [
+            os.path.join(SESSION_DIR, "jarvis_telegram_session.session"),
+            os.path.join(SESSION_DIR, "jarvis_telegram_session.session-journal")
+        ]
+    }
+    
+    services_logged_out = []
+    already_logged_out = []
+    failed_services = []
+    
+    for target in targets:
+        key = str(target).strip().lower()
+        if key not in paths_map:
+            failed_services.append(target)
+            continue
+            
+        path_list = paths_map[key]
+        exists = any(os.path.exists(p) for p in path_list)
+        service_name = {"whatsapp": "WhatsApp", "calendar": "Calendar", "mail": "Gmail", "telegram": "Telegram"}.get(key, key.capitalize())
+        
+        if not exists:
+            already_logged_out.append(service_name)
+            continue
+
+        all_deleted = True
+        for item_path in path_list:
+            if os.path.exists(item_path):
                 if not safe_delete(item_path):
                     all_deleted = False
                     break
-            if all_deleted:
-                service_name = {
-                    "whatsapp": "WhatsApp",
-                    "calendar": "Calendar",
-                    "mail": "Gmail",
-                    "telegram": "Telegram"
-                }.get(key, key.capitalize())
-                services_logged_out.append(service_name)
-            else:
-                failed_services.append(target)
-        if services_logged_out:
-            logger.info(f"{', '.join(services_logged_out)} logged out successfully.")
-        if failed_services:
-            logger.warning(f"Could not logout: {', '.join(failed_services)}")
-        if not services_logged_out and not failed_services:
-            logger.warning("No services specified.")
-    except Exception:
-        logger.warning("Could not logout services. Please close Jarvis and try again.")
+        
+        if all_deleted:
+            services_logged_out.append(service_name)
+        else:
+            failed_services.append(service_name)
+            
+    if already_logged_out:
+        logger.info(f"ℹ️ Already logged out: {', '.join(already_logged_out)}")
+    if services_logged_out:
+        logger.info(f"✅ Successfully logged out: {', '.join(services_logged_out)}")
+    if failed_services:
+        logger.warning(f"❌ Failed to logout completely (files in use): {', '.join(failed_services)}")
 
 def login_service(service: str):
+    service_name_map = {"whatsapp": "WhatsApp", "telegram": "Telegram", "mail": "Gmail", "calendar": "Google Calendar"}
+    svc_name = service_name_map.get(service, service.capitalize())
+
+    if service in CRED_PATHS and os.path.exists(CRED_PATHS[service]):
+        if not get_user_confirmation(f"⚠️ {svc_name} is already logged in. Do you want to overwrite the existing session?"):
+            logger.info(f"⏭️ Skipping {svc_name} login.")
+            return
+
     if service == "whatsapp":
         baileys_dir = os.path.join(PROJECT_ROOT, "tools", "Messanger", "whatsapp", "BaileysServer")
         script_path = os.path.join(baileys_dir, "baileys_service.js")
         if not os.path.exists(script_path):
-            logger.error("WhatsApp login service not found.")
+            logger.error("WhatsApp login service script not found.")
             return
+            
         logger.info("Starting WhatsApp login. Scan QR code from the popup window.")
         logger.info("Press Ctrl+C after scanning to complete the process.")
         try:
             subprocess.run(["node", script_path], cwd=baileys_dir, check=False)
-            logger.info("WhatsApp login completed.")
+            logger.info("✅ WhatsApp login process finished.")
         except KeyboardInterrupt:
-            logger.info("WhatsApp login process completed.")
-        except Exception:
-            logger.error("WhatsApp login failed.")
+            logger.info("✅ WhatsApp login process finished by user.")
+        except Exception as e:
+            logger.error(f"❌ WhatsApp login failed: {e}")
             
     elif service == "telegram":
         try:
             logger.info("Initializing Telegram Interactive Setup...")
-            
-            # Beautiful & Safe Interactive CLI Script
             auth_script = f"""
 import os, sys, asyncio
 from telethon import TelegramClient
@@ -149,7 +185,6 @@ from telethon.utils import get_display_name
 from dotenv import load_dotenv
 import logging
 
-# Silence default raw logs from telethon
 logging.getLogger('telethon').setLevel(logging.CRITICAL)
 
 PROJECT_ROOT = r"{PROJECT_ROOT}"
@@ -221,19 +256,18 @@ async def do_login():
 if __name__ == '__main__':
     asyncio.run(do_login())
 """
-            # Using a secure temporary file to avoid Windows command line character escaping issues
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
                 f.write(auth_script)
                 temp_script_path = f.name
             
             subprocess.run([sys.executable, temp_script_path])
             os.remove(temp_script_path)
+            logger.info("✅ Telegram login process completed.")
             
-            logger.info("Telegram login process completed.")
         except KeyboardInterrupt:
-            logger.info("Telegram login process cancelled by user.")
+            logger.info("✅ Telegram login process cancelled by user.")
         except Exception as e:
-            logger.error(f"Telegram login failed: {e}")
+            logger.error(f"❌ Telegram login failed: {e}")
             
     elif service == "mail":
         try:
@@ -241,11 +275,11 @@ if __name__ == '__main__':
             logger.info("Starting Gmail login. Browser will open for authentication.")
             service_obj = authenticate_gmail(interactive=True)
             if service_obj:
-                logger.info("Gmail login successful.")
+                logger.info("✅ Gmail login successful.")
             else:
-                logger.error("Gmail login failed or timed out.")
-        except Exception:
-            logger.error("Gmail login failed.")
+                logger.error("❌ Gmail login failed or timed out.")
+        except Exception as e:
+            logger.error(f"❌ Gmail login failed: {e}")
             
     elif service == "calendar":
         try:
@@ -253,13 +287,13 @@ if __name__ == '__main__':
             logger.info("Starting Google Calendar login. Browser will open for authentication.")
             service_obj, status = authenticate_calendar(interactive=True)
             if service_obj:
-                logger.info("Calendar login successful.")
+                logger.info("✅ Calendar login successful.")
             else:
-                logger.error("Calendar login failed.")
-        except Exception:
-            logger.error("Calendar login failed.")
+                logger.error("❌ Calendar login failed.")
+        except Exception as e:
+            logger.error(f"❌ Calendar login failed: {e}")
     else:
-        logger.error(f"Unknown service: {service}")
+        logger.error(f"❌ Unknown service: {service}")
 
 def show_help_menu():
     help_text = """
@@ -285,6 +319,11 @@ LOGOUT COMMANDS (Jarvis must be OFF):
     jarvis logout --calendar   Logout from Google Calendar
     jarvis logout --all        Logout from all services
 
+TELEGRAM REMOTE BOT:
+    jarvis bot --activate      Setup and activate Remote Telegram Bot
+    jarvis bot --deactivate    Revoke token and stop remote bot
+    jarvis bot --status        Check if remote bot is active
+
 MEMORY & RESET COMMANDS (Jarvis must be OFF):
     jarvis memory --clear      Clear Jarvis memory and chat history
     jarvis reset --hard        Factory reset (clear memory + all logins)
@@ -297,15 +336,20 @@ def handle_cli_commands():
     args = [arg.lower() for arg in sys.argv[1:]]
     if not args:
         return False
+        
     dev_flags = {"test_jarvis", "no_wake"}
     non_dev_args = [a for a in args if a not in dev_flags and not a.startswith("voice=")]
+    
     if not non_dev_args:
         return False
+        
     if any(h in non_dev_args for h in ("help", "--help", "-h")):
         show_help_menu()
         return True
-    subcommands = {"logout", "memory", "reset", "login"}
+        
+    subcommands = {"logout", "memory", "reset", "login", "bot"}
     has_valid_subcommand = any(arg in subcommands for arg in non_dev_args)
+    
     if not has_valid_subcommand:
         alias_map = {
             "--clear": "jarvis memory --clear",
@@ -319,15 +363,85 @@ def handle_cli_commands():
             "factory": "jarvis reset --hard",
             "--hard": "jarvis reset --hard"
         }
-        logger.error("Invalid command. Type 'jarvis --help' to see available commands.")
+        logger.error("❌ Invalid command. Type 'jarvis --help' to see available commands.")
         for arg in non_dev_args:
             if arg in alias_map:
-                logger.info(f"Did you mean: '{alias_map[arg]}'?")
+                logger.info(f"💡 Did you mean: '{alias_map[arg]}'?")
                 break
         return True
+
+    if "bot" in non_dev_args:
+        token_path = os.path.join(PROJECT_ROOT, "Data", "SessionCookies", "telegram_bot_token.json")
+        
+        if "--activate" in non_dev_args or "activate" in non_dev_args:
+            if os.path.exists(token_path):
+                try:
+                    with open(token_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    bot_username = data.get("bot_username", "Unknown")
+                    if not get_user_confirmation(f"⚠️ A Remote Bot (@{bot_username}) is already active. Do you want to replace it?"):
+                        logger.info("⏭️ Bot activation skipped.")
+                        return True
+                except Exception:
+                    pass
+
+            logger.info("🤖 Telegram Remote Bot Activation")
+            token = input("🔑 Enter Telegram Bot Token (from @BotFather): ").strip()
+            if not token:
+                logger.error("❌ Token cannot be empty!")
+                return True
+                
+            try:
+                logger.info("Verifying Bot Token with Telegram API...")
+                res = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=8)
+                if res.status_code == 200:
+                    bot_data = res.json().get("result", {})
+                    bot_username = bot_data.get("username", "Unknown")
+                    bot_name = bot_data.get("first_name", "Jarvis Bot")
+                    
+                    os.makedirs(SESSION_DIR, exist_ok=True)
+                    with open(token_path, "w", encoding="utf-8") as f:
+                        json.dump({
+                            "token": token,
+                            "bot_name": bot_name,
+                            "bot_username": bot_username,
+                            "active": True
+                        }, f, indent=2)
+                        
+                    logger.info(f"✅ SUCCESS: Bot @{bot_username} ({bot_name}) Activated!")
+                    logger.info("ℹ️ Jarvis starts hone par Remote Bot Service automatically chal jayegi.")
+                else:
+                    logger.error("❌ Invalid Token! Telegram API authentication failed.")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"❌ Connection error while verifying token: {e}")
+                
+        elif any(k in non_dev_args for k in ["--deactivate", "--revoke", "--delete", "deactivate", "revoke", "delete"]):
+            if safe_delete(token_path):
+                logger.info("✅ Telegram Remote Bot Deactivated & Token Revoked successfully.")
+            else:
+                logger.warning("ℹ️ No active Telegram Bot configuration found.")
+                
+        elif "--status" in non_dev_args or "status" in non_dev_args:
+            if os.path.exists(token_path):
+                try:
+                    with open(token_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    logger.info(f"🤖 Bot Status : ACTIVE")
+                    logger.info(f"👤 Bot Name   : {data.get('bot_name')}")
+                    logger.info(f"🔗 Username   : @{data.get('bot_username')}")
+                except Exception:
+                    logger.warning("🤖 Bot Status : Active (But info file is corrupted)")
+            else:
+                logger.info("🤖 Bot Status : INACTIVE (Not Configured)")
+        else:
+            logger.warning("Usage: jarvis bot --activate | jarvis bot --deactivate | jarvis bot --status")
+            
+        return True
+
     if is_jarvis_running():
-        logger.error("Jarvis is currently running! Please stop Jarvis first.")
+        logger.error("❌ Jarvis is currently running! Please stop Jarvis first before executing CLI setup commands.")
         sys.exit(1)
+        
     logger.info("Executing command...")
     
     if "login" in non_dev_args:
@@ -363,17 +477,25 @@ def handle_cli_commands():
             
     if "memory" in non_dev_args:
         if "--clear" in non_dev_args or "--purge" in non_dev_args:
-            deleteMemory()
+            if get_user_confirmation("⚠️ Are you sure you want to clear Jarvis's memory? This will delete past context."):
+                deleteMemory()
+            else:
+                logger.info("⏭️ Memory clear aborted.")
         else:
             logger.warning("Use 'jarvis memory --clear' to clear memory.")
             logger.info("Type 'jarvis --help' for usage.")
             
     if "reset" in non_dev_args:
         if "--hard" in non_dev_args:
-            logger.info("Factory reset in progress...")
-            deleteMemory()
-            deleteSessionCookies("whatsapp", "telegram", "mail", "calendar")
-            logger.info("Factory reset completed.")
+            if get_user_confirmation("⚠️ WARNING: This will factory reset Jarvis (clear all memory and log out all services). Are you absolutely sure?"):
+                logger.info("Factory reset in progress...")
+                deleteMemory()
+                deleteSessionCookies("whatsapp", "telegram", "mail", "calendar")
+                token_path = os.path.join(PROJECT_ROOT, "Data", "SessionCookies", "telegram_bot_token.json")
+                safe_delete(token_path)
+                logger.info("✅ Factory reset completed successfully.")
+            else:
+                logger.info("⏭️ Factory reset aborted.")
         else:
             logger.warning("Use 'jarvis reset --hard' to factory reset.")
             logger.info("Type 'jarvis --help' for usage.")

@@ -1,5 +1,3 @@
-# main.py
-
 import faulthandler
 faulthandler.enable()
 import os
@@ -177,6 +175,12 @@ def main() -> None:
     try:
         with ThreadPoolExecutor(max_workers=5) as executor:
             setup_hotkeys(executor, memory)
+            
+            from core.main.TelegramRemoteBot import set_telegram_remote_context
+            from core.main.BackgroundServices import start_telegram_remote_service
+            
+            set_telegram_remote_context(executor, memory)
+            start_telegram_remote_service()
 
             if no_wake:
                 while _is_running:

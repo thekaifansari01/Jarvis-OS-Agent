@@ -6,6 +6,11 @@ import logging
 from dotenv import load_dotenv
 from core.utils.ProcessManager import proc_manager
 from core.voice.stt_status import exit_stt_popup
+from core.main.TelegramRemoteBot import (
+    start_telegram_remote_listener,
+    stop_telegram_remote_listener,
+    is_telegram_remote_running
+)
 
 load_dotenv()
 
@@ -184,10 +189,31 @@ def is_mobile_connected():
     except:
         return False
 
+def start_telegram_remote_service():
+    try:
+        session_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "SessionCookies")
+        token_file = os.path.join(session_dir, "telegram_bot_token.json")
+        if not os.path.exists(token_file):
+            return
+        if start_telegram_remote_listener():
+            logging.info("Telegram Remote Bot Service started successfully.")
+    except Exception as e:
+        logging.error(f"Telegram Remote Bot Service start failed: {e}")
+
+def stop_telegram_remote_service():
+    try:
+        stop_telegram_remote_listener()
+    except Exception as e:
+        logging.error(f"Error stopping Telegram Remote Bot Service: {e}")
+
+def is_telegram_remote_service_running() -> bool:
+    return is_telegram_remote_running()
+
 def stop_all_services():
     logging.info("Initiating shutdown of all background services.")
     stop_agent_panel()
     stop_stt_popup()
     stop_baileys_server()
     stop_mobile_connection()
+    stop_telegram_remote_service()
     stop_rag_engine()

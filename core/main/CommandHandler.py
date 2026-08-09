@@ -12,7 +12,7 @@ def is_jarvis_busy() -> bool:
     global _is_busy
     return _is_busy
 
-def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: ContextMemory) -> None:
+def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: ContextMemory, source: str = "voice") -> None:
     global _is_busy
     _is_busy = True  
     
@@ -24,9 +24,17 @@ def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: C
         if interrupt.is_interrupted():
             interrupt.clear_interrupt()
             return
+            
+        if source == "telegram_bot":
+            if not hasattr(memory, 'ephemeral'):
+                memory.ephemeral = {}
+            memory.ephemeral["force_silent_agentic"] = True
         
         result = process_command(raw, memory_instance=memory)
         execute_actions(result, executor)
+        
+        if source == "telegram_bot" and hasattr(memory, 'ephemeral'):
+            memory.ephemeral.pop("force_silent_agentic", None)
         
         if 'response' not in result:
             result['response'] = "Action executed."

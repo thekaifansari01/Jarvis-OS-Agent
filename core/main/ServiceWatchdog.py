@@ -6,9 +6,11 @@ from core.main.BackgroundServices import (
     start_baileys_server,
     start_stt_popup,
     start_mobile_connection,
+    start_telegram_remote_service,
     is_baileys_running,
     is_stt_popup_running,
     is_mobile_connected,
+    is_telegram_remote_service_running,
     ADB_HOST
 )
 
@@ -21,6 +23,7 @@ class ServiceWatchdog:
         self._thread = None
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self._creds_path = os.path.join(base_dir, "Data", "SessionCookies", "auth_info_baileys", "creds.json")
+        self._telegram_token_path = os.path.join(base_dir, "Data", "SessionCookies", "telegram_bot_token.json")
         self._skip_log_times = {}
         self.services = {
             "baileys": {
@@ -37,6 +40,14 @@ class ServiceWatchdog:
                 "retries": 0,
                 "last_restart": 0,
                 "has_creds": lambda: True,
+                "abandoned": False
+            },
+            "telegram_remote": {
+                "is_running_check": is_telegram_remote_service_running,
+                "start_func": start_telegram_remote_service,
+                "retries": 0,
+                "last_restart": 0,
+                "has_creds": lambda: os.path.exists(self._telegram_token_path),
                 "abandoned": False
             }
         }
@@ -79,7 +90,6 @@ class ServiceWatchdog:
                     if not service_data["has_creds"]():
                         last_log = self._skip_log_times.get(service_name, 0)
                         if current_time - last_log > 60:
-                            logging.info(f"Watchdog: {service_name} credentials missing, skipping monitoring.")
                             self._skip_log_times[service_name] = current_time
                         continue
                     is_active = service_data["is_running_check"]()

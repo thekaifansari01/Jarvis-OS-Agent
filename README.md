@@ -2,7 +2,7 @@
 
 > *"We call it an AI Operating System because it controls your PC, Phone, Files, and Memory — not just your code."*
 
-> **Zero line‑drift coding · Lifelong memory · Voice‑first · Proactive HITL · Mobile control**
+> **Zero line‑drift coding · Lifelong memory · Voice‑first · Proactive HITL · Mobile control · Telegram Remote**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -49,18 +49,19 @@
 |:---:|:---|:---|
 | 💻 | **Zero Line‑Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers — eliminates the classic "line‑drift bug" that plagues Claude Code and other AI agents. Automatically catches syntax errors via AST linter and self‑corrects without human intervention. |
 | 📨 | **Proactive Email + WhatsApp + Telegram + Calendar Automation** | Background listeners for Gmail, WhatsApp, Telegram, and Calendar detect important messages, emails, and reschedules in real time. The agent never modifies critical data without explicit user consent — asks before acting. |
+| 🌍 | **Telegram Remote Control** | Control your PC from anywhere in the world via a dedicated Telegram bot. Commands trigger silent background execution without disrupting your active desktop workflow. Securely authenticated via CLI. |
 | 📱 | **Mobile Phone Control (Android)** | Control your Android phone remotely via ADB over Tailscale — lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, take screenshots, adjust volume, and more. Automatically connects on startup and reconnects if the connection drops. |
 | 🔄 | **Multi‑LLM Auto‑Failover** | Seamlessly switches between Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. Zero downtime — no interruption to your workflow. |
 | 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule‑based fallback — intelligently routes commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep‑reasoning **AgenticBrain** for complex multi‑step engineering, coding, and research tasks. |
 | 📚 | **Lifelong Episodic LTM & RAG** | ChromaDB‑backed persistent memory with daily Groq summarization. Remembers conversations from months ago. Also indexes your local documents (`Documents/Jarvis/RAG/`) for instant semantic search — your personal knowledge base. |
-| ⚙️ | **Enterprise‑Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys, Mobile ADB) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
+| ⚙️ | **Enterprise‑Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys, Mobile ADB, Telegram Remote) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
 | 🎨 | **Reactive UI Ecosystem** | ZMQ‑powered floating Agent Panel with real‑time thought/action/observation streaming, live markdown typing popup with async image previews (YouTube thumbnails, link previews, local images), and native STT/Input popups. Glass‑morphism, dynamic glow, auto‑resize. |
 | 🗣️ | **Voice‑First Multimodal** | Deepgram speech‑to‑text (Nova‑2) with **Vosk KWS (Keyword Spotting)** wake word detection for sub‑second noise‑immune triggering on older hardware, Edge TTS voice output, multimodal vision (OCR, object detection, image analysis via Gemini/Regolo), and image generation (Flux/AI Horde) — all integrated. |
 | 🤖 | **Autonomous Software Engineering** | Can autonomously explore codebases (`repo_map`), read files (`view`), replace exact code blocks (`replace_block` — zero line‑drift), create multiple files (`create_many`), execute Python scripts (`run_python_code`), and run terminal commands (`execute_terminal_command`). Real‑world bug fixing (10 tests, 3 bugs, 0.17 seconds) — proven. |
 | 🛡️ | **Human‑in‑the‑Loop (HITL) Safety** | Never executes irreversible actions (sending emails, deleting files, updating calendars) without explicit user consent. Pending confirmations auto‑expire after 60 seconds to prevent stale memory injections. |
 | 🛡️ | **Intelligent Command Security** | Uses `shlex` tokenization and `os.path.realpath` canonicalization to auto‑block only system‑destroying commands (`rm -rf /`, `format C:`, `dd` to `/dev/sda`, `diskpart`). Safe commands (`pip`, `git`, `mkdir`, `rm file.txt`) run without prompts — zero friction, enterprise safety. |
 | 🌐 | **Any Provider, Anywhere** | Works with Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint — including local models (Ollama, LM Studio, vLLM). 100% local inference possible — no internet required with local LLMs. |
-| 🔐 | **Conditional Service Startup** | WhatsApp, Telegram, Email, Calendar, and now **Mobile ADB** services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
+| 🔐 | **Conditional Service Startup** | WhatsApp, Telegram, Email, Calendar, and **Mobile ADB** services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
 
 ---
 
@@ -71,7 +72,8 @@
 | **Claude Code is expensive** & requires constant subscriptions. | **Free & Open Source.** Run it with local models (Ollama/LM Studio) or cloud APIs. |
 | **Line‑drift bugs** ruin code edits. LLMs often "miss" the exact line. | **`replace_block`** – Diff‑based exact matching. **Zero line‑drift.** Finds the exact code block, irrespective of line numbers. |
 | **Session‑based memory** – Forgets what you said within 2 minutes. | **Lifelong Memory (LTM)** – Episodic memory via ChromaDB. Remembers your coffee preference and which files you are working on. |
-| **No tooling for real systems.** Only generates text, does not execute code. | **Native Tool Execution** – Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and even **ADB (Android control)**. |
+| **No tooling for real systems.** Only generates text, does not execute code. | **Native Tool Execution** – Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and **ADB (Android control)**. |
+| **No remote execution capabilities.** | **Telegram Remote Bot** – Issue commands to your PC remotely via Telegram; Jarvis executes them silently in the background. |
 | **Doesn't read your emails/chats.** | **Proactive HITL (Human-in-the-Loop)** – Jarvis reads your emails, WhatsApp & Telegram in the background, *asks permission*, and takes action (e.g., rescheduling calendar events). |
 
 ---
@@ -83,8 +85,10 @@ flowchart TD
     User[👤 Voice or Text Command] --> Input{Input Type}
     Input -->|Voice| Wake[🎙️ Vosk KWS Wake Word]
     Input -->|Text| Hotkey[⌨️ Ctrl+Shift+J Popup]
+    Input -->|Remote| TelegramBot[🤖 Telegram Remote Bot]
     Wake --> STT[⚡ Deepgram Nova-2 STT]
     Hotkey --> Router[🚦 Hybrid Semantic Router]
+    TelegramBot -->|Silent Flag| Router
     STT --> Router
     Router -->|Fallback| LocalRouter[🔄 Local Rule-Based Router]
     
@@ -153,6 +157,7 @@ flowchart TD
     Failover -.-> Providers
     Recovery -.-> AgenticBrain
 
+
 ```
 
 ---
@@ -215,6 +220,7 @@ JARVIS can control your Android phone via ADB over Tailscale:
 | 📨 **Communication** | Gmail Pub/Sub (send/read), WhatsApp & Telegram (send/fetch chats), Calendar OAuth |
 | 📂 **Workspace & RAG** | Single‑file CRUD, recursive scanning, local markdown RAG indexing |
 | 📱 **Mobile Control** | ADB – lock/unlock, apps, calls, SMS, screenshots, WiFi/Data, file transfer |
+| 🌍 **Remote Control** | Telegram Bot integration to execute PC commands remotely and silently. |
 | 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript summarization, deep research reports |
 | ⚙️ **System Automation** | Launch/close apps, volume/brightness, screenshots, clipboard CRUD |
 | 👁️ **Multimodal Vision** | Image/Video analysis, object detection, OCR extraction |
@@ -309,7 +315,14 @@ CUSTOM_MODEL=llama3.2:3b
 4. **User:** *"Tell me today's OTP."*
 5. **Jarvis:** Reads the latest SMS via ADB content provider and speaks the OTP.
 
-### 🧪 Scenario 4: Full‑Stack App Generation
+### 🌍 Scenario 4: Remote Telegram Control
+
+1. **User (on phone away from PC):** Messages the Telegram Bot: *"Open Spotify and play my playlist."*
+2. **Jarvis (Background Service):** Receives the command securely via the Telegram Bot API.
+3. **Jarvis (AgenticBrain):** Activates in a silent execution mode (no UI popups). Opens Spotify and plays the music.
+4. **Jarvis (Telegram Bot):** Replies: *"Executing: Open Spotify and play my playlist."*
+
+### 🧪 Scenario 5: Full‑Stack App Generation
 
 **User:** *"Create a project named 'TaskFlow' on the Desktop. FastAPI backend with SQLite, React frontend with Tailwind, and 10+ unit tests. Then run pytest and make all tests pass."*
 
@@ -330,7 +343,7 @@ CUSTOM_MODEL=llama3.2:3b
 
 ### Session & Memory Management CLI
 
-> **⚠️ Important:** All logout, memory clear, login, and reset commands require Jarvis to be **OFF** (not running).
+> **⚠️ Important:** All logout, memory clear, login, bot, and reset commands require Jarvis to be **OFF** (not running).
 
 | Command | Action |
 | --- | --- |
@@ -344,6 +357,9 @@ CUSTOM_MODEL=llama3.2:3b
 | `jarvis logout --mail` | Logout Gmail |
 | `jarvis logout --calendar` | Logout Calendar |
 | `jarvis logout --all` | Logout from **ALL** services |
+| `jarvis bot --activate` | Setup and activate Remote Telegram Bot using your BotFather token |
+| `jarvis bot --deactivate` | Revoke token and stop remote bot |
+| `jarvis bot --status` | Check if remote bot is active |
 | `jarvis memory --clear` | Clear AI contextual memory (keep sessions) |
 | `jarvis reset --hard` | **FACTORY RESET** – wipe memory AND all sessions |
 | `jarvis --help` | Display help menu |
@@ -373,7 +389,8 @@ CUSTOM_MODEL=llama3.2:3b
 | `ModuleNotFoundError` | Activate `.venv` and `pip install -r requirements.txt`. |
 | Vosk model missing | Run `jarvis` once to auto‑download, or manually place in `Data/model/vosk-model-small/`. |
 | WhatsApp fails | Ensure Node.js 18+, run `npm install` in BaileysServer, complete QR login, port 3000 free. |
-| Telegram fails | Ensure `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` are set in `.env` and you ran `jarvis login --telegram`. |
+| Telegram App fails | Ensure `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` are set in `.env` and you ran `jarvis login --telegram`. |
+| Remote Telegram Bot not responding | Ensure you activated it via `jarvis bot --activate` with a valid BotFather token and restarted Jarvis. |
 | `jarvis` command not recognized | Run `python SetupRegistry.py` from activated venv and from the **root project directory**, then open a **new terminal**. |
 | Unwanted browser/QR popup | Logout of the service (`jarvis logout --service`). Services start only when credentials exist. |
 | Mobile ADB fails | Check `ADB_PHONE_IP` in `.env`, ensure Tailscale is running, run `adb devices` manually. |

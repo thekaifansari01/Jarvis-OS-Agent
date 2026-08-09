@@ -173,6 +173,10 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
             logger.info("🚦 Smart Router: AGENTIC (Deep Tasks, Memory, Comms & Visual Analysis)")
             context_blocks = []
             
+            is_silent = False
+            if memory_instance and hasattr(memory_instance, "ephemeral"):
+                is_silent = memory_instance.ephemeral.get("force_silent_agentic", False)
+            
             if memory_instance:
                 try:
                     logger.info("🗂️ Fetching Initial Profile, Mood & Workspace Context...")
@@ -184,7 +188,7 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
 
             final_context = "\n".join(context_blocks)
             
-            return run_agentic_loop(raw_command, final_context, memory_instance)
+            return run_agentic_loop(raw_command, final_context, memory_instance, silent=is_silent)
         else:
             logger.info("🚦 Smart Router: FAST (Direct Apps / Stateless Chat / Hardware)")
             
