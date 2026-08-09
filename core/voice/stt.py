@@ -31,7 +31,7 @@ class UnifiedVoiceAssistant:
     def __init__(self):
         self.CHUNK = 2048
         self.RATE = 16000
-        self.MIN_RMS_THRESHOLD = 400
+        self.MIN_RMS_THRESHOLD = 800
         self.WAKE_WORDS = ["jarvis", "hey jarvis"]
 
         model_path = "Data/model/vosk-model-small"
@@ -41,7 +41,9 @@ class UnifiedVoiceAssistant:
         
         try:
             self.vosk_model = VoskModel(model_path)
-            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE)
+            grammar_list = self.WAKE_WORDS + ["[unk]", "hello", "hi", "computer"]
+            grammar = json.dumps(grammar_list)
+            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
         except Exception as e:
             logger.error(f"Failed to initialize Vosk model: {e}")
             raise
@@ -163,6 +165,13 @@ class UnifiedVoiceAssistant:
                         
                         if self._check_wake_word(text) and rms >= self.MIN_RMS_THRESHOLD:
                             triggered = True
+                    else:
+                        partial = json.loads(self.vosk_recognizer.PartialResult())
+                        p_text = partial.get("partial", "").strip()
+                        
+                        if p_text in self.WAKE_WORDS and rms >= (self.MIN_RMS_THRESHOLD + 200):
+                            triggered = True
+                            self.vosk_recognizer.Reset()
 
                     if triggered:
                         try:
