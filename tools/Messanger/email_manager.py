@@ -61,7 +61,7 @@ def authenticate_gmail(interactive: bool = True):
 
         if (not creds or not creds.valid) and interactive:
             logger.info("🌐 Opening browser for Gmail OAuth...")
-            webbrowser.open("https://jarvis-oauth-server.vercel.app/api/oauth/start?service=gmail")
+            webbrowser.open("https://jarvis-os-agent.vercel.app/api/oauth/start?service=gmail")
             timeout = 120
             start_time = time.time()
             while time.time() - start_time < timeout:

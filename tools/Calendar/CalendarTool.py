@@ -60,7 +60,7 @@ def authenticate_calendar(interactive: bool = True):
 
         if (not creds or not creds.valid) and interactive:
             logger.info("🌐 Opening browser for Calendar OAuth...")
-            webbrowser.open("https://jarvis-oauth-server.vercel.app/api/oauth/start?service=calendar")
+            webbrowser.open("https://jarvis-os-agent.vercel.app/api/oauth/start?service=calendar")
             timeout = 120
             start_time = time.time()
             while time.time() - start_time < timeout:
