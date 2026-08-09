@@ -53,7 +53,7 @@
 | 📱 | **Mobile Phone Control (Android)** | Control your Android phone remotely via ADB over Tailscale — lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, take screenshots, adjust volume, and more. Automatically connects on startup and reconnects if the connection drops. |
 | 🔄 | **Multi‑LLM Auto‑Failover** | Seamlessly switches between Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. Zero downtime — no interruption to your workflow. |
 | 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule‑based fallback — intelligently routes commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep‑reasoning **AgenticBrain** for complex multi‑step engineering, coding, and research tasks. |
-| 📚 | **Lifelong Episodic LTM & Hybrid RAG** | ChromaDB‑backed persistent memory with daily Groq summarization. Remembers conversations from months ago. Also indexes your local documents (`Documents/Jarvis/RAG/`) with **smart chunk overlap (1500 chars, 200 overlap)**, **Hybrid search (Vector + BM25 + RRF)** and **Recency boost** — your personal knowledge base that understands both semantics and exact keywords. |
+| 📚 | **Lifelong Episodic LTM & Hybrid RAG** | ChromaDB‑backed persistent memory with daily Groq summarization. Remembers conversations from months ago. Also indexes your local documents (`Documents/Jarvis/RAG/`) with **smart chunk overlap (1500 characters, 200 overlap)**, **Hybrid search (Vector + BM25 + RRF)** and **Recency boost** — your personal knowledge base that understands both semantics and exact keywords. |
 | ⚙️ | **Enterprise‑Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys, Mobile ADB, Telegram Remote) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
 | 🎨 | **Reactive UI Ecosystem** | ZMQ‑powered floating Agent Panel with real‑time thought/action/observation streaming, live markdown typing popup with async image previews (YouTube thumbnails, link previews, local images), and native STT/Input popups. Glass‑morphism, dynamic glow, auto‑resize. |
 | 🗣️ | **Voice‑First Multimodal** | Deepgram speech‑to‑text (Nova‑2) with **Vosk KWS (Keyword Spotting)** wake word detection for sub‑second noise‑immune triggering on older hardware, Edge TTS voice output, multimodal vision (OCR, object detection, image analysis via Gemini/Regolo), and image generation (Flux/AI Horde) — all integrated. |
@@ -190,10 +190,10 @@ JARVIS employs a sophisticated **four‑tier** memory system that combines short
    - **Entity aliases** – automatically maps synonyms (e.g., "car" → "BMW") via a `aliases.json` file that can be manually extended.
    - **Search** returns results sorted by relevance (weight × decay), ensuring the most frequent and recent facts surface first.
 3. **📚 Hybrid RAG (Workspace Documents)** –
-   - **Smart chunking** with overlap (1500 chars, 200 overlap) to preserve context across chunk boundaries.
+   - **Smart chunking** with overlap (1500 characters, 200 overlap) to preserve context across chunk boundaries.
    - **Hybrid retrieval** – combines **BM25 keyword search** and **Gemini embedding vector search**, merged via **Reciprocal Rank Fusion (RRF)** for the best of both worlds.
    - **Recency boost** – files modified recently get a 20% score lift, making the knowledge base self‑updating.
-4. **👤 User Profile & Mood** – Automatically tracks mood, though bio/preferences are no longer auto‑extracted; instead, the system now **only** extracts knowledge‑graph triplets from conversations, leaving personal facts to be entered explicitly or through the graph.
+4. **👤 User Profile & Mood** – Automatically tracks mood; bio/preferences are no longer auto‑extracted. Instead, the system **only** extracts knowledge‑graph triplets from conversations, leaving personal facts to be entered explicitly or through the graph.
 
 This layered design ensures Jarvis never forgets critical context, yet remains efficient and cost‑effective.
 
@@ -306,7 +306,7 @@ CUSTOM_MODEL=llama3.2:3b
 
 1. **Background:** `EmailProactive` listener sees an email: *"Meeting shifted to 5 PM."*
 2. **Jarvis (Scout):** Evaluates and decides to ask for consent.
-3. **Jarvis (Speaks):** *"[alert] Brother, there's an email from Ram saying the meeting has been moved to 5 PM. Should I update the calendar?"*
+3. **Jarvis (Speaks):** *"[Alert] There is an email from Ram saying the meeting has been moved to 5 PM. Should I update the calendar?"*
 4. **User:** *"Yes, do it."*
 5. **Jarvis:** Triggers AgenticBrain → `calendar_action` to update the event.
 6. **Jarvis:** *"Done sir, the calendar has been updated."*
@@ -343,10 +343,10 @@ CUSTOM_MODEL=llama3.2:3b
 
 ### 🧠 Scenario 6: Weighted Graph Memory & Aliases
 
-1. **Day 1:** User: *"Mujhe BMW pasand hai."* → Graph stores `[User] --(LIKES)--> [BMW]` weight=1.
-2. **Day 60:** User: *"Meri car ka colour kya hai?"* → `car` alias maps to `BMW`, search returns `[User] --(LIKES)--> [BMW]`.
-3. **Day 100:** User: *"Mujhe BMW bahut pasand hai"* → weight becomes 2.
-4. **Day 400:** User: *"Mujhe kya pasand hai?"* → `BMW` weight=2, `last_seen`=Day100, decay factor 0.5 → adjusted weight 1.0; any newer fact (if any) will rank higher. Result sorted by relevance.
+1. **Day 1:** User: *"I like BMW."* → Graph stores `[User] --(LIKES)--> [BMW]` weight=1.
+2. **Day 60:** User: *"What is the colour of my car?"* → `car` alias maps to `BMW`, search returns `[User] --(LIKES)--> [BMW]`.
+3. **Day 100:** User: *"I really like BMW."* → weight becomes 2.
+4. **Day 400:** User: *"What do I like?"* → `BMW` weight=2, `last_seen`=Day100, decay factor 0.5 → adjusted weight 1.0; any newer fact (if any) will rank higher. Result sorted by relevance.
 
 ---
 
