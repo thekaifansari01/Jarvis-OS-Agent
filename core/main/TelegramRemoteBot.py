@@ -3,7 +3,6 @@ import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-
 import telebot
 from core.logger.logger import logger
 from core.main.CommandHandler import main_command_processor, is_jarvis_busy
@@ -60,19 +59,19 @@ def start_telegram_remote_listener():
             if not cmd_text:
                 return
 
-            logger.info(f"📱 Remote Telegram Command: '{cmd_text}' from Chat ID: {message.chat.id}")
+            logger.info(f"Remote Telegram Command: '{cmd_text}' from Chat ID: {message.chat.id}")
 
             if is_jarvis_busy():
-                _bot_instance.reply_to(message, "⚠️ Jarvis is currently busy. Added to live feedback queue.")
+                _bot_instance.reply_to(message, "Jarvis is currently busy. Added to live feedback queue.")
                 if _global_memory and hasattr(_global_memory, 'add_live_feedback'):
                     _global_memory.add_live_feedback(cmd_text)
             else:
-                _bot_instance.reply_to(message, f"⚡ Executing: `{cmd_text}`", parse_mode="Markdown")
+                _bot_instance.reply_to(message, f"Executing: `{cmd_text}`", parse_mode="Markdown")
                 if _global_executor and _global_memory:
                     _global_executor.submit(main_command_processor, cmd_text, _global_executor, _global_memory, "telegram_bot")
 
         def _poll_worker():
-            logger.info("✅ Telegram Remote Bot Service started listening...")
+            logger.info("Telegram Remote Bot Service started listening...")
             try:
                 _bot_instance.infinity_polling(timeout=20, long_polling_timeout=10)
             except Exception as e:
@@ -98,6 +97,7 @@ def stop_telegram_remote_listener():
     global _bot_instance, _is_polling
     if _bot_instance and _is_polling:
         try:
+            _bot_instance.stop_bot()
             _bot_instance.stop_polling()
             logger.info("Telegram Remote Bot listener stopped.")
         except Exception as e:

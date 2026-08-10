@@ -31,24 +31,24 @@ class ServiceWatchdog:
                 "start_func": start_baileys_server,
                 "retries": 0,
                 "last_restart": 0,
-                "has_creds": lambda: os.path.exists(self._creds_path),
-                "abandoned": False
+                "next_retry_time": 0,
+                "has_creds": lambda: os.path.exists(self._creds_path)
             },
             "stt_popup": {
                 "is_running_check": is_stt_popup_running,
                 "start_func": start_stt_popup,
                 "retries": 0,
                 "last_restart": 0,
-                "has_creds": lambda: True,
-                "abandoned": False
+                "next_retry_time": 0,
+                "has_creds": lambda: True
             },
             "telegram_remote": {
                 "is_running_check": is_telegram_remote_service_running,
                 "start_func": start_telegram_remote_service,
                 "retries": 0,
                 "last_restart": 0,
-                "has_creds": lambda: os.path.exists(self._telegram_token_path),
-                "abandoned": False
+                "next_retry_time": 0,
+                "has_creds": lambda: os.path.exists(self._telegram_token_path)
             }
         }
         if ADB_HOST is not None:
@@ -57,8 +57,8 @@ class ServiceWatchdog:
                 "start_func": start_mobile_connection,
                 "retries": 0,
                 "last_restart": 0,
-                "has_creds": lambda: True,
-                "abandoned": False
+                "next_retry_time": 0,
+                "has_creds": lambda: True
             }
 
     def start(self):
@@ -82,7 +82,7 @@ class ServiceWatchdog:
             for service_name, service_data in self.services.items():
                 if not self._is_running:
                     break
-                if service_data.get("abandoned", False):
+                if current_time < service_data["next_retry_time"]:
                     continue
                 if current_time - service_data["last_restart"] < self.cooldown:
                     continue
@@ -95,10 +95,11 @@ class ServiceWatchdog:
                     is_active = service_data["is_running_check"]()
                     if not is_active:
                         if service_data["retries"] >= self.max_retries:
-                            logging.warning(f"Watchdog: {service_name} failed after {self.max_retries} attempts. Skipping permanently.")
-                            service_data["abandoned"] = True
+                            logging.warning(f"Watchdog: {service_name} failed {self.max_retries} times. Backing off for 120 seconds.")
+                            service_data["next_retry_time"] = current_time + 120
+                            service_data["retries"] = 0
                             continue
-                        logging.warning(f"Watchdog: {service_name} process down. Attempting restart {service_data['retries'] + 1}/{self.max_retries}.")
+                        logging.warning(f"Watchdog: {service_name} is down. Restarting ({service_data['retries'] + 1}/{self.max_retries}).")
                         service_data["start_func"]()
                         service_data["retries"] += 1
                         service_data["last_restart"] = current_time

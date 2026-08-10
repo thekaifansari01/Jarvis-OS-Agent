@@ -56,20 +56,25 @@ _is_running = True
 def signal_handler(signum, frame):
     global _is_running
     _is_running = False
-    logger.info("Interrupt signal received. Initiating graceful shutdown.")
+    logger.info("Interrupt signal (Ctrl+C) received. Initiating aggressive graceful shutdown...")
     try:
         from core.utils.shutdown import set_shutdown
         set_shutdown()
         remove_lock_file()
+        
         from core.main.ServiceWatchdog import stop_watchdog
         from core.main.BackgroundServices import stop_all_services
         from core.utils.ProcessManager import proc_manager
+        
         stop_watchdog()
         stop_all_services()
         proc_manager.cleanup()
+        
+        logger.info("Cleanup complete. Force exiting to prevent zombie threads.")
     except Exception as e:
         logger.error(f"Error during signal cleanup: {e}")
-    sys.exit(0)
+    finally:
+        os._exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
@@ -139,11 +144,11 @@ def main() -> None:
 
     def preload_semantic_model():
         try:
-            logger.info("⏳ Preloading Lifetime Memory Engine & Semantic Model in background...")
+            logger.info("Preloading Lifetime Memory Engine & Semantic Model in background...")
             from core.brain.Memory.LifetimeMemory import ltm_engine
-            logger.info("✅ Lifetime Memory Engine & Semantic Model loaded successfully!")
+            logger.info("Lifetime Memory Engine & Semantic Model loaded successfully!")
         except Exception as e:
-            logger.error(f"❌ Failed to preload LTM Engine: {e}")
+            logger.error(f"Failed to preload LTM Engine: {e}")
             
     threading.Thread(target=preload_semantic_model, daemon=True).start()
 
@@ -251,6 +256,7 @@ def main() -> None:
             logger.error(f"Error cleaning up process manager: {e}")
 
         logger.info("Shutdown sequence complete.")
+        os._exit(0)
 
 if __name__ == "__main__":
     main()

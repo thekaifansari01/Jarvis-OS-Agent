@@ -25,6 +25,7 @@ _rag_engine_initialized = False
 
 def start_agent_panel():
     global _panel_process
+    stop_agent_panel()
     try:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         panel_script = os.path.join(base_dir, "core", "ui", "agent_panel.py")
@@ -53,6 +54,7 @@ def stop_agent_panel():
 
 def start_stt_popup():
     global _stt_popup_process
+    stop_stt_popup()
     try:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         popup_exe = os.path.join(base_dir, "Bin", "SttPopup.exe")
@@ -72,8 +74,8 @@ def stop_stt_popup():
     global _stt_popup_process
     try:
         exit_stt_popup()
-    except Exception as exc:
-        logging.debug("STT popup exit signal could not be sent: %s", exc, exc_info=True)
+    except Exception:
+        pass
     if _stt_popup_process:
         try:
             proc_manager.kill_process_tree(_stt_popup_process.pid)
@@ -91,6 +93,7 @@ def is_stt_popup_running() -> bool:
 
 def start_baileys_server():
     global _baileys_process
+    stop_baileys_server()
     try:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         baileys_dir = os.path.join(base_dir, "tools", "Messanger", "whatsapp", "BaileysServer")
@@ -100,16 +103,12 @@ def start_baileys_server():
             if not os.path.exists(session_creds_path):
                 logging.info("WhatsApp not logged in. Skipping server start.")
                 return
-            creation_flags = 0
-            stdout_target = None
-            stderr_target = None
-            if platform.system() == 'Windows':
-                creation_flags = subprocess.CREATE_NO_WINDOW
+            creation_flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
             _baileys_process = proc_manager.spawn(
                 ["node", script_path],
                 cwd=baileys_dir,
-                stdout=stdout_target,
-                stderr=stderr_target,
+                stdout=None,
+                stderr=None,
                 creationflags=creation_flags
             )
             logging.info("Baileys server started successfully.")
@@ -136,7 +135,7 @@ def is_baileys_running() -> bool:
 def start_rag_engine():
     try:
         from core.brain.RagEngine import rag_engine
-        logging.info("RAG Engine initialized successfully. Folder created & indexing started in background.")
+        logging.info("RAG Engine initialized successfully.")
     except Exception as e:
         logging.error(f"RAG Engine initialization failed: {e}")
 
@@ -150,20 +149,20 @@ def stop_rag_engine():
         finally:
             _rag_engine_initialized = False
             logging.info("RAG Engine stopped successfully.")
-    else:
-        logging.debug("RAG Engine was not running, nothing to stop.")
 
 def start_mobile_connection():
     if ADB_HOST is None:
         logging.info("ADB_PHONE_IP not set in environment. Skipping mobile connection.")
         return
     try:
-        subprocess.run(["adb", "disconnect", ADB_TARGET], capture_output=True, text=True)
-        result = subprocess.run(["adb", "connect", ADB_TARGET], capture_output=True, text=True)
+        subprocess.run(["adb", "disconnect", ADB_TARGET], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(["adb", "connect", ADB_TARGET], capture_output=True, text=True, timeout=10)
         if "connected" in result.stdout.lower() or "already connected" in result.stdout.lower():
             logging.info(f"Mobile connected successfully to {ADB_TARGET}")
         else:
-            logging.warning(f"Mobile connect failed: {result.stdout}")
+            logging.warning(f"Mobile connect failed: {result.stdout.strip()}")
+    except subprocess.TimeoutExpired:
+        logging.error("ADB connect timed out! The device or network might be unreachable.")
     except Exception as e:
         logging.error(f"Mobile start service crashed: {e}")
 
@@ -171,7 +170,7 @@ def stop_mobile_connection():
     if ADB_HOST is None:
         return
     try:
-        subprocess.run(["adb", "disconnect", ADB_TARGET], capture_output=True, text=True)
+        subprocess.run(["adb", "disconnect", ADB_TARGET], capture_output=True, text=True, timeout=5)
         logging.info(f"Mobile disconnected from {ADB_TARGET}")
     except Exception as e:
         logging.error(f"Mobile stop service crashed: {e}")
@@ -180,13 +179,16 @@ def is_mobile_connected():
     if ADB_HOST is None:
         return False
     try:
-        result = subprocess.run(["adb", "devices"], capture_output=True, text=True)
+        result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
         lines = result.stdout.splitlines()
         for line in lines:
             if ADB_HOST in line and "device" in line:
                 return True
         return False
-    except:
+    except subprocess.TimeoutExpired:
+        logging.warning("ADB devices check timed out.")
+        return False
+    except Exception:
         return False
 
 def start_telegram_remote_service():
