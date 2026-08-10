@@ -14,7 +14,6 @@ from core.brain.Processor.AgenticBrain import run_agentic_loop
 load_dotenv()
 REGOLO_API_KEY = os.getenv("REGOLO_API_KEY")
 
-
 class RegoloSemanticRouter:
     def __init__(self):
         self.api_key = REGOLO_API_KEY
@@ -36,6 +35,7 @@ class RegoloSemanticRouter:
         system_prompt = (
             "You are an enterprise AI semantic router. Classify the user command into strict JSON "
             "with a single key 'route' having value either 'FAST' or 'AGENTIC'.\n\n"
+            "CRITICAL RULE: If a user command contains MULTIPLE intents (e.g., a simple task + a complex task), ALWAYS prioritize routing to 'AGENTIC'.\n\n"
             "### STRICT NEGATIVE CONSTRAINTS (NEVER ROUTE TO AGENTIC)\n"
             "- Casual conversation, greetings, jokes, time, date, or personal chit-chat.\n"
             "- Simple hardware controls: volume up/down/mute, brightness, screen lock, sleep, or screenshots.\n"
@@ -60,7 +60,8 @@ class RegoloSemanticRouter:
             "User: 'Kal maine tumse kya kaha tha coffee ke bare me?' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Is image mein kya likha hai?' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Is photo ko describe karo' -> {\"route\": \"AGENTIC\"}\n"
-            "User: 'Mere screenshot mein kya dikh raha hai?' -> {\"route\": \"AGENTIC\"}"
+            "User: 'Mere screenshot mein kya dikh raha hai?' -> {\"route\": \"AGENTIC\"}\n"
+            "User: 'Weather check karo aur ek python script likho' -> {\"route\": \"AGENTIC\"}"
         )
 
         user_content = f"[RECENT CONVERSATION HISTORY]\n{trimmed_history}\n\n[USER COMMAND]\n\"{command}\""
@@ -85,25 +86,30 @@ class RegoloSemanticRouter:
                 raw_json = response.json()["choices"][0]["message"]["content"]
                 data = json.loads(raw_json)
                 route = data.get("route", "FAST").strip().upper()
-                logger.info(f"⚡ Regolo Semantic Router [{latency_ms:.1f}ms] | Decision -> {route}")
+                logger.info(f"Regolo Semantic Router [{latency_ms:.1f}ms] | Decision -> {route}")
                 return "AGENTIC" if route == "AGENTIC" else "FAST"
             else:
-                logger.warning(f"⚠️ Regolo Router API non-200 status ({response.status_code}): {response.text[:100]}")
+                logger.warning(f"Regolo Router API non-200 status ({response.status_code}): {response.text[:100]}")
                 
         except Exception as e:
-            logger.warning(f"⚠️ Regolo Router API failed ({e}). Switching to local fallback router.")
+            logger.warning(f"Regolo Router API failed ({e}). Switching to local fallback router.")
             
         return None
 
 router_engine = RegoloSemanticRouter()
 
-
 def get_local_fallback_route(command: str) -> str:
     cmd_lower = command.lower().strip()
-    words = cmd_lower.split()
 
-    if len(words) > 30:
-        return "AGENTIC"
+    agentic_strict_patterns = [
+        r'\b(write|run|execute|create|make|banao|likho|chalao).{0,20}(python|script|code|file|folder|dir)\b',
+        r'\b(send|write|bhejo|read|check|karo).{0,20}(email|mail|gmail|whatsapp|msg|message|telegram)\b',
+        r'\b(analyze|analyse|read|describe|explain|dekho|dikhao).{0,20}(image|photo|picture|screenshot|screen)\b',
+        r'\b(search|find|check|yaad|recall|batao|kahan).{0,20}(memory|history|vault|notes|kal|aaj)\b',
+        r'\b(terminal|cmd|powershell|pip install|npm install|git clone|subprocess)\b',
+        r'\b(arxiv|vault|deep research|scrape|webpage)\b',
+        r'\b(calendar|reminder|event|schedule)\b'
+    ]
 
     absolute_fast_patterns = [
         r'\b(volume|awaaz|sound|brightness|screenshot|lock|sleep|mute)\b',
@@ -111,17 +117,6 @@ def get_local_fallback_route(command: str) -> str:
         r'\b(play|chalao|song|gana|music|youtube)\b',
         r'\b(weather|mausam|time|date|score|news|joke)\b',
         r'^(hi|hello|hey|kaise ho|what is up|good morning|good evening)$'
-    ]
-
-    agentic_strict_patterns = [
-        r'\b(image|photo|picture|screenshot|screen|visual|vision|analyse|analyze|dekho|dikhao)\b',
-        r'\b(email|mail|gmail|whatsapp|msg|message)\b',
-        r'\b(file|folder|directory|repo|test\.txt|\.py|\.html|\.json)\b',
-        r'\b(terminal|cmd|powershell|pip|npm|git|subprocess)\b',
-        r'\b(python|script|code|repl|compile)\b',
-        r'\b(arxiv|vault|deep research|scrape|webpage)\b',
-        r'\b(calendar|reminder|event|schedule)\b',
-        r'\b(memory|yaad|recall|history)\b'
     ]
 
     for pattern in agentic_strict_patterns:
@@ -134,7 +129,6 @@ def get_local_fallback_route(command: str) -> str:
 
     return "FAST"
 
-
 def get_route_decision(command: str, memory_instance=None) -> str:
     if memory_instance and hasattr(memory_instance, "ephemeral"):
         if memory_instance.ephemeral.get("waiting_for_confirmation"):
@@ -145,7 +139,7 @@ def get_route_decision(command: str, memory_instance=None) -> str:
             ]
             if any(kw in cmd_lower for kw in confirm_keywords):
                 memory_instance.ephemeral["waiting_for_confirmation"] = False
-                logger.info("⚡ Proactive Confirmation detected -> Routing directly to AGENTIC")
+                logger.info("Proactive Confirmation detected -> Routing directly to AGENTIC")
                 return "AGENTIC"
             else:
                 memory_instance.ephemeral["waiting_for_confirmation"] = False
@@ -161,16 +155,15 @@ def get_route_decision(command: str, memory_instance=None) -> str:
     if cloud_decision:
         return cloud_decision
 
-    logger.info("🔄 Using Local Rule-Based Fallback Router...")
+    logger.info("Using Local Rule-Based Fallback Router...")
     return get_local_fallback_route(command)
-
 
 def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Dict[str, any]]:
     try:
         decision = get_route_decision(raw_command, memory_instance)
         
         if decision == "AGENTIC":
-            logger.info("🚦 Smart Router: AGENTIC (Deep Tasks, Memory, Comms & Visual Analysis)")
+            logger.info("Smart Router: AGENTIC (Deep Tasks, Memory, Comms & Visual Analysis)")
             context_blocks = []
             
             is_silent = False
@@ -179,7 +172,7 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
             
             if memory_instance:
                 try:
-                    logger.info("🗂️ Fetching Initial Profile, Mood & Workspace Context...")
+                    logger.info("Fetching Initial Profile, Mood & Workspace Context...")
                     personal_context = memory_instance.get_relevant_context(raw_command)
                     if personal_context:
                         context_blocks.append(personal_context)
@@ -190,24 +183,23 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
             
             return run_agentic_loop(raw_command, final_context, memory_instance, silent=is_silent)
         else:
-            logger.info("🚦 Smart Router: FAST (Direct Apps / Stateless Chat / Hardware)")
+            logger.info("Smart Router: FAST (Direct Apps / Stateless Chat / Hardware)")
             
             if memory_instance and hasattr(memory_instance, 'get_and_clear_feedback'):
                 cleared_feedback = memory_instance.get_and_clear_feedback()
                 if cleared_feedback:
-                    logger.info(f"🗑️ Flushed pending live feedback: {cleared_feedback}")
+                    logger.info(f"Flushed pending live feedback: {cleared_feedback}")
 
             ephemeral = memory_instance.ephemeral if memory_instance else None
             return fetch_from_groq(raw_command, memory_instance, ephemeral)
             
     except Exception as e:
-        logger.error(f"⚠️ Smart Router Error: {e}. Defaulting to Fast Brain.")
+        logger.error(f"Smart Router Error: {e}. Defaulting to Fast Brain.")
         
         if memory_instance and hasattr(memory_instance, 'get_and_clear_feedback'):
             memory_instance.get_and_clear_feedback()
             
         return fetch_from_groq(raw_command, memory_instance)
-
 
 def process_command(raw_command: str, memory_instance=None) -> Dict[str, any]:
     resolved_command = resolve_pronouns(raw_command)
