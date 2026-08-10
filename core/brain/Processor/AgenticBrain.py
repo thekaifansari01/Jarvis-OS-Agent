@@ -485,9 +485,11 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             if value.get("recent_logs"):
                                 action_detail = "Fetching 15-Day Recent Logs"
                             elif value.get("lifetime_recall"):
-                                action_detail = (
-                                    f"Recalling LTM: {value.get('lifetime_recall')}"
-                                )
+                                recall_val = value.get("lifetime_recall")
+                                if isinstance(recall_val, list):
+                                    action_detail = f"Recalling LTM: {', '.join(recall_val)}"
+                                else:
+                                    action_detail = f"Recalling LTM: {recall_val}"
                         elif key == "search_actions" and isinstance(value, dict):
                             action_detail = (
                                 value.get("web", "")

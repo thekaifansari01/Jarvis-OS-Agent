@@ -45,3 +45,7 @@ telebot>=24.0.0
 networkx
 rank-bm25
 cryptg
+sentence-transformers 
+scipy 
+networkx 
+numpy

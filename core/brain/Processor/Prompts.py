@@ -75,6 +75,12 @@ print(res.stdout[:1500])
     </step>
   </intelligence_core_workflow>
 
+  <memory_retrieval_rules>
+    <rule name="exact_keyword_preservation">CRITICAL: When querying 'memory_actions', NEVER translate the user's Hinglish words to English. If the user says 'naya project', pass 'naya project'. The graph DB stores the exact spoken words.</rule>
+    <rule name="minimal_entity_queries">CRITICAL: For 'lifetime_recall', ALWAYS combine multiple questions into a SINGLE array of exact entity nouns (e.g., ["Rahul", "naya project", "favorite sport"]). This saves steps. NEVER pass conversational phrases.</rule>
+    <rule name="no_hallucinated_scripts">If memory recall fails to find the answer, DO NOT over-engineer a solution by writing Python scripts to guess (e.g., scanning folders). Simply admit you don't remember or don't know.</rule>
+  </memory_retrieval_rules>
+
   <proactive_hitl_protocol>
     <rule name="detect_proactive_trigger">
       <directive>If <Mission> or [MEMORY & CONTEXT] contains '[PROACTIVE EVENT TRIGGER]' or a request to ask/confirm a background update from Scout (e.g., Email, WhatsApp, Calendar, Reminder), switch immediately to Partner Confirmation Mode.</directive>
@@ -181,19 +187,31 @@ def get_native_tools():
                     name="memory_actions",
                     description=(
                         "[WHEN TO USE]: Retrieve past knowledge. Use for personal facts, user preferences, project connections, or past relationship queries.\n"
-                        "[WHEN NOT TO USE]: Do not use for real-time web data or immediate conversational context (use 'search_actions' or history instead).\n"
-                        "[RULE]: Pass EXACTLY ONE key. The system uses advanced retrieval (frequency weighting, temporal decay, and alias expansion)."
+                        "[CRITICAL ANTI-HALLUCINATION RULES]:\n"
+                        "1. NEVER translate Hinglish/Hindi words to English. If the user says 'naya project', you MUST pass 'naya project'.\n"
+                        "2. NEVER pass full sentences, questions, or conversational filler as arguments.\n"
+                        "[RULE]: Pass EXACTLY ONE key ('recent_logs' OR 'lifetime_recall')."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "recent_logs": types.Schema(
                                 type=types.Type.STRING,
-                                description="[TARGET: Short-term 15-Day Raw History]: Fetches chronological chat transcripts. Use when you need the exact sequence of past conversations, user corrections, or recent instructions. Value = specific topic, date, or keyword (e.g., 'project discussion', 'yesterday's code')."
+                                description=(
+                                    "[TARGET: Short-term 15-Day Raw History]: Fetches chronological chat transcripts. "
+                                    "Value = exact short keyword or date (e.g., 'project discussion', 'kal ki meeting'). DO NOT translate."
+                                )
                             ),
                             "lifetime_recall": types.Schema(
-                                type=types.Type.STRING,
-                                description="[TARGET: Weighted Relational Knowledge Graph]: Fetches structured relationships (e.g., Person -> OWNS -> Object). Automatically expands synonyms and ranks results by frequency (how often mentioned) and recency (decay over time). Value = entity names or a short descriptive phrase (e.g., 'user vehicle', 'favorite framework', 'project collaborators')."
+                                type=types.Type.ARRAY,
+                                items=types.Schema(type=types.Type.STRING),
+                                description=(
+                                    "[TARGET: Relational Knowledge Graph]\n"
+                                    "[CRITICAL RULE]: Pass an ARRAY of EXACT 1-2 core Entity Nouns (e.g., ['Rahul', 'naya project', 'favorite sport']).\n"
+                                    "Combine multiple questions into one array request to save time.\n"
+                                    "NEVER pass descriptive phrases like 'project tech stack', 'what does rahul like', or 'hobbies'.\n"
+                                    "NEVER translate words. The Graph DB requires exact spoken entities."
+                                )
                             )
                         }
                     )
