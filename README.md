@@ -31,7 +31,7 @@
 - [⚡ FastBrain vs 🧠 AgenticBrain – Dual‑Engine Magic](#-fastbrain-vs--agenticbrain--dualengine-magic)
 - [🧠 Memory & Long‑Term Recall](#-memory--longterm-recall)
 - [📱 Mobile Phone Control (Android)](#-mobile-phone-control-android)
-- [🛠️ Integrated Tool Ecosystem](#️-integrated-tool-ecosystem)
+- [🛠️ Integrated Tool Ecosystem](#-integrated-tool-ecosystem)
 - [🚀 Getting Started (Zero Friction)](#-getting-started-zero-friction)
 - [📋 Real‑World Use Cases (Scenarios)](#-realworld-use-cases-scenarios)
 - [⚙️ CLI & Configuration](#️-cli--configuration)
@@ -53,7 +53,7 @@
 | 📱 | **Mobile Phone Control (Android)** | Control your Android phone remotely via ADB over Tailscale — lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, take screenshots, adjust volume, and more. Automatically connects on startup and reconnects if the connection drops. |
 | 🔄 | **Multi‑LLM Auto‑Failover** | Seamlessly switches between Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. Zero downtime — no interruption to your workflow. |
 | 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule‑based fallback — intelligently routes commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep‑reasoning **AgenticBrain** for complex multi‑step engineering, coding, and research tasks. |
-| 📚 | **Lifelong Episodic LTM & Hybrid RAG** | ChromaDB‑backed persistent memory with daily Groq summarization. Remembers conversations from months ago. Also indexes your local documents (`Documents/Jarvis/RAG/`) with **smart chunk overlap (1500 characters, 200 overlap)**, **Hybrid search (Vector + BM25 + RRF)** and **Recency boost** — your personal knowledge base that understands both semantics and exact keywords. |
+| 📚 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-based semantic knowledge graph backed by SentenceTransformers (`all-MiniLM-L6-v2`) with background preloading and batched array queries. Remembers conversations from months ago. Also indexes local documents (`Documents/Jarvis/RAG/`) with **smart chunk overlap (1500 characters, 200 overlap)**, **Hybrid search (Vector + BM25 + RRF)**, and **Recency boost** — your personal knowledge base that understands both semantics and exact keywords. |
 | ⚙️ | **Enterprise‑Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys, Mobile ADB, Telegram Remote) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
 | 🎨 | **Reactive UI Ecosystem** | ZMQ‑powered floating Agent Panel with real‑time thought/action/observation streaming, live markdown typing popup with async image previews (YouTube thumbnails, link previews, local images), and native STT/Input popups. Glass‑morphism, dynamic glow, auto‑resize. |
 | 🗣️ | **Voice‑First Multimodal** | Deepgram speech‑to‑text (Nova‑2) with **Vosk KWS (Keyword Spotting)** wake word detection for sub‑second noise‑immune triggering on older hardware, Edge TTS voice output, multimodal vision (OCR, object detection, image analysis via Gemini/Regolo), and image generation (Flux/AI Horde) — all integrated. |
@@ -71,7 +71,7 @@
 | :--- | :--- |
 | **Claude Code is expensive** & requires constant subscriptions. | **Free & Open Source.** Run it with local models (Ollama/LM Studio) or cloud APIs. |
 | **Line‑drift bugs** ruin code edits. LLMs often "miss" the exact line. | **`replace_block`** – Diff‑based exact matching. **Zero line‑drift.** Finds the exact code block, irrespective of line numbers. |
-| **Session‑based memory** – Forgets what you said within 2 minutes. | **Lifelong Memory (LTM)** – Episodic memory via ChromaDB with weighted edges, temporal decay, and entity aliases. Remembers your coffee preference and which files you are working on. |
+| **Session‑based memory** – Forgets what you said within 2 minutes. | **Lifelong Memory (LTM)** – Episodic memory graph powered by local vector embeddings, temporal decay, and subgraph extraction. Remembers your coffee preference and past projects effortlessly. |
 | **No tooling for real systems.** Only generates text, does not execute code. | **Native Tool Execution** – Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and **ADB (Android control)**. |
 | **No remote execution capabilities.** | **Telegram Remote Bot** – Issue commands to your PC remotely via Telegram; Jarvis executes them silently in the background. |
 | **Doesn't read your emails/chats.** | **Proactive HITL (Human-in-the-Loop)** – Jarvis reads your emails, WhatsApp & Telegram in the background, *asks permission*, and takes action (e.g., rescheduling calendar events). |
@@ -103,7 +103,7 @@ flowchart TD
     Providers --> Custom[Custom Provider<br/>Any OpenAI‑compatible<br/>endpoint including Ollama]
     
     subgraph Memory[🧠 Memory Ecosystem]
-        LTM[(🗄️ ChromaDB LTM<br/>Weighted Graph + Decay + Aliases)]
+        LTM[(🗄️ Vector Semantic Graph LTM<br/>Weighted Graph + Subgraph + Decay)]
         RAG[(📚 ChromaDB RAG<br/>Hybrid Vector+BM25+RRF)]
         JSONL[📜 JSONL Rolling History<br/>15-Day Context]
         Profile[👤 User Profile & Mood]
@@ -157,6 +157,7 @@ flowchart TD
     Watchdog -.->|Smart Skip| System
     Failover -.-> Providers
     Recovery -.-> AgenticBrain
+
 ```
 
 ---
@@ -172,7 +173,7 @@ flowchart TD
 | **File Operations** | ❌ Cannot modify files. | ✅ Full CRUD, `repo_map`, `replace_block` (Zero Drift), `create_many`. |
 | **Communication** | ❌ No email/WhatsApp/Telegram. | ✅ Send Gmails, WhatsApp & Telegram messages, Fetch chat history. |
 | **Code Execution** | ❌ No Python/Terminal execution. | ✅ `run_python_code` (preferred), `execute_terminal_command`. |
-| **Memory Recall** | ❌ No LTM; only recent history. | ✅ `memory_actions` (15‑day logs + Lifetime weighted graph recall with alias expansion & recency decay). |
+| **Memory Recall** | ❌ No LTM; only recent history. | ✅ `memory_actions` (15‑day logs + Lifetime vector-embedding graph recall with subgraph extraction & recency decay). |
 | **Multimodal** | ❌ No vision. | ✅ `vision` (Image/Video analysis, OCR, object detection). |
 | **Research** | ❌ Simple web search only (`quick_web_search`). | ✅ `deep_research` (420s multi‑source synthesis), ArXiv, YouTube transcripts. |
 | **Mobile Control** | ❌ No. | ✅ ADB over Tailscale – lock/unlock, apps, calls, SMS, screenshots, WiFi/Data, etc. |
@@ -182,20 +183,23 @@ flowchart TD
 
 ## 🧠 Memory & Long‑Term Recall
 
-JARVIS employs a sophisticated **four‑tier** memory system that combines short‑term context, weighted lifelong graph, hybrid RAG, and user profiling:
+JARVIS employs a sophisticated **four‑tier** memory system that combines short‑term context, weighted lifelong vector graph, hybrid RAG, and user profiling:
 
 1. **📜 Rolling JSONL History (Short‑Term)** – 15‑day rolling context, auto‑pruned and archived into the graph.
-2. **🗄️ Weighted Lifetime Episodic Graph (Long‑Term)** – 
-   - Built on NetworkX with **weighted edges** (frequency of mention) and **temporal decay** (relations older than 6 months lose half their weight).
-   - **Entity aliases** – automatically maps synonyms (e.g., "car" → "BMW") via a `aliases.json` file that can be manually extended.
-   - **Search** returns results sorted by relevance (weight × decay), ensuring the most frequent and recent facts surface first.
-3. **📚 Hybrid RAG (Workspace Documents)** –
-   - **Smart chunking** with overlap (1500 characters, 200 overlap) to preserve context across chunk boundaries.
-   - **Hybrid retrieval** – combines **BM25 keyword search** and **Gemini embedding vector search**, merged via **Reciprocal Rank Fusion (RRF)** for the best of both worlds.
-   - **Recency boost** – files modified recently get a 20% score lift, making the knowledge base self‑updating.
-4. **👤 User Profile & Mood** – Automatically tracks mood; bio/preferences are no longer auto‑extracted. Instead, the system **only** extracts knowledge‑graph triplets from conversations, leaving personal facts to be entered explicitly or through the graph.
+2. **🗄️ Weighted Lifetime Episodic Graph (Long‑Term)** –
+* Built on NetworkX with **weighted edges** (frequency of mention) and **temporal decay** (relations older than 6 months lose half their weight).
+* **Semantic Vector Embeddings (SentenceTransformers)** – Uses `all-MiniLM-L6-v2` embeddings for zero-shot semantic matching without manual alias files. Automatically maps conceptual synonyms (e.g., "React" matches "ReactJS") via vector similarity.
+* **Batched Array Queries & Background Preloading** – Preloads the embedding engine in a background thread at startup and processes multi-entity queries in a single agent step with zero latency.
+* **Subgraph Retrieval** – Extracts complete 2-hop subgraphs around matched nodes to ensure no connected facts or secondary relations are missed.
 
-This layered design ensures Jarvis never forgets critical context, yet remains efficient and cost‑effective.
+
+3. **📚 Hybrid RAG (Workspace Documents)** –
+* **Smart chunking** with overlap (1500 characters, 200 overlap) to preserve context across chunk boundaries.
+* **Hybrid retrieval** – combines **BM25 keyword search** and **Gemini embedding vector search**, merged via **Reciprocal Rank Fusion (RRF)** for maximum accuracy.
+* **Recency boost** – files modified recently get a 20% score lift, making the knowledge base self‑updating.
+
+
+4. **👤 User Profile & Mood** – Automatically tracks mood; bio/preferences are tracked through knowledge-graph triplets extracted from conversations.
 
 ---
 
@@ -249,7 +253,7 @@ Copy and paste this entire block into your terminal (PowerShell recommended):
 
 ```powershell
 # 1. Clone and Enter
-git clone https://github.com/thekaifansari01/Jarvis-OS-Agent.git
+git clone [https://github.com/thekaifansari01/Jarvis-OS-Agent.git](https://github.com/thekaifansari01/Jarvis-OS-Agent.git)
 cd Jarvis-OS-Agent
 
 # 2. Python Virtual Env & Dependencies
@@ -265,6 +269,7 @@ cd ../../../..
 
 # 4. Global CLI Setup (Run this once from the root project directory)
 python SetupRegistry.py
+
 ```
 
 > ⚠️ **Ensure you are in the root project directory** (`Jarvis-OS-Agent/`) before running `python SetupRegistry.py`.
@@ -275,6 +280,7 @@ After running `SetupRegistry.py`, open a **new terminal** and simply type:
 
 ```bash
 jarvis
+
 ```
 
 No need to activate the virtual environment every time – the `jarvis` command is available system‑wide.
@@ -287,6 +293,7 @@ Copy `.env.example` to `.env` and fill in your API keys. For local models (Ollam
 CUSTOM_API_KEY=EMPTY_KEY
 CUSTOM_BASE_URL=http://localhost:11434/v1
 CUSTOM_MODEL=llama3.2:3b
+
 ```
 
 ---
@@ -341,12 +348,12 @@ CUSTOM_MODEL=llama3.2:3b
 7. Runs `pytest` – if any fail, uses `replace_block` to fix.
 8. When all tests pass, calls `complete_task`.
 
-### 🧠 Scenario 6: Weighted Graph Memory & Aliases
+### 🧠 Scenario 6: Weighted Graph Memory & Semantic Recall
 
 1. **Day 1:** User: *"I like BMW."* → Graph stores `[User] --(LIKES)--> [BMW]` weight=1.
-2. **Day 60:** User: *"What is the colour of my car?"* → `car` alias maps to `BMW`, search returns `[User] --(LIKES)--> [BMW]`.
+2. **Day 60:** User: *"What is the color of my automobile?"* → Semantic vector search connects `automobile` to `BMW`, returning `[User] --(LIKES)--> [BMW]`.
 3. **Day 100:** User: *"I really like BMW."* → weight becomes 2.
-4. **Day 400:** User: *"What do I like?"* → `BMW` weight=2, `last_seen`=Day100, decay factor 0.5 → adjusted weight 1.0; any newer fact (if any) will rank higher. Result sorted by relevance.
+4. **Day 400:** User: *"What do I like?"* → `BMW` weight=2, `last_seen`=Day100, decay factor 0.5 → adjusted weight 1.0; results sorted by overall semantic and temporal relevance.
 
 ---
 
@@ -406,7 +413,7 @@ CUSTOM_MODEL=llama3.2:3b
 | Unwanted browser/QR popup | Logout of the service (`jarvis logout --service`). Services start only when credentials exist. |
 | Mobile ADB fails | Check `ADB_PHONE_IP` in `.env`, ensure Tailscale is running, run `adb devices` manually. |
 | Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. |
-| Graph memory seems stale | Delete `Data/jarvis_memory/lifetime_graph.json` and restart – weights and aliases will rebuild. |
+| Graph memory seems stale | Delete `Data/jarvis_memory/lifetime_graph.json` and restart – graph nodes, weights, and semantic embeddings will rebuild automatically. |
 | RAG results inaccurate | Delete `Data/jarvis_memory/rag_chroma_db` and restart – re‑index with new chunking & hybrid search. |
 
 ---
