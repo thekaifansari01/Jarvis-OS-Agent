@@ -40,18 +40,24 @@ class ContextMemory:
         self._start_background_pruning()
 
     def _is_valid_triplet(self, src, rel, tgt):
-        invalid_sources = ["agent", "info", "system", "jarvis", "data", "unknown"]
-        invalid_targets = ["info", "data", "system", "agent", "unknown"]
-        invalid_relations = ["will_give", "must_remember", "is_instruction", "status_update", "remember"]
-
-        if src.lower() in invalid_sources or tgt.lower() in invalid_targets:
+        invalid_entities = {"agent", "info", "system", "jarvis", "data", "unknown", "yes", "no", "today", "tomorrow", "now"}
+        if src.lower() in invalid_entities or tgt.lower() in invalid_entities:
             return False
-        if rel.lower() in invalid_relations:
-            return False
+        
         if len(src) < 2 or len(tgt) < 2:
             return False
-        if src.lower() == tgt.lower() and rel in ["STATUS", "TYPE", "RELATION"]:
+            
+        if src.lower() == tgt.lower():
             return False
+
+        ephemeral_relations = {
+            "is_doing", "eating", "going", "will_give", "must_remember", 
+            "status_update", "remember", "searching", "asking", "said", 
+            "talking_to", "wants_to", "planning_to"
+        }
+        if rel.lower() in ephemeral_relations:
+            return False
+
         return True
 
     def set_pending_confirmation(self, task_data=None, ttl_seconds=60):
@@ -157,21 +163,21 @@ class ContextMemory:
         except Exception:
             pass
 
-    def _async_extract_insights(self, message):
+    def _async_extract_permanent_facts(self, message):
         try:
-            thread = threading.Thread(target=self._extract_insights_ai, args=(message,))
+            thread = threading.Thread(target=self._extract_permanent_facts_ai, args=(message,))
             thread.daemon = True
             thread.start()
         except Exception:
             pass
 
-    def _extract_insights_ai(self, message):
-        if not self.groq_client or len(message.split()) < 3:
+    def _extract_permanent_facts_ai(self, message):
+        if not self.groq_client or len(message.split()) < 2:
             return
         
         recent_history = ""
         if self.master_history:
-            recent_history = "\n".join([f"{msg.get('role', '')}: {msg.get('message', '')}" for msg in self.master_history[-5:]])
+            recent_history = "\n".join([f"{msg.get('role', '')}: {msg.get('message', '')}" for msg in self.master_history[-6:]])
         
         existing_nodes_str = "None"
         try:
@@ -182,55 +188,78 @@ class ContextMemory:
         except Exception:
             pass
 
-        prompt = f"""You are an advanced Knowledge Graph Extraction agent for Jarvis AI.
-Extract factual triplets (Source, Relation, Target) from the user's latest message.
+        prompt = f"""You are the core LTM Engine for Jarvis.
+Your job is to analyze the user's latest message with the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure (Triplets).
 
-CRITICAL RULES:
-1. IGNORE meta-instructions like "remember this", "note down", "store this".
-2. If the user says "my X" (my mentor, my friend, my project), set Source as "User".
-3. Extract personal relations explicitly: HAS_MENTOR, HAS_FRIEND, LIKES, OWNS, WORKS_ON.
-4. Avoid dummy nodes like "Info", "Data", "System", "Agent".
-5. Relations must be UPPERCASE. Entities should be Proper Case.
-6. VERY IMPORTANT: Check the [EXISTING GRAPH NODES] below. If the user's message refers to any of these concepts, you MUST use the EXACT existing node name to prevent duplicates (e.g. if graph has 'Reactjs' and user says 'React', output 'Reactjs').
+[WHAT TO IGNORE]:
+- Commands & Actions ("open google", "send mail", "remind me").
+- Temporary states ("I am eating pizza", "I am tired", "going to Delhi").
+- Chit-chat or greetings ("hello", "how are you", "ok", "thanks").
+- Meta-instructions ("remember this", "note this down", "store this").
 
-[EXISTING GRAPH NODES (Use these exact names if applicable)]:
+[WHAT TO SAVE]:
+- Identity & Traits (Profession, Age, Habits, Skills).
+- Relationships (Friends, Family, Colleagues).
+- Hard Preferences (Likes, Dislikes, Allergies, Favorite things).
+- Assets (Car owned, Phone model, Pets).
+
+[ALLOWED RELATIONS]:
+You MUST strictly use one of these uppercase relations:
+[IS_A, LIKES, DISLIKES, OWNS, HAS_SKILL, WORKS_AS, HAS_RELATION, LOCATED_IN, USES, CREATED, PREFERS]
+
+[RULES]:
+1. If the user says "my friend Rahul", Source="User", Relation="HAS_RELATION", Target="Rahul".
+2. Resolve pronouns (he/she/it) using the Context History.
+3. Keep entities short (1-3 words max).
+4. Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.
+
+[EXISTING GRAPH NODES]:
 {existing_nodes_str}
 
-Recent Conversation History:
+[Context History]:
 {recent_history if recent_history else "No recent history."}
 
-User's Latest Message: "{message}"
+[User's Latest Message]: "{message}"
 
-Return ONLY valid JSON. Format: {{"triplets": [{{"source": "User", "relation": "LIKES", "target": "Pizza"}}]}}
-If no triplets, return {{"triplets": []}}.
+Return STRICT JSON exactly in this schema:
+{{
+    "reasoning": "string",
+    "is_permanent_fact": boolean,
+    "triplets": [
+        {{"source": "Entity1", "relation": "ALLOWED_RELATION", "target": "Entity2"}}
+    ]
+}}
 """
         for _ in range(3):
             try:
                 response = self.groq_client.chat.completions.create(
                     model=GROQ_SUMMARY_MODEL,
                     messages=[
-                        {"role": "system", "content": "You are a precise knowledge graph extractor. Output only valid JSON with a 'triplets' array."},
+                        {"role": "system", "content": "You are a precise knowledge graph extraction engine. Output strictly valid JSON."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.1,
+                    temperature=0.0,
                     response_format={"type": "json_object"}
                 )
                 raw_text = response.choices[0].message.content.strip()
                 clean_text = re.sub(r'^```json\n|```$', '', raw_text, flags=re.MULTILINE).strip()
                 data = json.loads(clean_text)
-                triplets = data.get("triplets", [])
                 
-                if triplets:
-                    try:
-                        from core.brain.Memory.LifetimeMemory import ltm_engine
-                        for t in triplets:
-                            src = str(t.get("source", "")).strip().title()
-                            rel = str(t.get("relation", "")).strip().upper()
-                            tgt = str(t.get("target", "")).strip().title()
-                            if src and rel and tgt and self._is_valid_triplet(src, rel, tgt):
-                                ltm_engine.record_triplet(src, rel, tgt)
-                    except Exception:
-                        pass
+                if data.get("is_permanent_fact") is True:
+                    triplets = data.get("triplets", [])
+                    if triplets:
+                        try:
+                            from core.brain.Memory.LifetimeMemory import ltm_engine
+                            for t in triplets:
+                                src = str(t.get("source", "")).strip().title()
+                                rel = str(t.get("relation", "")).strip().upper()
+                                tgt = str(t.get("target", "")).strip().title()
+                                
+                                if src and rel and tgt and self._is_valid_triplet(src, rel, tgt):
+                                    ltm_engine.record_triplet(src, rel, tgt)
+                                    logger.info(f"LTM Saved: [{src}] --({rel})--> [{tgt}]")
+                        except Exception as e:
+                            logger.error(f"LTM Engine Save Error: {e}")
                 break
             except Exception:
                 time.sleep(1)
@@ -293,7 +322,7 @@ If no triplets, return {{"triplets": []}}.
             ignore_words = ["ok", "okay", "yes", "no", "thanks", "thank you", "clear", "done", "nice", "cool", "hmm", "acha"]
             if role == "USER" and message.lower().strip() not in ignore_words:
                 self._track_session_state(message)
-                self._async_extract_insights(message)
+                self._async_extract_permanent_facts(message)
         except Exception:
             pass
 

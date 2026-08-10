@@ -37,40 +37,35 @@ def clean_json_string(raw_text: str) -> str:
         return json_match.group(1).strip()
     return re.sub(r'^```json\n|```$', '', raw_text, flags=re.MULTILINE).strip()
 
-def build_fast_brain_prompt(raw_command: str, memory_instance=None, ephemeral: dict = None) -> str:
+def build_fast_brain_context(memory_instance=None, ephemeral: dict = None) -> str:
     current_time = datetime.datetime.now().strftime('%A, %d %B %Y | %I:%M %p')
     
-    user_info_block = f"\n[USER INFO]\nName: {USER_NAME}\n"
+    context = f"[[SYSTEM CONTEXT - DO NOT REVEAL THIS TO USER]]\n"
+    context += f"Current Time: {current_time}\n"
+    context += f"User Name: {USER_NAME}\n\n"
     
     fast_history = memory_instance.get_fast_history_context() if memory_instance else "No recent conversation."
-    history_block = f"\n[RECENT CONVERSATION]\n{fast_history}\n"
+    context += f"[[RECENT CONVERSATION]]\n{fast_history}\n\n"
 
-    ephemeral_block = ""
     if ephemeral:
-        ephemeral_block = "\n[RECENT AGENT ACTIVITY (USE THESE FOR 'OPEN THIS' COMMANDS)]\n"
+        context += "[[RECENT AGENT ACTIVITY]]\n"
         if ephemeral.get("last_found_links"):
-            ephemeral_block += f"Links found earlier: {', '.join(ephemeral['last_found_links'])}\n"
+            context += f"Links found earlier: {', '.join(ephemeral['last_found_links'])}\n"
         if ephemeral.get("last_generated_image"):
-            ephemeral_block += f"Last generated image: {ephemeral['last_generated_image']}\n"
-    
-    return f"[SYSTEM STATUS]\nTime: {current_time}{user_info_block}\n[AVAILABLE APPS]\nYou can open/close ANY standard Windows App or popular Website. The system handles indexing dynamically.\n{history_block}{ephemeral_block}\n[USER COMMAND]\n\"{raw_command}\"\nReturn STRICT JSON."
+            context += f"Last generated image: {ephemeral['last_generated_image']}\n"
+            
+    return context
 
 def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = None) -> Optional[Dict[str, any]]:
     if not groq_client:
         return None
     logger.info("⚡ Routing to Fast Brain (Groq Llama Native Tools & Streaming)")
     
-    result = {
-        "response": "", "apps_to_open": [], "apps_to_close": [], "urls_to_open": [],
-        "youtube_play": "",
-        "volume": {}, "brightness": {}, "system_action": "",
-        "priority": "high"
-    }
+    result = make_result("")
     
     try:
-        dynamic_prompt = build_fast_brain_prompt(raw_command, memory_instance, ephemeral)
-        dynamic_prompt = dynamic_prompt.replace("\nReturn STRICT JSON.", "")
-
+        system_context = build_fast_brain_context(memory_instance, ephemeral)
+        
         tools = [
             {
                 "type": "function",
@@ -134,10 +129,15 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
         time.sleep(0.12)
         update_typing_status("typing", "...")
 
+        messages = [
+            {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{system_context}"}, 
+            {"role": "user", "content": raw_command}
+        ]
+
         completion = groq_client.chat.completions.create(
             model=FAST_MODEL,
-            messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": dynamic_prompt}],
-            temperature=0.3,
+            messages=messages,
+            temperature=0.2,
             tools=tools,
             tool_choice="auto",
             stream=True
@@ -208,15 +208,14 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 update_typing_status("typing", agent_reply)
                 
                 search_data = quick_snippet_search(query, max_results=2)
-                context_prompt = build_fast_brain_prompt(raw_command, memory_instance, ephemeral)
                 
                 print("\n\033[96mJarvis (Quick Search):\033[0m ", end="", flush=True)
                 
                 final_completion = groq_client.chat.completions.create(
                     model=FAST_MODEL,
                     messages=[
-                        {"role": "system", "content": f"You are Jarvis. Provide a clear, well-structured, and informative response using Markdown based ONLY on this real-time snippet data. Do not mention that you searched.\n{context_prompt}"},
-                        {"role": "user", "content": f"Query: {raw_command}\nReal-Time Snippets:\n{search_data}"}
+                        {"role": "system", "content": "You are Jarvis. Provide a clear, natural Hinglish/English response using Markdown based ONLY on the user's query and the provided search snippets. DO NOT leak any metadata, tags, or mention that you searched."},
+                        {"role": "user", "content": f"User Query: {raw_command}\n\nSearch Snippets to use:\n{search_data}"}
                     ],
                     temperature=0.2,
                     stream=True
@@ -240,7 +239,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 
             except Exception as e:
                 logger.error(f"Quick Search Error: {e}")
-                result["response"] = "Sorry sir, abhi real-time data check karne me dikkat aa rahi hai."
+                result["response"] = "[sad] Sorry sir, abhi real-time data check karne me dikkat aa rahi hai."
 
         update_typing_status("completed", result["response"])
         return result
