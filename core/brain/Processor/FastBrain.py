@@ -40,11 +40,7 @@ def clean_json_string(raw_text: str) -> str:
 def build_fast_brain_prompt(raw_command: str, memory_instance=None, ephemeral: dict = None) -> str:
     current_time = datetime.datetime.now().strftime('%A, %d %B %Y | %I:%M %p')
     
-    current_mood = "Neutral"
-    if memory_instance and memory_instance.user_mood.get("mood_history"):
-        current_mood = memory_instance.user_mood["mood_history"][-1]["mood"]
-        
-    user_info_block = f"\n[USER INFO]\nName: {USER_NAME}\nCurrent Mood: {current_mood}\n"
+    user_info_block = f"\n[USER INFO]\nName: {USER_NAME}\n"
     
     fast_history = memory_instance.get_fast_history_context() if memory_instance else "No recent conversation."
     history_block = f"\n[RECENT CONVERSATION]\n{fast_history}\n"
