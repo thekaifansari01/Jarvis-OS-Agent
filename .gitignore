@@ -34,10 +34,9 @@ core/UiSrc/**/release/
 core/UiSrc/**/.qtcreator/
 core/UiSrc/**/.qmake.stash
 core/UiSrc/**/Makefile*
-
-setup.py
 .jarvis.lock
 
 # OS metadata
 .DS_Store
+jarvis_cli.egg-info
 Thumbs.db
