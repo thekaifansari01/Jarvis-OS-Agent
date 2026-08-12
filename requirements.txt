@@ -5,7 +5,7 @@ torch
 torchvision
 torchaudio
 onnxruntime
-transformers==4.38.2
+transformers>=4.41.0
 sentence-transformers==5.7.0
 tiktoken==0.13.0
 
@@ -45,7 +45,7 @@ wikipedia==1.4.0
 arxiv==4.0.1
 
 # ===== TELEGRAM & MESSAGING =====
-cryptg==2024.1.0
+cryptg
 pyTelegramBotAPI==4.36.0
 telethon==1.44.0
 pywhatkit==5.4

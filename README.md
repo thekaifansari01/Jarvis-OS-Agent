@@ -1,6 +1,7 @@
 # 🧠 J.A.R.V.I.S. OS Agent – The Ultimate Open-Source Autonomous AI Assistant for Windows
 
-> **Welcome to the Jarvis-OS-Agent by @thekaifansari01.** > *"We call it an AI Operating System because it autonomously controls your PC, Android Phone, Local Files, and Lifelong Memory — not just your code."*
+> **Welcome to the Jarvis-OS-Agent by @thekaifansari01.**  
+> *"We call it an AI Operating System because it autonomously controls your PC, Android Phone, Local Files, and Lifelong Memory — not just your code."*
 
 > **Open-Source AI Agent · Zero Line‑Drift Coding · Lifelong Episodic Memory · Voice‑First Multimodal · Proactive HITL · Android ADB Control · Telegram Remote Execution · Hybrid RAG**
 
@@ -17,7 +18,7 @@
 [![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](https://mail.google.com)
 [![Google Calendar](https://img.shields.io/badge/Google%20Calendar-4285F4?style=for-the-badge&logo=google-calendar&logoColor=white)](https://calendar.google.com)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-00e676?style=for-the-badge)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent/pulls)
 
 **Built by an 18‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
@@ -411,7 +412,7 @@ We actively welcome contributions to make the Jarvis OS Agent the best open-sour
 
 ## 📄 License
 
-This open-source AI project is distributed under the **MIT License**. See the `LICENSE` file for full documentation.
+This open-source AI project is distributed under the **GNU General Public License v3.0**. See the `LICENSE` file for full documentation.
 
 ---
 
