@@ -8,20 +8,132 @@ import platform
 import re
 import sys
 import shlex
+import tkinter as tk
+from tkinter import scrolledtext
 from core.logger.logger import logger
+from core.brain.config import GROQ_API_KEY, GROQ_FAST_MODEL
+from groq import Groq
+
+def _fallback_analysis(content: str) -> str:
+    reasons = []
+    content_lower = content.lower()
+    if any(x in content_lower for x in ["subprocess", "os.system", "os.popen"]):
+        reasons.append("- Executes hidden OS-level commands.")
+    if any(x in content_lower for x in ["shutil.rmtree", "os.remove", "os.rmdir", "del ", "rm "]):
+        reasons.append("- Modifies or permanently deletes files/directories.")
+    if "requests" in content_lower or "urllib" in content_lower:
+        reasons.append("- Makes external network connections.")
+    if "open(" in content_lower and ("'w'" in content_lower or '"w"' in content_lower):
+        reasons.append("- Overwrites or writes new local files.")
+    if "format " in content_lower or "diskpart" in content_lower:
+        reasons.append("- Modifies disk partitions.")
+    if not reasons:
+        reasons.append("- Performs potentially unsafe system modifications.")
+    return "Fallback Security Analysis:\n" + "\n".join(reasons)
+
+def _llm_analyze(content: str, ui_callback):
+    if not GROQ_API_KEY:
+        ui_callback(_fallback_analysis(content))
+        return
+    try:
+        client = Groq(api_key=GROQ_API_KEY)
+        prompt = "You are a cyber security expert. Analyze the following python/terminal payload. Explain in 2-3 concise bullet points what this script does and why it was flagged as risky. Do not provide code, just the risk analysis in plain text."
+        response = client.chat.completions.create(
+            model=GROQ_FAST_MODEL,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": f"Code:\n{content}"}
+            ],
+            temperature=0.1,
+            max_tokens=150
+        )
+        analysis = response.choices[0].message.content.strip()
+        ui_callback(f"Fast Brain Assessment:\n{analysis}")
+    except Exception:
+        ui_callback(_fallback_analysis(content))
 
 def get_user_approval(action_type: str, content: str) -> bool:
     logger.warning(f"[JARVIS REQUESTS CRITICAL PERMISSION]")
     logger.warning(f"Action: {action_type}")
-    logger.warning(f"Content:\n{content}")
 
-    while True:
-        choice = input("\033[92mAllow execution? (Y/N):\033[0m ").strip().upper()
-        if choice == 'Y':
-            return True
-        elif choice == 'N':
-            return False
-        logger.info("Invalid input. Please enter Y or N.")
+    root = tk.Tk()
+    root.title(f"Jarvis Security Intercept — {action_type}")
+    root.geometry("680x580")
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+    root.configure(bg="#0f172a")
+    root.eval('tk::PlaceWindow . center')
+
+    approval_result = [False]
+
+    def on_approve():
+        approval_result[0] = True
+        root.quit()
+        root.destroy()
+
+    def on_deny():
+        approval_result[0] = False
+        root.quit()
+        root.destroy()
+
+    main_frame = tk.Frame(root, bg="#0f172a", padx=25, pady=20)
+    main_frame.pack(fill="both", expand=True)
+
+    header_frame = tk.Frame(main_frame, bg="#0f172a")
+    header_frame.pack(fill="x", pady=(0, 12))
+
+    badge = tk.Label(header_frame, text=" CRITICAL EXECUTION BLOCKED ", font=("Segoe UI", 8, "bold"), bg="#ef4444", fg="white", padx=8, pady=3)
+    badge.pack(anchor="w")
+
+    title_lbl = tk.Label(header_frame, text=action_type, font=("Segoe UI", 13, "bold"), bg="#0f172a", fg="#f8fafc", pady=4)
+    title_lbl.pack(anchor="w")
+
+    desc_lbl = tk.Label(header_frame, text="Review the requested system action before granting execution permission:", font=("Segoe UI", 9), bg="#0f172a", fg="#94a3b8")
+    desc_lbl.pack(anchor="w")
+
+    code_frame = tk.Frame(main_frame, bg="#1e293b", padx=1, pady=1)
+    code_frame.pack(fill="x", pady=(0, 15))
+
+    # FIXED: Changed font size 9.5 to 10
+    code_box = scrolledtext.ScrolledText(code_frame, height=9, font=("Consolas", 10), bg="#020617", fg="#38bdf8", relief="flat", bd=0, insertbackground="white")
+    code_box.pack(fill="both", expand=True, padx=6, pady=6)
+    code_box.insert(tk.END, content)
+    code_box.configure(state='disabled')
+
+    analysis_frame = tk.Frame(main_frame, bg="#1e293b", padx=15, pady=12)
+    analysis_frame.pack(fill="x", pady=(0, 20))
+
+    # FIXED: Changed font size 9.5 to 10
+    analysis_title = tk.Label(analysis_frame, text="🛡️ AI Security Assessment", font=("Segoe UI", 10, "bold"), bg="#1e293b", fg="#f59e0b")
+    analysis_title.pack(anchor="w", pady=(0, 4))
+
+    analysis_lbl = tk.Label(analysis_frame, text="Jarvis Neural Security: Analyzing payload for system risks...", font=("Segoe UI", 9), bg="#1e293b", fg="#cbd5e1", justify="left", wraplength=580, anchor="w")
+    analysis_lbl.pack(anchor="w", fill="x")
+
+    def update_ui(text):
+        root.after(0, lambda: analysis_lbl.config(text=text, fg="#38bdf8"))
+
+    threading.Thread(target=_llm_analyze, args=(content, update_ui), daemon=True).start()
+
+    btn_frame = tk.Frame(main_frame, bg="#0f172a")
+    btn_frame.pack(fill="x", side="bottom")
+
+    # FIXED: Changed font size 9.5 to 10
+    btn_deny = tk.Button(btn_frame, text="❌ Deny & Block", font=("Segoe UI", 10, "bold"), bg="#dc2626", fg="white", activebackground="#b91c1c", activeforeground="white", relief="flat", bd=0, padx=20, pady=8, cursor="hand2", command=on_deny)
+    btn_deny.pack(side="right", padx=(10, 0))
+
+    # FIXED: Changed font size 9.5 to 10
+    btn_approve = tk.Button(btn_frame, text="✅ Approve & Execute", font=("Segoe UI", 10, "bold"), bg="#16a34a", fg="white", activebackground="#15803d", activeforeground="white", relief="flat", bd=0, padx=20, pady=8, cursor="hand2", command=on_approve)
+    btn_approve.pack(side="right")
+
+    root.protocol("WM_DELETE_WINDOW", on_deny)
+    root.mainloop()
+
+    if approval_result[0]:
+        logger.info("[USER APPROVED] Executing critical payload.")
+    else:
+        logger.warning("[USER DENIED] Payload blocked.")
+    return approval_result[0]
 
 def is_terminal_command_safe(command: str) -> bool:
     return True
