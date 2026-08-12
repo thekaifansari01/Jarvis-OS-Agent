@@ -8,8 +8,9 @@ import platform
 import re
 import sys
 import shlex
-import tkinter as tk
-from tkinter import scrolledtext
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QRect, QParallelAnimationGroup, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGraphicsDropShadowEffect, QTextEdit, QPushButton
+from PyQt5.QtGui import QFont, QColor, QFontDatabase
 from core.logger.logger import logger
 from core.brain.config import GROQ_API_KEY, GROQ_FAST_MODEL
 from groq import Groq
@@ -17,125 +18,273 @@ from groq import Groq
 def _fallback_analysis(content: str) -> str:
     reasons = []
     content_lower = content.lower()
+    
     if any(x in content_lower for x in ["subprocess", "os.system", "os.popen"]):
-        reasons.append("- Executes hidden OS-level commands.")
+        reasons.append("• Yeh script background me OS-level commands execute kar rahi hai.")
     if any(x in content_lower for x in ["shutil.rmtree", "os.remove", "os.rmdir", "del ", "rm "]):
-        reasons.append("- Modifies or permanently deletes files/directories.")
-    if "requests" in content_lower or "urllib" in content_lower:
-        reasons.append("- Makes external network connections.")
+        reasons.append("• ⚠️ DANGER: Yeh script local files ya folders ko delete/modify kar rahi hai.")
+    if any(x in content_lower for x in ["requests", "urllib", "curl", "wget"]):
+        reasons.append("• Yeh script external network ya internet se data fetch/download kar rahi hai.")
     if "open(" in content_lower and ("'w'" in content_lower or '"w"' in content_lower):
-        reasons.append("- Overwrites or writes new local files.")
-    if "format " in content_lower or "diskpart" in content_lower:
-        reasons.append("- Modifies disk partitions.")
+        reasons.append("• Yeh script naye files bana rahi hai ya existings files overwrite kar rahi hai.")
+    if any(x in content_lower for x in ["format ", "diskpart", "mkfs"]):
+        reasons.append("• 🚨 CRITICAL: Yeh command directly aapke disk partitions ko target kar rahi hai.")
+        
     if not reasons:
-        reasons.append("- Performs potentially unsafe system modifications.")
-    return "Fallback Security Analysis:\n" + "\n".join(reasons)
+        reasons.append("• Yeh ek complex payload hai jo system resources access kar raha hai. Kripya review karein.")
+        
+    return "Fast Brain Assessment (Fallback):\n" + "\n".join(reasons)
 
-def _llm_analyze(content: str, ui_callback):
-    if not GROQ_API_KEY:
-        ui_callback(_fallback_analysis(content))
-        return
-    try:
-        client = Groq(api_key=GROQ_API_KEY)
-        prompt = "You are a cyber security expert. Analyze the following python/terminal payload. Explain in 2-3 concise bullet points what this script does and why it was flagged as risky. Do not provide code, just the risk analysis in plain text."
-        response = client.chat.completions.create(
-            model=GROQ_FAST_MODEL,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": f"Code:\n{content}"}
-            ],
-            temperature=0.1,
-            max_tokens=150
-        )
-        analysis = response.choices[0].message.content.strip()
-        ui_callback(f"Fast Brain Assessment:\n{analysis}")
-    except Exception:
-        ui_callback(_fallback_analysis(content))
+class SecurityDialog(QDialog):
+    analysis_ready = pyqtSignal(str)
+
+    def __init__(self, action_type, content):
+        super().__init__()
+        self.action_type = action_type
+        self.content = content
+        self.approved = False
+
+        eng_id = QFontDatabase.addApplicationFont("Data/fonts/english.ttf")
+        eng_fams = QFontDatabase.applicationFontFamilies(eng_id)
+        self.font_eng = eng_fams[0] if eng_fams else "Segoe UI"
+        
+        self.initUI()
+        self.analysis_ready.connect(self.update_analysis_text)
+        threading.Thread(target=self.run_llm, daemon=True).start()
+
+    def initUI(self):
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.resize(680, 600)
+
+        self.outer_layout = QVBoxLayout(self)
+        self.outer_layout.setContentsMargins(20, 20, 20, 20)
+
+        self.container = QFrame(self)
+        self.container.setStyleSheet("""
+            QFrame {
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(255, 255, 255, 0.15),
+                    stop:0.35 rgba(255, 255, 255, 0.05),
+                    stop:0.75 rgba(220, 38, 38, 0.15),
+                    stop:1 rgba(255, 255, 255, 0.1)
+                );
+                border-radius: 28px;
+            }
+        """)
+
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setBlurRadius(50)
+        self.shadow.setColor(QColor(0, 0, 0, 180))
+        self.shadow.setOffset(0, 12)
+        self.container.setGraphicsEffect(self.shadow)
+
+        self.wrapper_layout = QVBoxLayout(self.container)
+        self.wrapper_layout.setContentsMargins(1, 1, 1, 1)
+
+        self.inner_island = QFrame(self.container)
+        self.inner_island.setStyleSheet("""
+            QFrame {
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(15, 23, 42, 0.98), 
+                    stop:0.45 rgba(10, 15, 28, 0.99),
+                    stop:1 rgba(2, 6, 23, 1.0)
+                );
+                border-radius: 27px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+        """)
+        self.wrapper_layout.addWidget(self.inner_island)
+
+        self.layout = QVBoxLayout(self.inner_island)
+        self.layout.setContentsMargins(25, 25, 25, 25)
+        self.layout.setSpacing(15)
+
+        badge = QLabel(" CRITICAL EXECUTION BLOCKED ")
+        badge.setFont(QFont(self.font_eng, 8, QFont.Bold))
+        badge.setStyleSheet("background: #ef4444; color: white; border-radius: 4px; padding: 2px 6px;")
+        badge.setFixedSize(badge.sizeHint())
+        self.layout.addWidget(badge)
+
+        title_lbl = QLabel(self.action_type)
+        title_lbl.setFont(QFont(self.font_eng, 14, QFont.Bold))
+        title_lbl.setStyleSheet("color: #f8fafc; background: transparent; border: none;")
+        self.layout.addWidget(title_lbl)
+
+        desc_lbl = QLabel("Review the requested system action before granting execution permission:")
+        desc_lbl.setFont(QFont(self.font_eng, 10))
+        desc_lbl.setStyleSheet("color: #94a3b8; background: transparent; border: none;")
+        self.layout.addWidget(desc_lbl)
+
+        self.code_box = QTextEdit()
+        self.code_box.setReadOnly(True)
+        self.code_box.setPlainText(self.content)
+        self.code_box.setFont(QFont("Consolas", 10))
+        self.code_box.setStyleSheet("""
+            QTextEdit {
+                background-color: #020617;
+                color: #38bdf8;
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                padding: 10px;
+            }
+        """)
+        self.layout.addWidget(self.code_box)
+
+        analysis_frame = QFrame()
+        analysis_frame.setStyleSheet("""
+            QFrame {
+                background-color: rgba(255, 255, 255, 0.04);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+        """)
+        af_layout = QVBoxLayout(analysis_frame)
+        af_layout.setContentsMargins(15, 12, 15, 12)
+
+        analysis_title = QLabel("🛡️ AI Security Assessment")
+        analysis_title.setFont(QFont(self.font_eng, 10, QFont.Bold))
+        analysis_title.setStyleSheet("color: #f59e0b; background: transparent; border: none;")
+        af_layout.addWidget(analysis_title)
+
+        self.analysis_lbl = QLabel("Jarvis Neural Security: Analyzing payload for system risks...")
+        self.analysis_lbl.setFont(QFont(self.font_eng, 9))
+        self.analysis_lbl.setStyleSheet("color: #cbd5e1; background: transparent; border: none;")
+        self.analysis_lbl.setWordWrap(True)
+        af_layout.addWidget(self.analysis_lbl)
+
+        self.layout.addWidget(analysis_frame)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(0, 10, 0, 0)
+        btn_layout.addStretch()
+
+        self.btn_deny = QPushButton("❌ Deny & Block")
+        self.btn_deny.setFont(QFont(self.font_eng, 10, QFont.Bold))
+        self.btn_deny.setStyleSheet("""
+            QPushButton {
+                background-color: #dc2626; color: white; border-radius: 8px; padding: 8px 20px;
+            }
+            QPushButton:hover { background-color: #b91c1c; }
+        """)
+        self.btn_deny.clicked.connect(self.on_deny)
+        btn_layout.addWidget(self.btn_deny)
+
+        self.btn_approve = QPushButton("✅ Approve & Execute")
+        self.btn_approve.setFont(QFont(self.font_eng, 10, QFont.Bold))
+        self.btn_approve.setStyleSheet("""
+            QPushButton {
+                background-color: #16a34a; color: white; border-radius: 8px; padding: 8px 20px;
+            }
+            QPushButton:hover { background-color: #15803d; }
+        """)
+        self.btn_approve.clicked.connect(self.on_approve)
+        btn_layout.addWidget(self.btn_approve)
+
+        self.layout.addLayout(btn_layout)
+        self.outer_layout.addWidget(self.container)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        screen = QApplication.primaryScreen().availableGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.setGeometry(x, y - 40, self.width(), self.height())
+        self.setWindowOpacity(0.0)
+
+        self.anim_group = QParallelAnimationGroup(self)
+        fade_in = QPropertyAnimation(self, b"windowOpacity")
+        fade_in.setDuration(300)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.InOutQuad)
+
+        slide_down = QPropertyAnimation(self, b"pos")
+        slide_down.setDuration(400)
+        slide_down.setStartValue(QPoint(x, y - 40))
+        slide_down.setEndValue(QPoint(x, y))
+        slide_down.setEasingCurve(QEasingCurve.OutCubic)
+
+        self.anim_group.addAnimation(fade_in)
+        self.anim_group.addAnimation(slide_down)
+        self.anim_group.start()
+
+    def run_llm(self):
+        if not GROQ_API_KEY:
+            self.analysis_ready.emit(_fallback_analysis(self.content))
+            return
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            prompt = (
+                "You are Jarvis's Neural Security module. Analyze the provided python/terminal payload "
+                "and explain it to the user in natural, conversational Hinglish (Roman script) using 2-3 concise bullet points.\n\n"
+                "CRITICAL RULES:\n"
+                "1. Explain exactly what the script is trying to do.\n"
+                "2. Be objective & calm: Do not unnecessarily scare the user if it is a normal/safe command (like ping, tasklist, reading files, or system info). Just explain that it was intercepted because it requires OS-level execution.\n"
+                "3. If it is genuinely destructive or suspicious (deleting files, formatting, unauthorized network downloads), warn the user clearly.\n"
+                "4. Start directly with the bullet points (e.g., '• Yeh script...'). Do not provide any code or English filler text."
+            )
+            response = client.chat.completions.create(
+                model=GROQ_FAST_MODEL,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"Code:\n{self.content}"}
+                ],
+                temperature=0.1,
+                max_tokens=150
+            )
+            self.analysis_ready.emit(f"Fast Brain Assessment:\n{response.choices[0].message.content.strip()}")
+        except Exception:
+            self.analysis_ready.emit(_fallback_analysis(self.content))
+
+    def update_analysis_text(self, text):
+        self.analysis_lbl.setText(text)
+        self.analysis_lbl.setStyleSheet("color: #38bdf8; background: transparent; border: none;")
+
+    def on_approve(self):
+        self.approved = True
+        self.accept()
+
+    def on_deny(self):
+        self.approved = False
+        self.reject()
 
 def get_user_approval(action_type: str, content: str) -> bool:
     logger.warning(f"[JARVIS REQUESTS CRITICAL PERMISSION]")
     logger.warning(f"Action: {action_type}")
 
-    root = tk.Tk()
-    root.title(f"Jarvis Security Intercept — {action_type}")
-    root.geometry("680x580")
-    root.resizable(False, False)
-    root.attributes("-topmost", True)
-    root.configure(bg="#0f172a")
-    root.eval('tk::PlaceWindow . center')
+    if not QApplication.instance():
+        _app = QApplication(sys.argv)
+    
+    dialog = SecurityDialog(action_type, content)
+    dialog.exec_()
 
-    approval_result = [False]
-
-    def on_approve():
-        approval_result[0] = True
-        root.quit()
-        root.destroy()
-
-    def on_deny():
-        approval_result[0] = False
-        root.quit()
-        root.destroy()
-
-    main_frame = tk.Frame(root, bg="#0f172a", padx=25, pady=20)
-    main_frame.pack(fill="both", expand=True)
-
-    header_frame = tk.Frame(main_frame, bg="#0f172a")
-    header_frame.pack(fill="x", pady=(0, 12))
-
-    badge = tk.Label(header_frame, text=" CRITICAL EXECUTION BLOCKED ", font=("Segoe UI", 8, "bold"), bg="#ef4444", fg="white", padx=8, pady=3)
-    badge.pack(anchor="w")
-
-    title_lbl = tk.Label(header_frame, text=action_type, font=("Segoe UI", 13, "bold"), bg="#0f172a", fg="#f8fafc", pady=4)
-    title_lbl.pack(anchor="w")
-
-    desc_lbl = tk.Label(header_frame, text="Review the requested system action before granting execution permission:", font=("Segoe UI", 9), bg="#0f172a", fg="#94a3b8")
-    desc_lbl.pack(anchor="w")
-
-    code_frame = tk.Frame(main_frame, bg="#1e293b", padx=1, pady=1)
-    code_frame.pack(fill="x", pady=(0, 15))
-
-    # FIXED: Changed font size 9.5 to 10
-    code_box = scrolledtext.ScrolledText(code_frame, height=9, font=("Consolas", 10), bg="#020617", fg="#38bdf8", relief="flat", bd=0, insertbackground="white")
-    code_box.pack(fill="both", expand=True, padx=6, pady=6)
-    code_box.insert(tk.END, content)
-    code_box.configure(state='disabled')
-
-    analysis_frame = tk.Frame(main_frame, bg="#1e293b", padx=15, pady=12)
-    analysis_frame.pack(fill="x", pady=(0, 20))
-
-    # FIXED: Changed font size 9.5 to 10
-    analysis_title = tk.Label(analysis_frame, text="🛡️ AI Security Assessment", font=("Segoe UI", 10, "bold"), bg="#1e293b", fg="#f59e0b")
-    analysis_title.pack(anchor="w", pady=(0, 4))
-
-    analysis_lbl = tk.Label(analysis_frame, text="Jarvis Neural Security: Analyzing payload for system risks...", font=("Segoe UI", 9), bg="#1e293b", fg="#cbd5e1", justify="left", wraplength=580, anchor="w")
-    analysis_lbl.pack(anchor="w", fill="x")
-
-    def update_ui(text):
-        root.after(0, lambda: analysis_lbl.config(text=text, fg="#38bdf8"))
-
-    threading.Thread(target=_llm_analyze, args=(content, update_ui), daemon=True).start()
-
-    btn_frame = tk.Frame(main_frame, bg="#0f172a")
-    btn_frame.pack(fill="x", side="bottom")
-
-    # FIXED: Changed font size 9.5 to 10
-    btn_deny = tk.Button(btn_frame, text="❌ Deny & Block", font=("Segoe UI", 10, "bold"), bg="#dc2626", fg="white", activebackground="#b91c1c", activeforeground="white", relief="flat", bd=0, padx=20, pady=8, cursor="hand2", command=on_deny)
-    btn_deny.pack(side="right", padx=(10, 0))
-
-    # FIXED: Changed font size 9.5 to 10
-    btn_approve = tk.Button(btn_frame, text="✅ Approve & Execute", font=("Segoe UI", 10, "bold"), bg="#16a34a", fg="white", activebackground="#15803d", activeforeground="white", relief="flat", bd=0, padx=20, pady=8, cursor="hand2", command=on_approve)
-    btn_approve.pack(side="right")
-
-    root.protocol("WM_DELETE_WINDOW", on_deny)
-    root.mainloop()
-
-    if approval_result[0]:
+    if dialog.approved:
         logger.info("[USER APPROVED] Executing critical payload.")
+        return True
     else:
         logger.warning("[USER DENIED] Payload blocked.")
-    return approval_result[0]
+        return False
 
 def is_terminal_command_safe(command: str) -> bool:
+    cmd_lower = command.lower()
+    
+    suspicious_patterns = [
+        r'\bcurl\b', r'\bwget\b', r'\biwr\b', r'\binvoke-webrequest\b', 
+        r'\bssh\b', r'\bftp\b', r'\btelnet\b', r'\bnc\b', r'\bnetcat\b', 
+        r'\breg\s+add\b', r'\breg\s+delete\b', r'\bregedit\b', 
+        r'\btaskkill\b', r'\bkill\b', r'\bstop-process\b', 
+        r'\bchmod\b', r'\bchown\b', r'\bicacls\b', r'\btakeown\b', 
+        r'\bformat\b', r'\bdiskpart\b', r'\bvssadmin\b', r'\bwmic\b', 
+        r'\bnet\s+user\b', r'\bnet\s+localgroup\b' 
+    ]
+    
+    for pattern in suspicious_patterns:
+        if re.search(pattern, cmd_lower):
+            return False
+            
     return True
 
 def _is_system_destroyer(command: str) -> bool:
@@ -194,15 +343,33 @@ def _is_system_destroyer(command: str) -> bool:
     return False
 
 def is_python_code_safe(code: str) -> bool:
-    dangerous_patterns = [
-        r'subprocess',
-        r'os\.system',
-        r'os\.popen',
-        r'shutil\.rmtree',
+    destructive_patterns = [
+        r'shutil\.rmtree', r'os\.remove', r'os\.unlink', r'os\.rmdir',
+        r'os\.rename', r'os\.replace', r'os\.chmod', r'os\.chown',
+        r'winreg', r'__import__\([\'"]os[\'"]\)\.system',
+        r'eval\(', r'exec\('
     ]
-    for pattern in dangerous_patterns:
+    for pattern in destructive_patterns:
         if re.search(pattern, code):
             return False
+
+    os_exec_patterns = [r'subprocess', r'os\.system', r'os\.popen', r'os\.spawn']
+    uses_os_exec = any(re.search(p, code) for p in os_exec_patterns)
+
+    if uses_os_exec:
+        risky_shell_words = [
+            r'\brm\b', r'\bdel\b', r'\berase\b', r'\bformat\b', r'\bfdisk\b',
+            r'\bmkfs\b', r'\bparted\b', r'\bkill\b', r'\btaskkill\b',
+            r'\bshutdown\b', r'\breboot\b', r'\bpoweroff\b', r'\bcurl\b',
+            r'\bwget\b', r'\biwr\b', r'\bchmod\b', r'\bchown\b', r'\battrib\b',
+            r'\breg\b', r'\bnetsh\b', r'\bdiskpart\b', r'\bvssadmin\b',
+            r'>', r'>>', r'\|' 
+        ]
+        code_lower = code.lower()
+        for risky in risky_shell_words:
+            if re.search(risky, code_lower):
+                return False
+
     return True
 
 class StatefulTerminal:
@@ -288,6 +455,10 @@ def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
         logger.error(f"[SYSTEM PROTECTION] Auto-blocked lethal command: {command}")
         return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Command targets system core and was automatically blocked. No execution took place."
 
+    if not is_terminal_command_safe(command):
+        if not get_user_approval("Terminal Command Execution (CRITICAL)", command):
+            return "Observation: Action Denied by User."
+
     heavy_keywords = ['pip install', 'npm install', 'npm i ', 'git clone', 'yarn add', 'pnpm install', 'apt-get install']
     if any(kw in command.lower() for kw in heavy_keywords) and timeout_seconds <= 30:
         timeout_seconds = 180
@@ -307,7 +478,7 @@ def run_python_code(code_string: str) -> str:
         if not get_user_approval("Python Code Execution (CRITICAL)", code_string):
             return "Observation: Action Denied by User."
     else:
-        logger.info("[AUTO-APPROVED PYTHON SCRIPT]: Executing data processing script...")
+        logger.info("[AUTO-APPROVED PYTHON SCRIPT]: Executing safe data/processing script...")
 
     fd, temp_path = tempfile.mkstemp(suffix=".py")
 
@@ -355,3 +526,4 @@ def run_python_code(code_string: str) -> str:
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
