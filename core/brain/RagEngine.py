@@ -23,7 +23,6 @@ from core.brain.config import (
 )
 from core.logger.logger import logger
 
-
 class RagEngine:
     def __init__(self):
         self.rag_path = Path.home() / "Documents" / "Jarvis" / "RAG"
@@ -35,6 +34,9 @@ class RagEngine:
 
         self.file_hashes = self._load_json(self.file_hashes_file, {})
         self.google_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+        # [NEW]: Thread lock to prevent ChromaDB Access Violations on Windows
+        self.db_lock = threading.Lock()
 
         self.chroma_client = chromadb.PersistentClient(path=str(self.db_path))
         self.rag_collection = self.chroma_client.get_or_create_collection(name="jarvis_vault_docs")
@@ -168,21 +170,37 @@ class RagEngine:
 
                                 mod_time = os.path.getmtime(file_path)
                                 mod_date = datetime.fromtimestamp(mod_time).isoformat()
+                                file_size = os.path.getsize(file_path)
 
                                 chunks = self._recursive_chunk_text(content, ext)
+                                
+                                # [NEW] Batch data to avoid repeated slow upsert loops
+                                batch_ids = []
+                                batch_embeddings = []
+                                batch_metadatas = []
+                                batch_documents = []
+
                                 for i, chunk in enumerate(chunks):
                                     embedding = self.get_embedding(chunk, "search_document")
                                     if embedding:
+                                        batch_ids.append(f"{file_name}_chunk_{i}")
+                                        batch_embeddings.append(embedding)
+                                        batch_metadatas.append({
+                                            "file_name": file_name,
+                                            "file_path": str(file_path),
+                                            "modified": mod_date,
+                                            "file_size": file_size
+                                        })
+                                        batch_documents.append(chunk)
+
+                                if batch_ids:
+                                    # [NEW] Lock the database thread during upsert to prevent Access Violation
+                                    with self.db_lock:
                                         self.rag_collection.upsert(
-                                            ids=[f"{file_name}_chunk_{i}"],
-                                            embeddings=[embedding],
-                                            metadatas=[{
-                                                "file_name": file_name,
-                                                "file_path": str(file_path),
-                                                "modified": mod_date,
-                                                "file_size": os.path.getsize(file_path)
-                                            }],
-                                            documents=[chunk]
+                                            ids=batch_ids,
+                                            embeddings=batch_embeddings,
+                                            metadatas=batch_metadatas,
+                                            documents=batch_documents
                                         )
                                 updated = True
                         except Exception as e:
@@ -196,7 +214,10 @@ class RagEngine:
 
     def _rebuild_bm25_cache(self):
         try:
-            all_data = self.rag_collection.get()
+            # Apply Lock
+            with self.db_lock:
+                all_data = self.rag_collection.get()
+                
             if not all_data['documents']:
                 self._all_documents_cache = None
                 self._bm25_index = None
@@ -238,11 +259,13 @@ class RagEngine:
             if not query_embedding:
                 return self._fallback_keyword_search(query, top_k)
 
-            vector_results = self.rag_collection.query(
-                query_embeddings=[query_embedding],
-                n_results=top_k * 2,
-                include=["documents", "metadatas", "distances"]
-            )
+            # Apply Lock
+            with self.db_lock:
+                vector_results = self.rag_collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=top_k * 2,
+                    include=["documents", "metadatas", "distances"]
+                )
 
             vector_items = []
             if vector_results['documents'] and vector_results['documents'][0]:
@@ -291,7 +314,10 @@ class RagEngine:
 
             final_results = []
             for fname, data in file_map.items():
-                all_chunks = self.rag_collection.get(where={"file_name": fname})
+                # Apply Lock
+                with self.db_lock:
+                    all_chunks = self.rag_collection.get(where={"file_name": fname})
+                    
                 total_chunks = len(all_chunks['documents']) if all_chunks['documents'] else 0
                 content = "\n\n".join(data["chunks"])
                 file_size_bytes = data['file_size'] if data['file_size'] else 0
@@ -335,7 +361,10 @@ class RagEngine:
 
     def _fallback_keyword_search(self, query, top_k):
         try:
-            results = self.rag_collection.get()
+            # Apply Lock
+            with self.db_lock:
+                results = self.rag_collection.get()
+                
             if not results['documents']:
                 return []
             file_map = {}
@@ -379,6 +408,5 @@ class RagEngine:
         except Exception as e:
             logger.error(f"Fallback search error: {e}")
             return []
-
 
 rag_engine = RagEngine()

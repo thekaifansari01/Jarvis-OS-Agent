@@ -1,47 +1,71 @@
-appopener==1.7
-arxiv==4.0.1
-chromadb==1.5.9
-comtypes==1.4.16
-cryptg==2024.1.0
-deepgram-sdk==3.7.0
-edge-tts==7.2.8
-flask==3.1.0
-google-api-python-client==2.197.0
-google-cloud-pubsub==2.23.1
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# ===== DEEP LEARNING & AI =====
+torch
+torchvision
+torchaudio
+onnxruntime
+transformers==4.38.2
+sentence-transformers==5.7.0
+tiktoken==0.13.0
+
+# ===== VECTOR DATABASE & SEARCH =====
+chromadb==0.4.24
+rank-bm25==0.2.2
+
+# ===== AI PROVIDERS =====
 google-genai==1.0.0
 groq==1.6.0
-keyboard==0.13.5
-markdown2==2.5.5
-networkx==3.6.1
-numpy==2.2.4
-pillow==12.0.0
-psutil==7.2.2
-pyautogui==0.9.54
-PyAudio==0.2.14
-pycaw==20251023
-pygame==2.6.1
-Pygments==2.20.0
-pyperclip==1.11.0
-PyQt5==5.15.11
-pyqt5-sip==12.18.0
-pyTelegramBotAPI==4.36.0
-python-dotenv==1.2.2
-pywhatkit==5.4
-pyzmq==27.1.0
-rank-bm25==0.2.2
-requests==2.34.2
-rich==15.0.0
-scipy==1.15.2
-screen-brightness-control==0.27.2
-sentence-transformers==5.7.0
-setuptools==65.5.0
-tavily-python==0.7.26
-telethon==1.44.0
-tiktoken==0.13.0
 together==2.30.0
+tavily-python==0.7.26
+
+# ===== SPEECH & AUDIO =====
+deepgram-sdk==3.7.0
+edge-tts==7.2.8
+PyAudio==0.2.14
 vosk==0.3.45
-wikipedia==1.4.0
 youtube-transcript-api==1.2.4
 
-# Editable install of your project (so that 'jarvis' command works)
+# ===== SYSTEM & AUTOMATION =====
+appopener==1.7
+comtypes==1.4.16
+keyboard==0.13.5
+psutil==7.2.2
+pyautogui==0.9.54
+pyperclip==1.11.0
+screen-brightness-control==0.27.2
+pycaw==20251023
+
+# ===== WEB & APIs =====
+flask==3.1.0
+requests==2.34.2
+google-api-python-client==2.197.0
+google-cloud-pubsub==2.23.1
+wikipedia==1.4.0
+arxiv==4.0.1
+
+# ===== TELEGRAM & MESSAGING =====
+cryptg==2024.1.0
+pyTelegramBotAPI==4.36.0
+telethon==1.44.0
+pywhatkit==5.4
+
+# ===== GUI & MEDIA =====
+PyQt5==5.15.11
+pyqt5-sip==12.18.0
+pillow==12.0.0
+pygame==2.6.1
+Pygments==2.20.0
+markdown2==2.5.5
+
+# ===== UTILITIES =====
+numpy<2.0.0
+scipy==1.15.2
+networkx==3.6.1
+python-dotenv==1.2.2
+pyzmq==27.1.0
+rich==15.0.0
+setuptools==65.5.0
+
+# ===== CURRENT PROJECT =====
 -e .

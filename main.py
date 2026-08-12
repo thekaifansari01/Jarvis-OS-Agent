@@ -142,15 +142,12 @@ def main() -> None:
     start_mobile_connection()
     start_watchdog()
 
-    def preload_semantic_model():
-        try:
-            logger.info("Preloading Lifetime Memory Engine & Semantic Model in background...")
-            from core.brain.Memory.LifetimeMemory import ltm_engine
-            logger.info("Lifetime Memory Engine & Semantic Model loaded successfully!")
-        except Exception as e:
-            logger.error(f"Failed to preload LTM Engine: {e}")
-            
-    threading.Thread(target=preload_semantic_model, daemon=True).start()
+    try:
+        logger.info("🧠 Preloading Lifetime Memory Engine & Semantic Model safely...")
+        from core.brain.Memory.LifetimeMemory import ltm_engine
+        logger.info("✅ Lifetime Memory Engine & Semantic Model loaded successfully!")
+    except Exception as e:
+        logger.error(f"❌ Failed to preload LTM Engine: {e}")
 
     def start_rag_background():
         try:
