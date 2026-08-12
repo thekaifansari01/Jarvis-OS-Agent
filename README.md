@@ -1,8 +1,8 @@
-# 🧠 J.A.R.V.I.S. – The Autonomous AI Agent for Windows
+# 🧠 J.A.R.V.I.S. OS Agent – The Ultimate Open-Source Autonomous AI Assistant for Windows
 
-> *"We call it an AI Operating System because it controls your PC, Phone, Files, and Memory — not just your code."*
+> **Welcome to the Jarvis-OS-Agent by @thekaifansari01.** > *"We call it an AI Operating System because it autonomously controls your PC, Android Phone, Local Files, and Lifelong Memory — not just your code."*
 
-> **Zero line‑drift coding · Lifelong memory · Voice‑first · Proactive HITL · Mobile control · Telegram Remote · Hybrid RAG · Weighted Graph Decay**
+> **Open-Source AI Agent · Zero Line‑Drift Coding · Lifelong Episodic Memory · Voice‑First Multimodal · Proactive HITL · Android ADB Control · Telegram Remote Execution · Hybrid RAG**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -25,61 +25,62 @@
 ---
 
 ## 📌 Table of Contents
-- [🎯 The Hook – What Makes JARVIS Special](#-the-hook--what-makes-jarvis-special)
-- [🔥 Problem vs Solution – The "Claude Code Killer"](#-problem-vs-solution--the-claude-code-killer)
-- [🏗️ Technical Architecture (Trust Through Transparency)](#️-technical-architecture-trust-through-transparency)
-- [⚡ FastBrain vs 🧠 AgenticBrain – Dual‑Engine Magic](#-fastbrain-vs--agenticbrain--dualengine-magic)
-- [🧠 Memory & Long‑Term Recall](#-memory--longterm-recall)
-- [📱 Mobile Phone Control (Android)](#-mobile-phone-control-android)
-- [🛠️ Integrated Tool Ecosystem](#-integrated-tool-ecosystem)
-- [🚀 Getting Started (Zero Friction)](#-getting-started-zero-friction)
-- [📋 Real‑World Use Cases (Scenarios)](#-realworld-use-cases-scenarios)
-- [⚙️ CLI & Configuration](#️-cli--configuration)
-- [🔧 Troubleshooting](#-troubleshooting)
-- [🤝 Contributing & Community](#-contributing--community)
+- [🎯 Core Features of J.A.R.V.I.S. AI Agent](#-core-features-of-jarvis-ai-agent)
+- [🔥 J.A.R.V.I.S. vs. Claude Code (The Superior Alternative)](#-jarvis-vs-claude-code-the-superior-alternative)
+- [🏗️ Technical Architecture of Jarvis OS](#️-technical-architecture-of-jarvis-os)
+- [⚡ Dual‑Engine AI: FastBrain vs 🧠 AgenticBrain](#-dualengine-ai-fastbrain-vs--agenticbrain)
+- [🧠 Lifelong Episodic Memory & Hybrid RAG System](#-lifelong-episodic-memory--hybrid-rag-system)
+- [📱 Android Mobile Control via ADB](#-android-mobile-control-via-adb)
+- [🛠️ Integrated AI Tool Ecosystem](#️-integrated-ai-tool-ecosystem)
+- [🚀 How to Install Jarvis OS Agent (Quick Setup)](#-how-to-install-jarvis-os-agent-quick-setup)
+- [📋 Real‑World Autonomous AI Use Cases](#-realworld-autonomous-ai-use-cases)
+- [⚙️ Command Line Interface (CLI) & Agent Configuration](#️-command-line-interface-cli--agent-configuration)
+- [🔧 Troubleshooting & FAQ](#-troubleshooting--faq)
+- [🤝 Contributing to the Open Source Agent](#-contributing-to-the-open-source-agent)
 - [📄 License](#-license)
 
 ---
 
-## 🎯 The Hook – What Makes JARVIS Special
+## 🎯 Core Features of J.A.R.V.I.S. AI Agent
 
-**JARVIS is not a ChatGPT wrapper.** It is a **desktop‑native AI Operating System** and **Autonomous Agent** that bridges low‑latency conversational AI with complex, multi‑step engineering execution.
+**Jarvis OS Agent** is a highly advanced **desktop-native AI Operating System** built in Python. It bridges sub-second conversational AI with deep, multi-step autonomous engineering execution.
 
-| Icon | Feature | Why It Matters |
+| Icon | Key AI Feature | Technical Advantage & SEO Impact |
 |:---:|:---|:---|
-| 💻 | **Zero Line‑Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers — eliminates the classic "line‑drift bug" that plagues Claude Code and other AI agents. Automatically catches syntax errors via AST linter and self‑corrects without human intervention. |
-| 📨 | **Proactive Email + WhatsApp + Telegram + Calendar Automation** | Background listeners for Gmail, WhatsApp, Telegram, and Calendar detect important messages, emails, and reschedules in real time. The agent never modifies critical data without explicit user consent — asks before acting. |
-| 🌍 | **Telegram Remote Control** | Control your PC from anywhere in the world via a dedicated Telegram bot. Commands trigger silent background execution without disrupting your active desktop workflow. Securely authenticated via CLI. |
-| 📱 | **Mobile Phone Control (Android)** | Control your Android phone remotely via ADB over Tailscale — lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, take screenshots, adjust volume, and more. Automatically connects on startup and reconnects if the connection drops. |
-| 🔄 | **Multi‑LLM Auto‑Failover** | Seamlessly switches between Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint (including local models like Ollama, LM Studio, vLLM) if the primary provider hits rate limits. Zero downtime — no interruption to your workflow. |
-| 🧠 | **Hybrid Semantic Routing** | Cloud Regolo router + local rule‑based fallback — intelligently routes commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec) for simple tasks, or deep‑reasoning **AgenticBrain** for complex multi‑step engineering, coding, and research tasks. |
-| 📚 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-based semantic knowledge graph backed by SentenceTransformers (`all-MiniLM-L6-v2`) with background preloading and batched array queries. Remembers conversations from months ago. Also indexes local documents (`Documents/Jarvis/RAG/`) with **smart chunk overlap (1500 characters, 200 overlap)**, **Hybrid search (Vector + BM25 + RRF)**, and **Recency boost** — your personal knowledge base that understands both semantics and exact keywords. |
-| ⚙️ | **Enterprise‑Grade Resilience** | Dedicated **ServiceWatchdog** monitors background processes (STT Popup, Baileys, Mobile ADB, Telegram Remote) and auto‑restarts them if they crash — but intelligently skips monitoring for services that are not logged in, logging only once per minute to avoid spam. Multi‑threaded executor ensures parallel task execution without blocking the main loop. |
-| 🎨 | **Reactive UI Ecosystem** | ZMQ‑powered floating Agent Panel with real‑time thought/action/observation streaming, live markdown typing popup with async image previews (YouTube thumbnails, link previews, local images), and native STT/Input popups. Glass‑morphism, dynamic glow, auto‑resize. |
-| 🗣️ | **Voice‑First Multimodal** | Deepgram speech‑to‑text (Nova‑2) with **Vosk KWS (Keyword Spotting)** wake word detection for sub‑second noise‑immune triggering on older hardware, Edge TTS voice output, multimodal vision (OCR, object detection, image analysis via Gemini/Regolo), and image generation (Flux/AI Horde) — all integrated. |
-| 🤖 | **Autonomous Software Engineering** | Can autonomously explore codebases (`repo_map`), read files (`view`), replace exact code blocks (`replace_block` — zero line‑drift), create multiple files (`create_many`), execute Python scripts (`run_python_code`), and run terminal commands (`execute_terminal_command`). Real‑world bug fixing (10 tests, 3 bugs, 0.17 seconds) — proven. |
-| 🛡️ | **Human‑in‑the‑Loop (HITL) Safety** | Never executes irreversible actions (sending emails, deleting files, updating calendars) without explicit user consent. Pending confirmations auto‑expire after 60 seconds to prevent stale memory injections. |
-| 🛡️ | **Intelligent Command Security** | Uses `shlex` tokenization and `os.path.realpath` canonicalization to auto‑block only system‑destroying commands (`rm -rf /`, `format C:`, `dd` to `/dev/sda`, `diskpart`). Safe commands (`pip`, `git`, `mkdir`, `rm file.txt`) run without prompts — zero friction, enterprise safety. |
-| 🌐 | **Any Provider, Anywhere** | Works with Regolo, Gemini, OpenRouter, or any custom OpenAI‑compatible endpoint — including local models (Ollama, LM Studio, vLLM). 100% local inference possible — no internet required with local LLMs. |
-| 🔐 | **Conditional Service Startup** | WhatsApp, Telegram, Email, Calendar, and **Mobile ADB** services start **only if credentials exist** — no unwanted browser/QR popups on startup. Proactive listeners and ServiceWatchdog automatically skip unlogged services, keeping the system clean and focused. Manual login commands let you authenticate on demand. |
+| 💻 | **Autonomous Software Engineering** | Can autonomously explore codebases (`repo_map`), read files (`view`), replace exact code blocks (`replace_block`), execute Python scripts (`run_python_code`), and run terminal commands. Proven to autonomously fix bugs in milliseconds. |
+| 🛡️ | **Zero Line‑Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers. This eliminates the "line‑drift bug" plaguing Claude Code. Auto-catches syntax errors via AST linter and self‑corrects without human intervention. |
+| 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-based semantic knowledge graph backed by SentenceTransformers (`all-MiniLM-L6-v2`). Indexes local documents with **smart chunk overlap**, **Hybrid search (Vector + BM25 + RRF)**, and **Recency boost**. Remembers history from months ago. |
+| 🔄 | **Hybrid Semantic AI Routing** | Cloud Regolo router + local rule‑based fallback. Intelligently routes simple commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec), and complex tasks to deep‑reasoning **AgenticBrain**. |
+| 📱 | **Android ADB Mobile Control** | Remotely control your Android phone via ADB over Tailscale. Execute lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, and take screenshots directly from your PC. |
+| 🌍 | **Telegram Remote PC Control** | Control your Windows PC from anywhere globally via a secure Telegram bot. Commands trigger silent background execution without disrupting your active desktop workflow. |
+| 📨 | **Proactive Automation (Email/WhatsApp/Telegram)** | Background listeners for Gmail, WhatsApp, Telegram, and Google Calendar. Jarvis detects updates in real-time and utilizes Proactive HITL (Human-In-The-Loop) to ask for consent before modifying critical data. |
+| 🗣️ | **Voice‑First Multimodal AI** | Integrates Deepgram Nova-2 STT with **Vosk KWS (Keyword Spotting)** for sub-second noise-immune triggering. Features Edge TTS voice output, multimodal vision (OCR/Image Analysis), and AI Image Generation (Flux/AI Horde). |
+| 🔌 | **Multi‑LLM Auto‑Failover (Cloud & Local)** | Seamlessly switches between Regolo, Gemini, OpenRouter, or **Local LLMs (Ollama, LM Studio, vLLM)**. Zero downtime workflow execution even if the primary provider hits API rate limits. |
+| 🎨 | **Reactive Dynamic UI Ecosystem** | Features a ZMQ‑powered floating PyQt5 Agent Panel with real‑time thought/action/observation streaming. Includes a live markdown typing popup with async image previews, glass‑morphism, and auto-resize dynamic glow. |
+| 🔒 | **Enterprise‑Grade Command Security** | Utilizes `shlex` tokenization and `os.path.realpath` canonicalization to auto‑block system‑destroying terminal commands (e.g., `rm -rf /`, `format C:`). Safe commands (`pip`, `git`) execute frictionlessly. |
+| ⚙️ | **ServiceWatchdog Resilience** | A dedicated background watchdog monitors processes (STT, Baileys, ADB, Telegram). It intelligently auto-restarts crashed services while skipping unauthenticated modules to prevent spam. |
 
 ---
 
-## 🔥 Problem vs Solution – The "Claude Code Killer"
+## 🔥 J.A.R.V.I.S. vs. Claude Code (The Superior Alternative)
 
-| **Existing Tools / Pain Points** | **JARVIS Magic** |
+For developers seeking an **open-source AI coding agent** and **desktop assistant**, the Jarvis OS Agent directly solves the critical pain points of paid enterprise solutions.
+
+| **Traditional AI Agents (e.g., Claude Code)** | **J.A.R.V.I.S. OS Agent Advantage** |
 | :--- | :--- |
-| **Claude Code is expensive** & requires constant subscriptions. | **Free & Open Source.** Run it with local models (Ollama/LM Studio) or cloud APIs. |
-| **Line‑drift bugs** ruin code edits. LLMs often "miss" the exact line. | **`replace_block`** – Diff‑based exact matching. **Zero line‑drift.** Finds the exact code block, irrespective of line numbers. |
-| **Session‑based memory** – Forgets what you said within 2 minutes. | **Lifelong Memory (LTM)** – Episodic memory graph powered by local vector embeddings, temporal decay, and subgraph extraction. Remembers your coffee preference and past projects effortlessly. |
-| **No tooling for real systems.** Only generates text, does not execute code. | **Native Tool Execution** – Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and **ADB (Android control)**. |
-| **No remote execution capabilities.** | **Telegram Remote Bot** – Issue commands to your PC remotely via Telegram; Jarvis executes them silently in the background. |
-| **Doesn't read your emails/chats.** | **Proactive HITL (Human-in-the-Loop)** – Jarvis reads your emails, WhatsApp & Telegram in the background, *asks permission*, and takes action (e.g., rescheduling calendar events). |
-| **RAG is either semantic or keyword, never both.** | **Hybrid RAG** – BM25 keyword search + Vector semantic search merged with **Reciprocal Rank Fusion (RRF)**. Plus **chunk overlap** and **recency boost** for maximum accuracy. |
+| **High Cost & Subscription Walls:** Expensive API usage and monthly recurring fees. | **100% Free & Open Source:** Run entirely on local models (Ollama/LM Studio) or free-tier cloud APIs. |
+| **Line‑Drift Bugs:** Edits often fail because LLMs miscalculate line numbers during code modification. | **Exact Diff-Matching (`replace_block`):** Guaranteed zero line-drift. Finds the exact code block irrespective of line numbers. |
+| **Amnesia (Session-Only Memory):** Forgets context within 2 minutes of a new chat. | **Lifelong Episodic Memory (LTM):** Powered by local vector embeddings, temporal decay, and subgraph extraction. |
+| **Text-Only Constraints:** Generates code but lacks real-world native execution capabilities. | **Native Tool Execution:** Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and Android ADB. |
+| **Isolated Environment:** Cannot be triggered remotely. | **Telegram Remote Bot:** Issue commands to your PC remotely via Telegram; executed silently in the background. |
+| **Reactive Only:** Waits for you to prompt it. | **Proactive HITL:** Background listeners read emails/chats and proactively suggest calendar updates or replies. |
+| **Basic RAG Integration:** Uses either semantic OR keyword search, yielding poor results. | **Hybrid RAG System:** BM25 keyword search + Vector semantic search merged via Reciprocal Rank Fusion (RRF). |
 
 ---
 
-## 🏗️ Technical Architecture (Trust Through Transparency)
+## 🏗️ Technical Architecture of Jarvis OS
+
+Trust through transparency. Here is the complete architecture flow of the Python Autonomous Agent:
 
 ```mermaid
 flowchart TD
@@ -162,284 +163,262 @@ flowchart TD
 
 ---
 
-## ⚡ FastBrain vs 🧠 AgenticBrain – Dual‑Engine Magic
+## ⚡ Dual‑Engine AI: FastBrain vs 🧠 AgenticBrain
 
-| Feature / Capability | ⚡ FastBrain (Groq LPU) | 🧠 AgenticBrain (Regolo/Gemini/OpenRouter/Custom) |
+Jarvis utilizes a dual-engine architecture to optimize API costs, speed, and reasoning depth.
+
+| Feature / Capability | ⚡ FastBrain (Groq LPU) | 🧠 AgenticBrain (Regolo/Gemini/OpenRouter/Local) |
 | --- | --- | --- |
-| **Core Philosophy** | Stateless, sub‑second latency, direct OS toggles. | Stateful, deep reasoning, tool‑calling master. |
-| **Routing Trigger** | Short commands, casual chat, simple toggles. | 25+ words, file ops, code gen, communication. |
-| **System Controls** | Open/Close Apps, URLs, YouTube direct play. | Full system automation via Python scripts & Terminal. |
-| **Hardware Toggles** | Volume (Set/Inc/Dec), Brightness, Mute, Screenshot, Lock/Sleep. | *(Same as FastBrain, but part of complex workflows)* |
-| **File Operations** | ❌ Cannot modify files. | ✅ Full CRUD, `repo_map`, `replace_block` (Zero Drift), `create_many`. |
-| **Communication** | ❌ No email/WhatsApp/Telegram. | ✅ Send Gmails, WhatsApp & Telegram messages, Fetch chat history. |
-| **Code Execution** | ❌ No Python/Terminal execution. | ✅ `run_python_code` (preferred), `execute_terminal_command`. |
-| **Memory Recall** | ❌ No LTM; only recent history. | ✅ `memory_actions` (15‑day logs + Lifetime vector-embedding graph recall with subgraph extraction & recency decay). |
-| **Multimodal** | ❌ No vision. | ✅ `vision` (Image/Video analysis, OCR, object detection). |
-| **Research** | ❌ Simple web search only (`quick_web_search`). | ✅ `deep_research` (420s multi‑source synthesis), ArXiv, YouTube transcripts. |
-| **Mobile Control** | ❌ No. | ✅ ADB over Tailscale – lock/unlock, apps, calls, SMS, screenshots, WiFi/Data, etc. |
-| **Proactive HITL** | ❌ No. | ✅ Strict Partner Confirmation Mode. Asks consent before permanent changes. |
+| **Core Philosophy** | Stateless, sub‑second latency (<1.5s). | Stateful, deep reasoning, multi-step tool execution. |
+| **Routing Trigger** | Short commands, casual chat, simple OS toggles. | Complex prompts, software engineering, long-term memory. |
+| **System Controls** | Open/Close Apps, URLs, YouTube direct play. | Full system automation via Python scripts & CMD/PowerShell. |
+| **Hardware Toggles** | Volume, Brightness, Mute, Screenshot, Lock. | *(Included inside complex workflow chains)* |
+| **File Operations** | ❌ Cannot modify files. | ✅ Full CRUD, `repo_map`, `replace_block`, `create_many`. |
+| **Communication** | ❌ No email/WhatsApp/Telegram execution. | ✅ Send Gmails, WhatsApp & Telegram messages, fetch chat history. |
+| **Code Execution** | ❌ No Python/Terminal execution. | ✅ `run_python_code` (preferred) and `execute_terminal_command`. |
+| **Memory Recall** | ❌ No LTM; only short-term context. | ✅ `memory_actions` (Lifetime vector graph recall + temporal decay). |
+| **Multimodal Vision** | ❌ No vision processing. | ✅ `vision` (Image/Video analysis, OCR, Object detection). |
+| **Web Research** | ❌ Basic real-time search (`quick_web_search`). | ✅ `deep_research` (420s synthesis), ArXiv, YouTube scraping. |
+| **Mobile Control** | ❌ No Android connection. | ✅ Full ADB mobile control over Tailscale. |
+| **Proactive HITL** | ❌ No background scanning. | ✅ Strict Partner Confirmation Mode before permanent modifications. |
 
 ---
 
-## 🧠 Memory & Long‑Term Recall
+## 🧠 Lifelong Episodic Memory & Hybrid RAG System
 
-JARVIS employs a sophisticated **four‑tier** memory system that combines short‑term context, weighted lifelong vector graph, hybrid RAG, and user profiling:
+JARVIS implements a **four‑tier** artificial memory system, setting a new standard for open-source AI desktop agents:
 
-1. **📜 Rolling JSONL History (Short‑Term)** – 15‑day rolling context, auto‑pruned and archived into the graph.
-2. **🗄️ Weighted Lifetime Episodic Graph (Long‑Term)** –
-* Built on NetworkX with **weighted edges** (frequency of mention) and **temporal decay** (relations older than 6 months lose half their weight).
-* **Semantic Vector Embeddings (SentenceTransformers)** – Uses `all-MiniLM-L6-v2` embeddings for zero-shot semantic matching without manual alias files. Automatically maps conceptual synonyms (e.g., "React" matches "ReactJS") via vector similarity.
-* **Batched Array Queries & Background Preloading** – Preloads the embedding engine in a background thread at startup and processes multi-entity queries in a single agent step with zero latency.
-* **Subgraph Retrieval** – Extracts complete 2-hop subgraphs around matched nodes to ensure no connected facts or secondary relations are missed.
-
-
-3. **📚 Hybrid RAG (Workspace Documents)** –
-* **Smart chunking** with overlap (1500 characters, 200 overlap) to preserve context across chunk boundaries.
-* **Hybrid retrieval** – combines **BM25 keyword search** and **Gemini embedding vector search**, merged via **Reciprocal Rank Fusion (RRF)** for maximum accuracy.
-* **Recency boost** – files modified recently get a 20% score lift, making the knowledge base self‑updating.
+1. **📜 Rolling JSONL History (Short‑Term):** 15‑day rolling conversation context, auto‑pruned and archived.
+2. **🗄️ Weighted Lifetime Episodic Graph (Long‑Term):**
+* Built on `NetworkX` with **weighted edges** and **temporal decay** (relations older than 6 months lose half their weight).
+* **Semantic Vector Embeddings:** Uses `SentenceTransformers` (`all-MiniLM-L6-v2`) for zero-shot semantic matching. Maps conceptual synonyms (e.g., "React" matches "ReactJS") autonomously.
+* **Batched Array Queries & Preloading:** Preloads the embedding engine at startup to process multi-entity graph queries in a single agent step with zero latency.
+* **Subgraph Retrieval:** Extracts complete 2-hop subgraphs around matched nodes to retain secondary contextual facts.
 
 
-4. **👤 User Profile & Mood** – Automatically tracks mood; bio/preferences are tracked through knowledge-graph triplets extracted from conversations.
+3. **📚 Hybrid RAG (Workspace Documents):**
+* **Smart Chunking:** Text is chunked with 1500 character limits and a 200-character overlap to preserve cross-boundary context.
+* **Hybrid Retrieval:** Merges **BM25 keyword search** and **Gemini embedding vector search** via **Reciprocal Rank Fusion (RRF)**.
+* **Recency Boost:** Recently modified files receive a 20% score lift, creating a self-updating knowledge base.
+
+
+4. **👤 User Profile & Mood Tracker:** Automatically extracts and tracks user bio, preferences, and mood states into knowledge-graph triplets.
 
 ---
 
-## 📱 Mobile Phone Control (Android)
+## 📱 Android Mobile Control via ADB
 
-JARVIS can control your Android phone via ADB over Tailscale:
+Control your Android smartphone completely hands-free from your Windows PC using the Jarvis Agent via ADB and Tailscale:
 
-| Category | Example Commands |
+| Capability Category | Example Agentic Commands |
 | --- | --- |
-| **System Actions** | Lock/Unlock, Home, Back, Recent Apps |
-| **Volume & Media** | Volume Up/Down, Mute, Flashlight Toggle |
-| **App Launcher** | WhatsApp, Chrome, YouTube, Spotify, Camera, Settings |
-| **Calls & SMS** | Make a call (direct), Open dialer, Send SMS |
-| **Screenshots** | Take screenshot and save to PC |
-| **WiFi & Data** | Enable/Disable WiFi, Enable/Disable Mobile Data |
-| **Notifications** | Expand notification panel, Quick Settings |
-| **Battery** | Check battery level, charging status |
-| **File Transfer** | Pull files from phone to PC, Push files from PC to phone |
+| **System Actions** | Lock/Unlock, Home Button, Back Button, Recent Apps |
+| **Volume & Media** | Volume Up/Down, Mute Device, Flashlight Toggle |
+| **App Launching** | Open WhatsApp, Chrome, YouTube, Spotify, Camera, Settings |
+| **Telecom (Calls & SMS)** | Make direct phone calls, Open dialer, Read/Send SMS messages |
+| **Screenshots** | Capture Android screenshot and save/analyze on Windows PC |
+| **Network Toggles** | Enable/Disable WiFi, Toggle Mobile Data |
+| **Notifications** | Expand notification panel, Access Quick Settings |
+| **Battery & Sensors** | Check exact battery percentage and charging state |
+| **File Transfer** | Pull files from Android to PC, Push files to Android |
 
-**Setup:** Enable USB debugging, run `adb tcpip 5555`, connect via Tailscale IP, and set `ADB_PHONE_IP` in `.env`.
+*Setup Note:* Enable USB debugging on your Android, run `adb tcpip 5555`, connect your devices via Tailscale, and assign `ADB_PHONE_IP` in the `.env` file.
 
 ---
 
-## 🛠️ Integrated Tool Ecosystem
+## 🛠️ Integrated AI Tool Ecosystem
 
-| Category | Supported Capabilities |
+| AI Category | Integrated Capabilities |
 | --- | --- |
-| 💻 **Software Engineering** | `repo_map`, `replace_block` (zero drift), AST linting, `create_many` |
-| 📨 **Communication** | Gmail Pub/Sub (send/read), WhatsApp & Telegram (send/fetch chats), Calendar OAuth |
-| 📂 **Workspace & RAG** | Single‑file CRUD, recursive scanning, hybrid RAG (BM25+Vector+RRF) with overlap & recency |
-| 📱 **Mobile Control** | ADB – lock/unlock, apps, calls, SMS, screenshots, WiFi/Data, file transfer |
-| 🌍 **Remote Control** | Telegram Bot integration to execute PC commands remotely and silently. |
-| 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript summarization, deep research reports |
-| ⚙️ **System Automation** | Launch/close apps, volume/brightness, screenshots, clipboard CRUD |
-| 👁️ **Multimodal Vision** | Image/Video analysis, object detection, OCR extraction |
-| 🎨 **Image Generation** | Text‑to‑image (Regolo/FLUX), image‑to‑image editing (AI Horde) |
+| 💻 **Software Engineering** | `repo_map`, `replace_block` (zero line-drift), AST linting, `create_many` |
+| 📨 **Communication Agents** | Gmail Pub/Sub (send/read), WhatsApp & Telegram API, Google Calendar OAuth |
+| 📂 **Workspace & RAG** | Single‑file CRUD, recursive repo scanning, Hybrid RAG (BM25+Vector+RRF) |
+| 📱 **Mobile Control** | ADB Suite (lock, apps, calls, SMS, screenshot, WiFi/Data, file push/pull) |
+| 🌍 **Remote Control** | Telegram Bot API for triggering silent PC commands externally |
+| 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript extraction, Deep Research |
+| ⚙️ **System Automation** | App launch/kill, volume/brightness control, clipboard CRUD operations |
+| 👁️ **Multimodal Vision** | Screen/Video analysis, Object detection, OCR data extraction |
+| 🎨 **Image Generation** | Text‑to‑image generation (Regolo/FLUX), Image‑to‑image editing (AI Horde) |
 
 ---
 
-## 🚀 Getting Started (Zero Friction)
+## 🚀 How to Install Jarvis OS Agent (Quick Setup)
 
 ### 📋 Prerequisites
 
-* **Windows 10/11** (Primary)
-* **Python 3.10+**
-* **Node.js 18+**
+* **Windows 10/11** (Primary supported OS)
+* **Python 3.10+** (Required for AI models and dependencies)
+* **Node.js 18+** (Required for the WhatsApp Baileys bridge)
 
 ### 🛠️ Single Block Installation
 
-Copy and paste this entire block into your terminal (PowerShell recommended):
+Copy and paste this exact command block into your PowerShell terminal:
 
 ```powershell
-# 1. Clone and Enter
+# 1. Clone the Jarvis Repository
 git clone [https://github.com/thekaifansari01/Jarvis-OS-Agent.git](https://github.com/thekaifansari01/Jarvis-OS-Agent.git)
 cd Jarvis-OS-Agent
 
-# 2. Python Virtual Env & Dependencies
+# 2. Setup Python Virtual Environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
-# 3. Node.js Dependencies (for WhatsApp Bridge)
+# 3. Setup Node.js Dependencies (WhatsApp Integration)
 cd tools/Messanger/whatsapp/BaileysServer
 npm install
 cd ../../../..
 
-# 4. Global CLI Setup (Run this once from the root project directory)
+# 4. Global CLI Registry Setup (Run ONCE from the root directory)
 python SetupRegistry.py
 
 ```
 
-> ⚠️ **Ensure you are in the root project directory** (`Jarvis-OS-Agent/`) before running `python SetupRegistry.py`.
+> ⚠️ **CRITICAL:** Ensure your terminal is in the root `Jarvis-OS-Agent/` directory before executing `python SetupRegistry.py`.
 
-### 🌐 Global Command Magic
+### 🌐 Global Command Initialization
 
-After running `SetupRegistry.py`, open a **new terminal** and simply type:
+Once setup is complete, open a **new terminal window** and launch your agent globally by typing:
 
 ```bash
 jarvis
 
 ```
 
-No need to activate the virtual environment every time – the `jarvis` command is available system‑wide.
-
-### 📝 Configure Environment
-
-Copy `.env.example` to `.env` and fill in your API keys. For local models (Ollama), set:
-
-```ini
-CUSTOM_API_KEY=EMPTY_KEY
-CUSTOM_BASE_URL=http://localhost:11434/v1
-CUSTOM_MODEL=llama3.2:3b
-
-```
+*You do not need to activate the virtual environment manually again; the `jarvis` command is now system‑wide.*
 
 ---
 
-## 📋 Real‑World Use Cases (Scenarios)
+## 📋 Real‑World Autonomous AI Use Cases
 
-### 🐞 Scenario 1: Bug Fixing (The "Zero Line‑Drift" Power)
+### 🐞 Scenario 1: Automated Bug Fixing (Zero Line‑Drift)
 
-1. **User:** *"Run the tests in my project and fix any failing ones."*
-2. **Jarvis (AgenticBrain):** Runs `pytest -v`, sees 3 failing tests.
-3. **Jarvis:** Uses `view` to read the failing files.
-4. **Jarvis:** Uses `replace_block` (exact search & replace) to fix logic errors.
-5. **Jarvis:** Re‑runs `pytest -v` to verify.
-6. **Jarvis (Speaks):** *"Sir, all tests have passed. I have made changes to 3 files. Would you like to review them?"*
+1. **User:** *"Run the tests in my Python project and fix any failing ones."*
+2. **Jarvis (AgenticBrain):** Executes `pytest -v` via terminal; identifies 3 failing test cases.
+3. **Jarvis:** Utilizes the `view` tool to read the specific failing files.
+4. **Jarvis:** Employs `replace_block` (exact search & replace) to fix the core logic errors safely.
+5. **Jarvis:** Re‑runs `pytest -v` to verify 100% success.
+6. **Jarvis (Voice):** *"Sir, all tests have passed. I have made changes to 3 files. Would you like to review them?"*
 
-### 🚨 Scenario 2: Proactive HITL (Your Personal Secretary)
+### 🚨 Scenario 2: Proactive HITL (Your AI Executive Assistant)
 
-1. **Background:** `EmailProactive` listener sees an email: *"Meeting shifted to 5 PM."*
-2. **Jarvis (Scout):** Evaluates and decides to ask for consent.
-3. **Jarvis (Speaks):** *"[Alert] There is an email from Ram saying the meeting has been moved to 5 PM. Should I update the calendar?"*
+1. **Background Listener:** The `EmailProactive` service detects an incoming email: *"Meeting shifted to 5 PM."*
+2. **Jarvis (Scout Mode):** Evaluates priority and flags it for user consent.
+3. **Jarvis (Voice Alert):** *"[Alert] There is an email from Ram saying the meeting has been moved to 5 PM. Should I update the calendar?"*
 4. **User:** *"Yes, do it."*
-5. **Jarvis:** Triggers AgenticBrain → `calendar_action` to update the event.
+5. **Jarvis:** Triggers AgenticBrain → `calendar_action` to securely update the Google Calendar event.
 6. **Jarvis:** *"Done sir, the calendar has been updated."*
 
-### 📱 Scenario 3: Mobile & PC Unification (ADB Control)
+### 🧪 Scenario 3: Full‑Stack Application Generation
 
-1. **User:** *"Lock my phone."*
-2. **Jarvis:** Executes `adb shell input keyevent 26`.
-3. **Jarvis:** *"Phone locked, sir."*
-4. **User:** *"Tell me today's OTP."*
-5. **Jarvis:** Reads the latest SMS via ADB content provider and speaks the OTP.
+1. **User:** *"Create a project named 'TaskFlow' on the Desktop. FastAPI backend with SQLite, React frontend with Tailwind, and 10+ unit tests. Run pytest and make all tests pass."*
+2. **Jarvis (Autonomous Execution):**
+* Scaffolds the folder architecture.
+* Generates `requirements.txt` and `package.json`.
+* Codes FastAPI CRUD endpoints and React UI.
+* Writes the test suite.
+* Executes `npm install` and `pip install` autonomously.
+* Runs `pytest`. If failures occur, utilizes `replace_block` to iterate and fix until 100% success.
+* Invokes `complete_task`.
 
-### 🌍 Scenario 4: Remote Telegram Control
 
-1. **User (on phone away from PC):** Messages the Telegram Bot: *"Open Spotify and play my playlist."*
-2. **Jarvis (Background Service):** Receives the command securely via the Telegram Bot API.
-3. **Jarvis (AgenticBrain):** Activates in a silent execution mode (no UI popups). Opens Spotify and plays the music.
-4. **Jarvis (Telegram Bot):** Replies: *"Executing: Open Spotify and play my playlist."*
 
-### 🧪 Scenario 5: Full‑Stack App Generation
+### 🧠 Scenario 4: Weighted Graph Knowledge Recall
 
-**User:** *"Create a project named 'TaskFlow' on the Desktop. FastAPI backend with SQLite, React frontend with Tailwind, and 10+ unit tests. Then run pytest and make all tests pass."*
-
-**Jarvis:**
-
-1. Creates folder structure.
-2. Generates `requirements.txt` and `package.json`.
-3. Writes FastAPI CRUD endpoints.
-4. Writes React frontend with Tailwind.
-5. Writes `pytest` tests.
-6. Runs `npm install` and `pip install`.
-7. Runs `pytest` – if any fail, uses `replace_block` to fix.
-8. When all tests pass, calls `complete_task`.
-
-### 🧠 Scenario 6: Weighted Graph Memory & Semantic Recall
-
-1. **Day 1:** User: *"I like BMW."* → Graph stores `[User] --(LIKES)--> [BMW]` weight=1.
-2. **Day 60:** User: *"What is the color of my automobile?"* → Semantic vector search connects `automobile` to `BMW`, returning `[User] --(LIKES)--> [BMW]`.
-3. **Day 100:** User: *"I really like BMW."* → weight becomes 2.
-4. **Day 400:** User: *"What do I like?"* → `BMW` weight=2, `last_seen`=Day100, decay factor 0.5 → adjusted weight 1.0; results sorted by overall semantic and temporal relevance.
+1. **Day 1:** User: *"I like BMW."* → Graph Database stores `[User] --(LIKES)--> [BMW]` (Weight=1).
+2. **Day 60:** User: *"What is the color of my automobile?"* → Semantic vector search identifies `automobile` maps to `BMW`, returning the stored relation.
+3. **Day 100:** User: *"I really like BMW."* → Knowledge Graph Weight increases to 2.
+4. **Day 400:** User: *"What do I like?"* → Algorithm calculates temporal decay (Day 400 vs Day 100). Adjusted weight prioritizes the most relevant lifelong facts instantly.
 
 ---
 
-## ⚙️ CLI & Configuration
+## ⚙️ Command Line Interface (CLI) & Agent Configuration
 
-### Session & Memory Management CLI
+### Agent Session & Memory Management CLI
 
-> **⚠️ Important:** All logout, memory clear, login, bot, and reset commands require Jarvis to be **OFF** (not running).
+> **⚠️ Important:** Ensure the main Jarvis application is **OFF** before running memory, login, or reset commands.
 
-| Command | Action |
+| CLI Command | Execution Action |
 | --- | --- |
-| `jarvis login --whatsapp` | Start WhatsApp QR login |
-| `jarvis login --telegram` | Start Telegram login (Phone + OTP) |
-| `jarvis login --mail` | Start Gmail OAuth login |
-| `jarvis login --calendar` | Start Google Calendar OAuth |
-| `jarvis login --all` | Login to all services |
-| `jarvis logout --whatsapp` | Logout WhatsApp & clear session |
-| `jarvis logout --telegram` | Logout Telegram & clear session |
-| `jarvis logout --mail` | Logout Gmail |
-| `jarvis logout --calendar` | Logout Calendar |
-| `jarvis logout --all` | Logout from **ALL** services |
-| `jarvis bot --activate` | Setup and activate Remote Telegram Bot using your BotFather token |
-| `jarvis bot --deactivate` | Revoke token and stop remote bot |
-| `jarvis bot --status` | Check if remote bot is active |
-| `jarvis memory --clear` | Clear AI contextual memory (keep sessions) |
-| `jarvis reset --hard` | **FACTORY RESET** – wipe memory AND all sessions |
-| `jarvis --help` | Display help menu |
+| `jarvis login --whatsapp` | Initialize WhatsApp Web QR authentication |
+| `jarvis login --telegram` | Initialize Telegram authentication (Phone + OTP) |
+| `jarvis login --mail` | Authenticate Gmail via OAuth2 |
+| `jarvis login --calendar` | Authenticate Google Calendar via OAuth2 |
+| `jarvis login --all` | Run batch authentication for all integrations |
+| `jarvis logout --whatsapp` | Logout WhatsApp and destroy session data |
+| `jarvis logout --telegram` | Logout Telegram and destroy session data |
+| `jarvis logout --mail` | Revoke Gmail OAuth tokens |
+| `jarvis logout --calendar` | Revoke Calendar OAuth tokens |
+| `jarvis logout --all` | Revoke **ALL** connected services instantly |
+| `jarvis bot --activate` | Configure and activate the Remote Telegram Control Bot |
+| `jarvis bot --deactivate` | Revoke tokens and offline the remote bot |
+| `jarvis bot --status` | Check the live status of your remote bot |
+| `jarvis memory --clear` | Purge AI contextual memory (maintains active service sessions) |
+| `jarvis reset --hard` | **FACTORY RESET** – Wipes all memory graphs, vector databases, and API sessions |
+| `jarvis --help` | Display the global help documentation |
 
-### Environment Variables (`.env`)
+### Environment Variables (`.env`) Configuration
 
-| Variable | Description | Default |
+Copy `.env.example` to `.env` in the root directory and populate your API credentials. **For 100% Local LLM Execution (e.g., Ollama), configure the Custom Provider block:**
+
+| Environment Variable | Description | Default Status |
 | --- | --- | --- |
-| `GROQ_API_KEY` | FastBrain & Summarization | (Required) |
-| `GEMINI_API_KEY` | Embeddings, Vision, Reasoning | (Required) |
-| `REGOLO_API_KEY` | Agentic Primary Provider | (Required) |
-| `OPENROUTER_API_KEY` | Fallback Agentic Provider | (Optional) |
-| `TAVILY_API_KEY` | Web search tool | (Required) |
-| `DEEPGRAM_API_KEY` | Live speech‑to‑text | (Required) |
-| `ADB_PHONE_IP` | Tailscale IP of Android phone | (Optional) |
-| `TELEGRAM_API_ID` | Telegram App API ID | (Optional) |
-| `TELEGRAM_API_HASH` | Telegram App API Hash | (Optional) |
-| `CUSTOM_BASE_URL` | Local/cloud OpenAI‑compatible endpoint | `http://localhost:11434/v1` |
-| `CUSTOM_MODEL` | Model name for custom provider | `default‑model` |
+| `GROQ_API_KEY` | FastBrain Routing & Sub-second Tasks | (Required) |
+| `GEMINI_API_KEY` | Embeddings, Vision Processing, Reasoning | (Required) |
+| `REGOLO_API_KEY` | Primary Agentic Engine Provider | (Required) |
+| `OPENROUTER_API_KEY` | Fallback Agentic Provider (Claude 3.7/DeepSeek) | (Optional) |
+| `TAVILY_API_KEY` | Real-time Web Search Engine | (Required) |
+| `DEEPGRAM_API_KEY` | Ultra-low latency Speech-to-Text | (Required) |
+| `ADB_PHONE_IP` | Tailscale IP for Android Mobile Control | (Optional) |
+| `TELEGRAM_API_ID` | Telegram App API ID for Desktop Client | (Optional) |
+| `TELEGRAM_API_HASH` | Telegram App API Hash for Desktop Client | (Optional) |
+| `CUSTOM_BASE_URL` | Local OpenAI‑compatible endpoint (Ollama/LM Studio) | `http://localhost:11434/v1` |
+| `CUSTOM_MODEL` | Specific Local Model string | `llama3.2:3b` |
+| `CUSTOM_API_KEY` | Pass API key for local/custom deployment | `EMPTY_KEY` |
 
 ---
 
-## 🔧 Troubleshooting
+## 🔧 Troubleshooting & FAQ
 
-| Problem | Solution |
+| Known Issue | Proven Solution |
 | --- | --- |
-| `ModuleNotFoundError` | Activate `.venv` and `pip install -r requirements.txt`. |
-| Vosk model missing | Run `jarvis` once to auto‑download, or manually place in `Data/model/vosk-model-small/`. |
-| WhatsApp fails | Ensure Node.js 18+, run `npm install` in BaileysServer, complete QR login, port 3000 free. |
-| Telegram App fails | Ensure `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` are set in `.env` and you ran `jarvis login --telegram`. |
-| Remote Telegram Bot not responding | Ensure you activated it via `jarvis bot --activate` with a valid BotFather token and restarted Jarvis. |
-| `jarvis` command not recognized | Run `python SetupRegistry.py` from activated venv and from the **root project directory**, then open a **new terminal**. |
-| Unwanted browser/QR popup | Logout of the service (`jarvis logout --service`). Services start only when credentials exist. |
-| Mobile ADB fails | Check `ADB_PHONE_IP` in `.env`, ensure Tailscale is running, run `adb devices` manually. |
-| Custom provider not working | Verify `CUSTOM_BASE_URL`, `CUSTOM_MODEL`, and that the endpoint is OpenAI‑compatible. |
-| Graph memory seems stale | Delete `Data/jarvis_memory/lifetime_graph.json` and restart – graph nodes, weights, and semantic embeddings will rebuild automatically. |
-| RAG results inaccurate | Delete `Data/jarvis_memory/rag_chroma_db` and restart – re‑index with new chunking & hybrid search. |
+| `ModuleNotFoundError` during startup | Ensure you are running inside the `.venv` and execute `pip install -r requirements.txt`. |
+| Vosk Offline Wake-Word model missing | Run `jarvis` once to trigger auto‑download, or manually download and place in `Data/model/vosk-model-small/`. |
+| WhatsApp Service fails to launch | Verify Node.js 18+ is installed. Run `npm install` inside `tools/Messanger/whatsapp/BaileysServer`. Ensure port 3000 is available. |
+| Telegram Desktop Client fails | Verify `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in `.env` and authenticate via `jarvis login --telegram`. |
+| Remote Telegram Bot is unresponsive | Ensure activation via `jarvis bot --activate` with a valid BotFather token and restart the Jarvis OS Agent. |
+| `jarvis` command not recognized globally | Run `python SetupRegistry.py` from your activated virtual environment in the **root directory**, then launch a **new terminal**. |
+| Unwanted popup authentications on boot | Run `jarvis logout --service`. Proactive listeners only start if valid credentials exist. |
+| Mobile ADB Connection Timeout | Verify `ADB_PHONE_IP` in `.env`, confirm Tailscale VPN status, and manually test `adb devices` in CMD. |
+| Custom Local Provider (Ollama) failing | Double-check `CUSTOM_BASE_URL` ends with `/v1` and the endpoint strictly follows OpenAI formatting. |
+| Knowledge Graph memory feels stale | Delete `Data/jarvis_memory/lifetime_graph.json` and reboot. Graph nodes, temporal weights, and vector embeddings will auto-rebuild. |
+| Hybrid RAG Search returning poor data | Delete `Data/jarvis_memory/rag_chroma_db` and reboot to force a fresh index with updated chunk overlap logic. |
 
 ---
 
-## 🤝 Contributing & Community
+## 🤝 Contributing to the Open Source Agent
 
-We welcome contributions! Whether it's a bug fix, new provider, or documentation:
+We actively welcome contributions to make the Jarvis OS Agent the best open-source AI desktop assistant! Whether it's patching bugs, integrating new LLM providers, or expanding documentation:
 
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to the branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
+1. **Fork** the repository.
+2. **Create a Feature Branch** (`git checkout -b feature/AdvancedRAGUpdate`).
+3. **Commit your Changes** (`git commit -m 'Implement AdvancedRAGUpdate'`).
+4. **Push to the Branch** (`git push origin feature/AdvancedRAGUpdate`).
+5. **Open a Pull Request** for review.
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+This open-source AI project is distributed under the **MIT License**. See the `LICENSE` file for full documentation.
 
 ---
 
-## 🌟 Show Your Support
+## 🌟 Show Your Support for the Developer
 
-If this project made you smile, saved you time, or inspired you:
+If the **Jarvis OS Agent** streamlined your workflow, autonomously fixed your bugs, or inspired your own AI projects:
 
-* ⭐ **Star** this repository.
-* 🐦 Tweet about it tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
-* ☕ Buy me a coffee (coming soon) – because late nights are expensive.
+* ⭐ **Star** this repository to help it rank and grow the community.
+* 🐦 **Follow & Tweet** your use cases by tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
+* ☕ **Buy me a coffee** (Link coming soon) – Late nights, compiling code, and building AI operating systems run purely on caffeine.
