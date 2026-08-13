@@ -40,3 +40,5 @@ core/UiSrc/**/Makefile*
 .DS_Store
 jarvis_cli.egg-info
 Thumbs.db
+
+signatures/
