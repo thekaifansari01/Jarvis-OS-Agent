@@ -7,6 +7,26 @@ We follow the **"Do the right thing"** principle — if it makes Jarvis faster, 
 
 ---
 
+## ⚖️ Contributor License Agreement (CLA) — **MUST READ**
+
+By submitting any contribution (including but not limited to Pull Requests, Issues with code snippets, or patches) to this repository, **you explicitly agree to the following legal terms**:
+
+1. **Ownership & Authority:** You confirm that you are the original author of the code you are contributing, or you have the legal right to contribute it under these terms.
+
+2. **Copyright Assignment:** You hereby irrevocably assign and transfer to **Kaif Ansari (thekaifansari01)** all rights, title, and interest in and to your contribution, including all copyrights and intellectual property rights, for the full term of protection throughout the world.
+
+3. **Dual-Licensing Permission:** You acknowledge and agree that your contribution may be included in the Jarvis-OS-Agent project and that the project maintainer (Kaif Ansari) may distribute the project (including your contribution) under **any license of their choice**, including but not limited to:
+   - The existing **GNU General Public License v3.0 (GPLv3)** for the open-source community.
+   - A **Proprietary / Commercial License** sold to enterprises or individuals, without requiring any further permission, notification, or compensation to you.
+
+4. **Waiver of Moral Rights:** To the extent permitted by law, you waive any "moral rights" you may have in the contribution, ensuring the maintainer can modify or use it freely.
+
+5. **Irrevocability:** This agreement is **perpetual, worldwide, and irrevocable**. Once you submit the contribution, you cannot revoke this license or claim ownership over it.
+
+> ⚠️ **Legal Notice:** If you do not agree to these terms, please do not submit any code to this repository. By sending a Pull Request, you automatically accept this CLA.
+
+---
+
 ## 📜 Code of Conduct
 
 By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). We expect all contributors to be respectful and inclusive.

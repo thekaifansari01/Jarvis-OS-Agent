@@ -23,6 +23,11 @@
 
 **Built by an 18‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
 
+> 📜 **Legal Notice for Contributors:**  
+> By contributing to this project (via Issues, Pull Requests, or any code submission), you agree to our  
+> **[Contributor License Agreement (CLA)](CONTRIBUTING.md)** and **[Code of Conduct](CODE_OF_CONDUCT.md)**.  
+> This ensures that your contributions can be used commercially by the project maintainer without additional permission.
+
 ---
 
 ## 📌 Table of Contents
@@ -159,7 +164,6 @@ flowchart TD
     Watchdog -.->|Smart Skip| System
     Failover -.-> Providers
     Recovery -.-> AgenticBrain
-
 ```
 
 ---
@@ -191,18 +195,14 @@ JARVIS implements a **four‑tier** artificial memory system, setting a new stan
 
 1. **📜 Rolling JSONL History (Short‑Term):** 15‑day rolling conversation context, auto‑pruned and archived.
 2. **🗄️ Weighted Lifetime Episodic Graph (Long‑Term):**
-* Built on `NetworkX` with **weighted edges** and **temporal decay** (relations older than 6 months lose half their weight).
-* **Semantic Vector Embeddings:** Uses `SentenceTransformers` (`all-MiniLM-L6-v2`) for zero-shot semantic matching. Maps conceptual synonyms (e.g., "React" matches "ReactJS") autonomously.
-* **Batched Array Queries & Preloading:** Preloads the embedding engine at startup to process multi-entity graph queries in a single agent step with zero latency.
-* **Subgraph Retrieval:** Extracts complete 2-hop subgraphs around matched nodes to retain secondary contextual facts.
-
-
+   - Built on `NetworkX` with **weighted edges** and **temporal decay** (relations older than 6 months lose half their weight).
+   - **Semantic Vector Embeddings:** Uses `SentenceTransformers` (`all-MiniLM-L6-v2`) for zero-shot semantic matching. Maps conceptual synonyms (e.g., "React" matches "ReactJS") autonomously.
+   - **Batched Array Queries & Preloading:** Preloads the embedding engine at startup to process multi-entity graph queries in a single agent step with zero latency.
+   - **Subgraph Retrieval:** Extracts complete 2-hop subgraphs around matched nodes to retain secondary contextual facts.
 3. **📚 Hybrid RAG (Workspace Documents):**
-* **Smart Chunking:** Text is chunked with 1500 character limits and a 200-character overlap to preserve cross-boundary context.
-* **Hybrid Retrieval:** Merges **BM25 keyword search** and **Gemini embedding vector search** via **Reciprocal Rank Fusion (RRF)**.
-* **Recency Boost:** Recently modified files receive a 20% score lift, creating a self-updating knowledge base.
-
-
+   - **Smart Chunking:** Text is chunked with 1500 character limits and a 200-character overlap to preserve cross-boundary context.
+   - **Hybrid Retrieval:** Merges **BM25 keyword search** and **Gemini embedding vector search** via **Reciprocal Rank Fusion (RRF)**.
+   - **Recency Boost:** Recently modified files receive a 20% score lift, creating a self-updating knowledge base.
 4. **👤 User Profile & Mood Tracker:** Automatically extracts and tracks user bio, preferences, and mood states into knowledge-graph triplets.
 
 ---
@@ -247,9 +247,9 @@ Control your Android smartphone completely hands-free from your Windows PC using
 
 ### 📋 Prerequisites
 
-* **Windows 10/11** (Primary supported OS)
-* **Python 3.10+** (Required for AI models and dependencies)
-* **Node.js 18+** (Required for the WhatsApp Baileys bridge)
+- **Windows 10/11** (Primary supported OS)
+- **Python 3.10+** (Required for AI models and dependencies)
+- **Node.js 18+** (Required for the WhatsApp Baileys bridge)
 
 ### 🛠️ Single Block Installation
 
@@ -257,7 +257,7 @@ Copy and paste this exact command block into your PowerShell terminal:
 
 ```powershell
 # 1. Clone the Jarvis Repository
-git clone [https://github.com/thekaifansari01/Jarvis-OS-Agent.git](https://github.com/thekaifansari01/Jarvis-OS-Agent.git)
+git clone https://github.com/thekaifansari01/Jarvis-OS-Agent.git
 cd Jarvis-OS-Agent
 
 # 2. Setup Python Virtual Environment
@@ -273,7 +273,6 @@ cd ../../../..
 
 # 4. Global CLI Registry Setup (Run ONCE from the root directory)
 python SetupRegistry.py
-
 ```
 
 > ⚠️ **CRITICAL:** Ensure your terminal is in the root `Jarvis-OS-Agent/` directory before executing `python SetupRegistry.py`.
@@ -284,7 +283,6 @@ Once setup is complete, open a **new terminal window** and launch your agent glo
 
 ```bash
 jarvis
-
 ```
 
 *You do not need to activate the virtual environment manually again; the `jarvis` command is now system‑wide.*
@@ -315,15 +313,13 @@ jarvis
 
 1. **User:** *"Create a project named 'TaskFlow' on the Desktop. FastAPI backend with SQLite, React frontend with Tailwind, and 10+ unit tests. Run pytest and make all tests pass."*
 2. **Jarvis (Autonomous Execution):**
-* Scaffolds the folder architecture.
-* Generates `requirements.txt` and `package.json`.
-* Codes FastAPI CRUD endpoints and React UI.
-* Writes the test suite.
-* Executes `npm install` and `pip install` autonomously.
-* Runs `pytest`. If failures occur, utilizes `replace_block` to iterate and fix until 100% success.
-* Invokes `complete_task`.
-
-
+   - Scaffolds the folder architecture.
+   - Generates `requirements.txt` and `package.json`.
+   - Codes FastAPI CRUD endpoints and React UI.
+   - Writes the test suite.
+   - Executes `npm install` and `pip install` autonomously.
+   - Runs `pytest`. If failures occur, utilizes `replace_block` to iterate and fix until 100% success.
+   - Invokes `complete_task`.
 
 ### 🧠 Scenario 4: Weighted Graph Knowledge Recall
 
@@ -400,13 +396,21 @@ Copy `.env.example` to `.env` in the root directory and populate your API creden
 
 ## 🤝 Contributing to the Open Source Agent
 
-We actively welcome contributions to make the Jarvis OS Agent the best open-source AI desktop assistant! Whether it's patching bugs, integrating new LLM providers, or expanding documentation:
+We actively welcome contributions to make the Jarvis OS Agent the best open-source AI desktop assistant! 
+
+> ⚖️ **IMPORTANT: By submitting a Pull Request or any code to this repository, you automatically agree to the [Contributor License Agreement (CLA)](CONTRIBUTING.md).**  
+> This means you grant the project maintainer (Kaif Ansari) the right to use your code in both open-source (GPLv3) and **commercial/proprietary** licenses without seeking further permission from you.  
+> Please read the full `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` before contributing.
+
+Whether it's patching bugs, integrating new LLM providers, or expanding documentation, here’s how to contribute:
 
 1. **Fork** the repository.
 2. **Create a Feature Branch** (`git checkout -b feature/AdvancedRAGUpdate`).
 3. **Commit your Changes** (`git commit -m 'Implement AdvancedRAGUpdate'`).
 4. **Push to the Branch** (`git push origin feature/AdvancedRAGUpdate`).
 5. **Open a Pull Request** for review.
+
+**📜 By using or contributing to this project, you acknowledge and accept our [Contributor License Agreement](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).**
 
 ---
 
@@ -420,6 +424,6 @@ This open-source AI project is distributed under the **GNU General Public Licens
 
 If the **Jarvis OS Agent** streamlined your workflow, autonomously fixed your bugs, or inspired your own AI projects:
 
-* ⭐ **Star** this repository to help it rank and grow the community.
-* 🐦 **Follow & Tweet** your use cases by tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
-* ☕ **Buy me a coffee** (Link coming soon) – Late nights, compiling code, and building AI operating systems run purely on caffeine.
+- ⭐ **Star** this repository to help it rank and grow the community.
+- 🐦 **Follow & Tweet** your use cases by tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
+- ☕ **Buy me a coffee** (Link coming soon) – Late nights, compiling code, and building AI operating systems run purely on caffeine.
