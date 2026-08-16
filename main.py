@@ -9,13 +9,15 @@ import logging
 import signal
 import time
 import ctypes
-
-from core.logger.logger import logger
+import _thread
 
 os.environ['PYTHONUNBUFFERED'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['ANONYMIZED_TELEMETRY'] = 'False'
+
+from core.logger.logger import logger
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(write_through=True)
@@ -26,14 +28,11 @@ def disable_quickedit():
     if platform.system() == "Windows":
         try:
             kernel32 = ctypes.windll.kernel32
-            STD_INPUT_HANDLE = -10
-            ENABLE_QUICK_EDIT_MODE = 0x0040
-            ENABLE_EXTENDED_FLAGS = 0x0080
-            handle = kernel32.GetStdHandle(STD_INPUT_HANDLE)
+            handle = kernel32.GetStdHandle(-10)
             mode = ctypes.c_ulong()
             kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-            mode.value &= ~ENABLE_QUICK_EDIT_MODE
-            mode.value |= ENABLE_EXTENDED_FLAGS
+            mode.value &= ~0x0040
+            mode.value |= 0x0080
             kernel32.SetConsoleMode(handle, mode)
         except Exception:
             pass
@@ -56,9 +55,19 @@ from terminalCommands import handle_cli_commands, create_lock_file, remove_lock_
 
 _is_running = True
 
+def restore_console():
+    if platform.system() == "Windows":
+        try:
+            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+            if hwnd:
+                ctypes.windll.user32.ShowWindow(hwnd, 5)
+        except Exception:
+            pass
+
 def signal_handler(signum, frame):
     global _is_running
     _is_running = False
+    restore_console()
     logger.info("Interrupt signal (Ctrl+C) received. Initiating aggressive graceful shutdown...")
     try:
         from core.brain.Memory.LifetimeMemory import ltm_engine
@@ -70,15 +79,12 @@ def signal_handler(signum, frame):
         from core.utils.shutdown import set_shutdown
         set_shutdown()
         remove_lock_file()
-        
         from core.main.ServiceWatchdog import stop_watchdog
         from core.main.BackgroundServices import stop_all_services
         from core.utils.ProcessManager import proc_manager
-        
         stop_watchdog()
         stop_all_services()
         proc_manager.cleanup()
-        
         logger.info("Cleanup complete. Force exiting to prevent zombie threads.")
     except Exception as e:
         logger.error(f"Error during signal cleanup: {e}")
@@ -98,6 +104,46 @@ def set_terminal_title(title="Jarvis"):
     except Exception:
         pass
 
+def start_tray_icon():
+    try:
+        import pystray
+        from PIL import Image
+    except ImportError:
+        logger.error("pystray or PIL not installed. Run 'pip install pystray pillow' for system tray feature.")
+        return
+
+    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+
+    def show_window(icon, item):
+        ctypes.windll.user32.ShowWindow(hwnd, 9)
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+
+    def exit_app(icon, item):
+        icon.stop()
+        _thread.interrupt_main()
+
+    menu = pystray.Menu(
+        pystray.MenuItem('Open Jarvis', show_window, default=True),
+        pystray.MenuItem('Exit Jarvis', exit_app)
+    )
+
+    icon_path = os.path.join(PROJECT_ROOT, "Data", "icons", "jarvis_icon.png")
+    try:
+        image = Image.open(icon_path)
+    except Exception:
+        image = Image.new('RGB', (64, 64), color=(0, 0, 0))
+
+    icon = pystray.Icon("Jarvis", image, "Jarvis", menu)
+
+    def monitor():
+        while _is_running:
+            if ctypes.windll.user32.IsIconic(hwnd):
+                ctypes.windll.user32.ShowWindow(hwnd, 0)
+            time.sleep(0.1)
+
+    threading.Thread(target=monitor, daemon=True).start()
+    icon.run()
+
 def main() -> None:
     global _is_running
 
@@ -113,14 +159,17 @@ def main() -> None:
 
     create_lock_file()
 
+    if platform.system() == "Windows":
+        threading.Thread(target=start_tray_icon, daemon=True).start()
+
     os.system('cls' if os.name == 'nt' else 'clear')
     print(r"""
-        ██╗  █████╗ ██████╗ ██╗   ██╗██╗███████╗
-        ██║ ██╔══██╗██╔══██╗██║   ██║██║╚══██╔══╝
-        ██║ ███████║██████╔╝██║   ██║██║   ██║   
-    ██  ██║ ██╔══██║██╔══██╗██║   ██║██║   ██║   
-    ╚████╔╝ ██║  ██║██║  ██║╚██████╔╝██║   ██║   
-     ╚═══╝  ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝   ╚═╝   
+         ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗
+         ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝
+         ██║███████║██████╔╝██║   ██║██║███████╗
+    ██   ██║██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║
+    ╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
+     ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
     """)
 
     import pygame
@@ -196,13 +245,10 @@ def main() -> None:
     try:
         with ThreadPoolExecutor(max_workers=5) as executor:
             setup_hotkeys(executor, memory)
-            
             from core.main.TelegramRemoteBot import set_telegram_remote_context
             from core.main.BackgroundServices import start_telegram_remote_service
-            
             set_telegram_remote_context(executor, memory)
             start_telegram_remote_service()
-
             if no_wake:
                 while _is_running:
                     time.sleep(1)
@@ -212,7 +258,6 @@ def main() -> None:
                         command = stt.listen()
                         if not command:
                             continue
-
                         if command.lower() in ["exit", "quit", "stop", "bye"]:
                             _is_running = False
                             logger.info("Exit command received.")
@@ -221,7 +266,6 @@ def main() -> None:
                             except Exception as e:
                                 logger.error(f"Error stopping TTS: {e}")
                             break
-
                         if command:
                             if is_jarvis_busy() and hasattr(memory, 'add_live_feedback'):
                                 try:
@@ -236,7 +280,6 @@ def main() -> None:
                                     logger.error(f"Error hiding STT popup: {e}")
                                 executor.submit(main_command_processor, command, executor, memory)
                                 interrupt.clear_interrupt()
-
                     except KeyboardInterrupt:
                         _is_running = False
                         logger.info("Keyboard interrupt received.")
@@ -246,6 +289,7 @@ def main() -> None:
                         continue
     finally:
         logger.info("Starting shutdown sequence.")
+        restore_console()
         try:
             from core.brain.Memory.LifetimeMemory import ltm_engine
             ltm_engine._save_graph()
@@ -257,16 +301,13 @@ def main() -> None:
             pygame.quit()
         except Exception as e:
             logger.error(f"Error cleaning up TTS/Pygame: {e}")
-
         remove_lock_file()
         stop_watchdog()
         stop_all_services()
-
         try:
             proc_manager.cleanup()
         except Exception as e:
             logger.error(f"Error cleaning up process manager: {e}")
-
         logger.info("Shutdown sequence complete.")
         os._exit(0)
 
