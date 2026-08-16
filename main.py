@@ -61,6 +61,12 @@ def signal_handler(signum, frame):
     _is_running = False
     logger.info("Interrupt signal (Ctrl+C) received. Initiating aggressive graceful shutdown...")
     try:
+        from core.brain.Memory.LifetimeMemory import ltm_engine
+        ltm_engine._save_graph()
+        logger.info("LTM Graph forcefully saved during interrupt.")
+    except Exception as e:
+        logger.error(f"Failed to save LTM graph on interrupt: {e}")
+    try:
         from core.utils.shutdown import set_shutdown
         set_shutdown()
         remove_lock_file()
@@ -136,8 +142,8 @@ def main() -> None:
     try:
         from core.ui.agent_status import reset_agent_status
         reset_agent_status()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error resetting agent status: {e}")
 
     start_agent_panel()
     start_stt_popup()
@@ -212,8 +218,8 @@ def main() -> None:
                             logger.info("Exit command received.")
                             try:
                                 tts.stop_speaking()
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.error(f"Error stopping TTS: {e}")
                             break
 
                         if command:
@@ -226,8 +232,8 @@ def main() -> None:
                             else:
                                 try:
                                     hide_stt_popup()
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    logger.error(f"Error hiding STT popup: {e}")
                                 executor.submit(main_command_processor, command, executor, memory)
                                 interrupt.clear_interrupt()
 
@@ -240,6 +246,12 @@ def main() -> None:
                         continue
     finally:
         logger.info("Starting shutdown sequence.")
+        try:
+            from core.brain.Memory.LifetimeMemory import ltm_engine
+            ltm_engine._save_graph()
+            logger.info("LTM Graph saved successfully during exit.")
+        except Exception as e:
+            logger.error(f"Error saving LTM graph during exit: {e}")
         try:
             tts.cleanup_temp()
             pygame.quit()

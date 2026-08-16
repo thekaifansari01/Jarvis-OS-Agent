@@ -22,8 +22,8 @@ class ContextMemory:
             self._rewrite_history_jsonl(self.master_history_file, old_data)
             try:
                 os.remove(old_json_file)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to remove old json file: {e}")
 
         self.master_history = self._load_history_jsonl(self.master_history_file)
         self.ephemeral = {}
@@ -34,22 +34,24 @@ class ContextMemory:
 
         try:
             self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to initialize Groq client: {e}")
             self.groq_client = None
 
         self._start_background_pruning()
 
     def _is_valid_triplet(self, src, rel, tgt):
-        invalid_entities = {"agent", "info", "system", "jarvis", "data", "unknown", "yes", "no", "today", "tomorrow", "now"}
+        invalid_entities = {"agent", "info", "system", "jarvis", "data", "unknown", "yes", "no", "today", "tomorrow", "now", "thing", "stuff"}
         if src.lower() in invalid_entities or tgt.lower() in invalid_entities:
             return False
-        
         if len(src) < 2 or len(tgt) < 2:
             return False
-            
         if src.lower() == tgt.lower():
             return False
-
+        family_relations = {"father", "mother", "brother", "sister", "son", "daughter", "spouse", "uncle", "aunt"}
+        if rel.lower() in family_relations:
+            if len(src.split()) > 3 or len(tgt.split()) > 3:
+                return False
         ephemeral_relations = {
             "is_doing", "eating", "going", "will_give", "must_remember", 
             "status_update", "remember", "searching", "asking", "said", 
@@ -57,7 +59,6 @@ class ContextMemory:
         }
         if rel.lower() in ephemeral_relations:
             return False
-
         return True
 
     def set_pending_confirmation(self, task_data=None, ttl_seconds=60):
@@ -65,8 +66,8 @@ class ContextMemory:
             if self._confirmation_timer:
                 try:
                     self._confirmation_timer.cancel()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error cancelling confirmation timer: {e}")
                 self._confirmation_timer = None
             self.ephemeral["waiting_for_confirmation"] = True
             if task_data:
@@ -87,8 +88,8 @@ class ContextMemory:
             if self._confirmation_timer:
                 try:
                     self._confirmation_timer.cancel()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error cancelling confirmation timer: {e}")
                 self._confirmation_timer = None
             self.ephemeral["waiting_for_confirmation"] = False
             self.ephemeral.pop("pending_task_data", None)
@@ -110,7 +111,8 @@ class ContextMemory:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             return default
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to load JSON from {file_path}: {e}")
             return default
 
     def _save_json(self, file_path, data):
@@ -118,8 +120,8 @@ class ContextMemory:
             try:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to save JSON to {file_path}: {e}")
 
     def _load_history_jsonl(self, file_path):
         history = []
@@ -129,8 +131,8 @@ class ContextMemory:
                     for line in f:
                         if line.strip():
                             history.append(json.loads(line))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to load JSONL from {file_path}: {e}")
         return history
 
     def _append_history_jsonl(self, file_path, entry):
@@ -138,8 +140,8 @@ class ContextMemory:
             try:
                 with open(file_path, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to append to JSONL {file_path}: {e}")
 
     def _rewrite_history_jsonl(self, file_path, data_list):
         with self._lock:
@@ -147,8 +149,8 @@ class ContextMemory:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     for entry in data_list:
                         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to rewrite JSONL {file_path}: {e}")
 
     def _track_session_state(self, message):
         try:
@@ -160,16 +162,16 @@ class ContextMemory:
             self.mode_timer = datetime.now()
             if (datetime.now() - self.mode_timer).total_seconds() / 60 > 30:
                 self.current_mode = "General Assistant"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Session state error: {e}")
 
     def _async_extract_permanent_facts(self, message):
         try:
             thread = threading.Thread(target=self._extract_permanent_facts_ai, args=(message,))
             thread.daemon = True
             thread.start()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Thread starting error: {e}")
 
     def _extract_permanent_facts_ai(self, message):
         if not self.groq_client or len(message.split()) < 2:
@@ -185,51 +187,10 @@ class ContextMemory:
             top_nodes = ltm_engine.get_all_node_names(limit=100)
             if top_nodes:
                 existing_nodes_str = ", ".join(top_nodes)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to fetch LTM nodes: {e}")
 
-        prompt = f"""You are the core LTM Engine for Jarvis.
-Your job is to analyze the user's latest message with the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure (Triplets).
-
-[WHAT TO IGNORE]:
-- Commands & Actions ("open google", "send mail", "remind me").
-- Temporary states ("I am eating pizza", "I am tired", "going to Delhi").
-- Chit-chat or greetings ("hello", "how are you", "ok", "thanks").
-- Meta-instructions ("remember this", "note this down", "store this").
-
-[WHAT TO SAVE]:
-- Identity & Traits (Profession, Age, Habits, Skills).
-- Relationships (Friends, Family, Colleagues).
-- Hard Preferences (Likes, Dislikes, Allergies, Favorite things).
-- Assets (Car owned, Phone model, Pets).
-
-[ALLOWED RELATIONS]:
-You MUST strictly use one of these uppercase relations:
-[IS_A, LIKES, DISLIKES, OWNS, HAS_SKILL, WORKS_AS, HAS_RELATION, LOCATED_IN, USES, CREATED, PREFERS]
-
-[RULES]:
-1. If the user says "my friend Rahul", Source="User", Relation="HAS_RELATION", Target="Rahul".
-2. Resolve pronouns (he/she/it) using the Context History.
-3. Keep entities short (1-3 words max).
-4. Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.
-
-[EXISTING GRAPH NODES]:
-{existing_nodes_str}
-
-[Context History]:
-{recent_history if recent_history else "No recent history."}
-
-[User's Latest Message]: "{message}"
-
-Return STRICT JSON exactly in this schema:
-{{
-    "reasoning": "string",
-    "is_permanent_fact": boolean,
-    "triplets": [
-        {{"source": "Entity1", "relation": "ALLOWED_RELATION", "target": "Entity2"}}
-    ]
-}}
-"""
+        prompt = f"You are the core LTM Engine for Jarvis.\nYour job is to analyze the user's latest message with the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure (Triplets).\n\n[WHAT TO IGNORE]:\n- Commands & Actions (\"open google\", \"send mail\", \"remind me\").\n- Temporary states (\"I am eating pizza\", \"I am tired\", \"going to Delhi\").\n- Chit-chat or greetings (\"hello\", \"how are you\", \"ok\", \"thanks\").\n- Meta-instructions (\"remember this\", \"note this down\", \"store this\").\n\n[WHAT TO SAVE]:\n- Identity & Traits (Profession, Age, Habits, Skills).\n- Relationships (Friends, Family, Colleagues).\n- Hard Preferences (Likes, Dislikes, Allergies, Favorite things).\n- Assets (Car owned, Phone model, Pets).\n\n[ALLOWED RELATIONS]:\nFAMILY: FATHER, MOTHER, BROTHER, SISTER, SON, DAUGHTER, SPOUSE, UNCLE, AUNT\nPROFESSIONAL: WORKS_AS, EMPLOYED_AT, MANAGER_OF, COLLEAGUE\nPERSONAL: FRIEND, NEIGHBOR, ROOMMATE, PARTNER\nCORE: IS_A, LIKES, DISLIKES, OWNS, USES, PREFERS, HAS_SKILL, LOCATED_IN, CREATED\n\n[RULES]:\n1. Use the MOST SPECIFIC relation possible. For example, if the user says \"my father\", use FATHER instead of HAS_RELATION.\n2. Never store generic facts like \"User is_a Person\" or \"Jarvis has_relation System\". Skip such entries.\n3. Resolve pronouns (he/she/it) using the Context History.\n4. Keep entities short (1-3 words max) and in Title Case.\n5. Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.\n6. If you are unsure about a relation, use the most specific available from the list above.\n7. If the relation is family-related, ensure both source and target are people (not emails or phone numbers).\n8. If a fact is temporary or not permanent, set \"is_permanent_fact\" to false.\n\n[EXISTING GRAPH NODES]:\n{existing_nodes_str}\n\n[Context History]:\n{recent_history if recent_history else 'No recent history.'}\n\n[User's Latest Message]: \"{message}\"\n\nReturn STRICT JSON exactly in this schema:\n{{\n    \"reasoning\": \"string\",\n    \"is_permanent_fact\": boolean,\n    \"triplets\": [\n        {{\"source\": \"Entity1\", \"relation\": \"ALLOWED_RELATION\", \"target\": \"Entity2\"}}\n    ]\n}}\n"
         for _ in range(3):
             try:
                 response = self.groq_client.chat.completions.create(
@@ -255,13 +216,21 @@ Return STRICT JSON exactly in this schema:
                                 rel = str(t.get("relation", "")).strip().upper()
                                 tgt = str(t.get("target", "")).strip().title()
                                 
-                                if src and rel and tgt and self._is_valid_triplet(src, rel, tgt):
+                                if not (src and rel and tgt) or not self._is_valid_triplet(src, rel, tgt):
+                                    continue
+                                
+                                with ltm_engine._lock:
+                                    if ltm_engine.graph.has_edge(src, tgt):
+                                        existing_rel = ltm_engine.graph.edges[src, tgt].get('relation')
+                                        if existing_rel == 'HAS_RELATION' and rel != 'HAS_RELATION':
+                                            ltm_engine.graph.remove_edge(src, tgt)
                                     ltm_engine.record_triplet(src, rel, tgt)
                                     logger.info(f"LTM Saved: [{src}] --({rel})--> [{tgt}]")
                         except Exception as e:
                             logger.error(f"LTM Engine Save Error: {e}")
                 break
-            except Exception:
+            except Exception as e:
+                logger.error(f"LTM API parsing/request error: {e}")
                 time.sleep(1)
 
     def _start_background_pruning(self):
@@ -270,8 +239,8 @@ Return STRICT JSON exactly in this schema:
             timer = threading.Timer(86400, self._start_background_pruning)
             timer.daemon = True
             timer.start()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Pruning timer error: {e}")
 
     def _prune_old_messages(self):
         if not self.master_history:
@@ -288,19 +257,19 @@ Return STRICT JSON exactly in this schema:
                         filtered_history.append(msg)
                     else:
                         messages_to_archive.append(msg)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Timestamp parse error: {e}")
             if messages_to_archive:
                 try:
                     from core.brain.Memory.LifetimeMemory import ltm_engine
                     ltm_engine.archive_old_chats(messages_to_archive)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Archival error: {e}")
             if len(filtered_history) < len(self.master_history):
                 self.master_history = filtered_history
                 self._rewrite_history_jsonl(self.master_history_file, self.master_history)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Pruning history error: {e}")
 
     def add_message(self, role, message, metadata=None):
         if not message or not message.strip():
@@ -323,8 +292,8 @@ Return STRICT JSON exactly in this schema:
             if role == "USER" and message.lower().strip() not in ignore_words:
                 self._track_session_state(message)
                 self._async_extract_permanent_facts(message)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error adding message to memory: {e}")
 
     def get_fast_history_context(self):
         if not self.master_history:
@@ -338,7 +307,8 @@ Return STRICT JSON exactly in this schema:
                 else:
                     history_str.append(f"[{time_str}] {entry.get('role', 'UNKNOWN')}: {entry.get('message', '')}")
             return "\n".join(history_str)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Context retrieval error: {e}")
             return "Error retrieving history."
 
     def get_agentic_fast_context(self):
@@ -378,7 +348,8 @@ Return STRICT JSON exactly in this schema:
                 history_lines.append(block)
             history_lines.append("</Recent_Context>")
             return "\n\n".join(history_lines)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Agent context retrieval error: {e}")
             return "<Recent_Context>\nError retrieving history.\n</Recent_Context>"
 
     def get_relevant_context(self, query):
@@ -388,7 +359,8 @@ Return STRICT JSON exactly in this schema:
                 f"SESSION MODE: {self.current_mode}"
             ]
             return "\n".join(context)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Relevant context retrieval error: {e}")
             return "Error retrieving relevant context."
 
     def get_chat_history_for_tool(self):
@@ -427,5 +399,6 @@ Return STRICT JSON exactly in this schema:
                     block += f"\n</{role.capitalize()}>"
                 history_lines.append(block)
             return "\n\n".join(history_lines)
-        except Exception:
+        except Exception as e:
+            logger.error(f"History for tool retrieval error: {e}")
             return "Error retrieving conversation history."

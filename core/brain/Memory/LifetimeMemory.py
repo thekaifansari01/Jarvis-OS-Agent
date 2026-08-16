@@ -19,15 +19,14 @@ class LifetimeMemoryEngine:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
         self.graph = nx.DiGraph()
-        self._lock = threading.Lock()
-        self.is_dirty = False
+        self._lock = threading.RLock()
         
         logger.info("⏳ Loading Semantic Embedding Model (all-MiniLM-L6-v2) for LTM...")
         self.embedder = SentenceTransformer('all-MiniLM-L6-v2') 
         self.node_embeddings = {}
         
         self._load_graph()
-        self._start_background_saver()
+        self._start_auto_cleanup()
 
     def _compute_all_embeddings(self):
         nodes = list(self.graph.nodes())
@@ -50,7 +49,8 @@ class LifetimeMemoryEngine:
                 with open(self.db_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.graph = nx.node_link_graph(data)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error loading graph: {e}")
                 self.graph = nx.DiGraph()
         else:
             self.graph = nx.DiGraph()
@@ -62,17 +62,33 @@ class LifetimeMemoryEngine:
                 data = nx.node_link_data(self.graph)
                 with open(self.db_path, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error saving graph: {e}")
 
-    def _start_background_saver(self):
-        def saver_loop():
+    def _start_auto_cleanup(self):
+        def cleanup_loop():
             while True:
-                time.sleep(30)
-                if self.is_dirty:
-                    self._save_graph()
-                    self.is_dirty = False
-        threading.Thread(target=saver_loop, daemon=True).start()
+                time.sleep(86400)
+                self._archive_old_edges()
+        threading.Thread(target=cleanup_loop, daemon=True).start()
+
+    def _archive_old_edges(self):
+        with self._lock:
+            now = datetime.now()
+            to_archive = []
+            for u, v, data in self.graph.edges(data=True):
+                last_seen = data.get('last_seen')
+                if last_seen:
+                    try:
+                        last_date = datetime.strptime(last_seen, "%Y-%m-%d")
+                        if (now - last_date).days > 180:
+                            to_archive.append((u, v))
+                    except Exception as e:
+                        logger.error(f"Date parse error in archive: {e}")
+            for u, v in to_archive:
+                self.graph.edges[u, v]['archived'] = True
+            if to_archive:
+                self._save_graph()
 
     def record_triplet(self, source, relation, target, date_str=None):
         if not source or not relation or not target:
@@ -93,10 +109,16 @@ class LifetimeMemoryEngine:
             edge_data = self.graph.get_edge_data(src, tgt, default=None)
             if edge_data is not None and edge_data.get('relation') == rel:
                 self.graph.edges[src, tgt]['weight'] = edge_data.get('weight', 1) + 1
+                self.graph.edges[src, tgt]['count'] = edge_data.get('count', 1) + 1
                 self.graph.edges[src, tgt]['last_seen'] = date_str
+                if 'first_seen' not in edge_data:
+                    self.graph.edges[src, tgt]['first_seen'] = date_str
+                if 'archived' in self.graph.edges[src, tgt]:
+                    del self.graph.edges[src, tgt]['archived']
             else:
-                self.graph.add_edge(src, tgt, relation=rel, date=date_str, weight=1, last_seen=date_str)
-        self.is_dirty = True
+                self.graph.add_edge(src, tgt, relation=rel, date=date_str, weight=1, count=1, first_seen=date_str, last_seen=date_str)
+        
+        self._save_graph()
 
     def _clean_json(self, raw_text):
         m = re.search(r'(\[.*\]|{.*})', raw_text, re.DOTALL)
@@ -119,7 +141,8 @@ class LifetimeMemoryEngine:
                 raw = res.choices[0].message.content.strip()
                 data = json.loads(self._clean_json(raw))
                 return data.get("triplets", [])
-            except Exception:
+            except Exception as e:
+                logger.error(f"Extraction attempt failed: {e}")
                 time.sleep(1)
         return []
 
@@ -170,22 +193,27 @@ class LifetimeMemoryEngine:
                     undirected_g = self.graph.to_undirected()
                     try:
                         neighbors_dict = nx.single_source_shortest_path_length(undirected_g, matched_node, cutoff=2)
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"Shortest path calculation failed: {e}")
                         continue
                     
                     subgraph = self.graph.subgraph(neighbors_dict.keys())
                     
                     for u, v, data in subgraph.edges(data=True):
+                        if data.get('archived', False):
+                            continue
                         rel = data.get('relation', 'RELATES_TO')
                         weight = data.get('weight', 1)
+                        count = data.get('count', 1)
                         last_seen = data.get('last_seen', data.get('date', ''))
+                        first_seen = data.get('first_seen', '')
                         
                         days_diff = 0
                         if last_seen:
                             try:
                                 last_date = datetime.strptime(last_seen, "%Y-%m-%d").date()
                                 days_diff = (today - last_date).days
-                            except:
+                            except Exception:
                                 pass
                         
                         match_boost = 1.5 if (u in matched_nodes or v in matched_nodes) else 1.0
@@ -196,8 +224,9 @@ class LifetimeMemoryEngine:
                         depth_penalty = 1.0 if min_depth == 0 else 0.8
                         
                         time_penalty = 0.5 if days_diff > 180 else 1.0
+                        count_boost = min(1.0 + (count - 1) * 0.1, 2.0)
                         
-                        adjusted_weight = weight * time_penalty * depth_penalty * match_boost
+                        adjusted_weight = weight * time_penalty * depth_penalty * match_boost * count_boost
                         
                         results.append({
                             "text": f"[{u}] --({rel})--> [{v}]",
