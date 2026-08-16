@@ -190,7 +190,66 @@ class ContextMemory:
         except Exception as e:
             logger.error(f"Failed to fetch LTM nodes: {e}")
 
-        prompt = f"You are the core LTM Engine for Jarvis.\nYour job is to analyze the user's latest message with the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure (Triplets).\n\n[WHAT TO IGNORE]:\n- Commands & Actions (\"open google\", \"send mail\", \"remind me\").\n- Temporary states (\"I am eating pizza\", \"I am tired\", \"going to Delhi\").\n- Chit-chat or greetings (\"hello\", \"how are you\", \"ok\", \"thanks\").\n- Meta-instructions (\"remember this\", \"note this down\", \"store this\").\n\n[WHAT TO SAVE]:\n- Identity & Traits (Profession, Age, Habits, Skills).\n- Relationships (Friends, Family, Colleagues).\n- Hard Preferences (Likes, Dislikes, Allergies, Favorite things).\n- Assets (Car owned, Phone model, Pets).\n\n[ALLOWED RELATIONS]:\nFAMILY: FATHER, MOTHER, BROTHER, SISTER, SON, DAUGHTER, SPOUSE, UNCLE, AUNT\nPROFESSIONAL: WORKS_AS, EMPLOYED_AT, MANAGER_OF, COLLEAGUE\nPERSONAL: FRIEND, NEIGHBOR, ROOMMATE, PARTNER\nCORE: IS_A, LIKES, DISLIKES, OWNS, USES, PREFERS, HAS_SKILL, LOCATED_IN, CREATED\n\n[RULES]:\n1. Use the MOST SPECIFIC relation possible. For example, if the user says \"my father\", use FATHER instead of HAS_RELATION.\n2. Never store generic facts like \"User is_a Person\" or \"Jarvis has_relation System\". Skip such entries.\n3. Resolve pronouns (he/she/it) using the Context History.\n4. Keep entities short (1-3 words max) and in Title Case.\n5. Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.\n6. If you are unsure about a relation, use the most specific available from the list above.\n7. If the relation is family-related, ensure both source and target are people (not emails or phone numbers).\n8. If a fact is temporary or not permanent, set \"is_permanent_fact\" to false.\n\n[EXISTING GRAPH NODES]:\n{existing_nodes_str}\n\n[Context History]:\n{recent_history if recent_history else 'No recent history.'}\n\n[User's Latest Message]: \"{message}\"\n\nReturn STRICT JSON exactly in this schema:\n{{\n    \"reasoning\": \"string\",\n    \"is_permanent_fact\": boolean,\n    \"triplets\": [\n        {{\"source\": \"Entity1\", \"relation\": \"ALLOWED_RELATION\", \"target\": \"Entity2\"}}\n    ]\n}}\n"
+        prompt = f"""You are the core LTM Engine for Jarvis.
+Your job is to analyze the user's latest message with the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure.
+
+[WHAT TO IGNORE]:
+- Commands & Actions ("open google", "send mail", "remind me").
+- Temporary states ("I am eating pizza", "I am tired", "going to Delhi").
+- Chit-chat or greetings ("hello", "how are you", "ok", "thanks").
+- Meta-instructions ("remember this", "note this down", "store this").
+
+[WHAT TO SAVE]:
+- Identity & Traits (Profession, Age, Habits, Skills).
+- Relationships (Friends, Family, Colleagues).
+- Hard Preferences (Likes, Dislikes, Allergies, Favorite things).
+- Assets (Car owned, Phone model, Pets).
+
+[ALLOWED RELATIONS]:
+FAMILY: FATHER, MOTHER, BROTHER, SISTER, SON, DAUGHTER, SPOUSE, UNCLE, AUNT
+PROFESSIONAL: WORKS_AS, EMPLOYED_AT, MANAGER_OF, COLLEAGUE
+PERSONAL: FRIEND, NEIGHBOR, ROOMMATE, PARTNER
+CORE: IS_A, LIKES, DISLIKES, OWNS, USES, PREFERS, HAS_SKILL, LOCATED_IN, CREATED
+
+[RULES]:
+1. Use the MOST SPECIFIC relation possible. For example, if the user says "my father", use FATHER instead of HAS_RELATION.
+2. Never store generic facts like "User is_a Person". Skip such entries.
+3. Resolve pronouns (he/she/it) using the Context History.
+4. Keep entities short (1-3 words max) and in Title Case.
+5. Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.
+6. If the relation is family-related, ensure both source and target are people.
+7. If a fact is temporary or not permanent, set "is_permanent_fact" to false.
+
+[EXISTING GRAPH NODES]:
+{existing_nodes_str}
+
+[Context History]:
+{recent_history if recent_history else 'No recent history.'}
+
+[User's Latest Message]: "{message}"
+
+Return STRICT JSON exactly in this schema:
+{{
+    "reasoning": "string",
+    "is_permanent_fact": boolean,
+    "triplets": [
+        {{
+            "source": "Entity1",
+            "relation": "ALLOWED_RELATION",
+            "target": "Entity2",
+            "metadata": {{
+                "confidence": float,
+                "context": "Brief context about this relation",
+                "source_message": "Exact sentence or snippet proving this fact"
+            }},
+            "inverse": {{
+                "relation": "INVERSE_RELATION_NAME",
+                "target": "Entity1"
+            }}
+        }}
+    ]
+}}
+"""
         for _ in range(3):
             try:
                 response = self.groq_client.chat.completions.create(
@@ -215,6 +274,8 @@ class ContextMemory:
                                 src = str(t.get("source", "")).strip().title()
                                 rel = str(t.get("relation", "")).strip().upper()
                                 tgt = str(t.get("target", "")).strip().title()
+                                metadata = t.get("metadata", {})
+                                inverse = t.get("inverse")
                                 
                                 if not (src and rel and tgt) or not self._is_valid_triplet(src, rel, tgt):
                                     continue
@@ -224,7 +285,7 @@ class ContextMemory:
                                         existing_rel = ltm_engine.graph.edges[src, tgt].get('relation')
                                         if existing_rel == 'HAS_RELATION' and rel != 'HAS_RELATION':
                                             ltm_engine.graph.remove_edge(src, tgt)
-                                    ltm_engine.record_triplet(src, rel, tgt)
+                                    ltm_engine.record_triplet(src, rel, tgt, metadata=metadata, inverse=inverse)
                                     logger.info(f"LTM Saved: [{src}] --({rel})--> [{tgt}]")
                         except Exception as e:
                             logger.error(f"LTM Engine Save Error: {e}")

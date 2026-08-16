@@ -487,7 +487,18 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             elif value.get("lifetime_recall"):
                                 recall_val = value.get("lifetime_recall")
                                 if isinstance(recall_val, list):
-                                    action_detail = f"Recalling LTM: {', '.join(recall_val)}"
+                                    parsed_entities = []
+                                    for item in recall_val:
+                                        if isinstance(item, dict):
+                                            entity = item.get('entity', '')
+                                            relation = item.get('relation', '')
+                                            if entity and relation:
+                                                parsed_entities.append(f"{entity} ({relation})")
+                                            elif entity:
+                                                parsed_entities.append(entity)
+                                        elif isinstance(item, str):
+                                            parsed_entities.append(item)
+                                    action_detail = f"Recalling LTM: {', '.join(parsed_entities)}"
                                 else:
                                     action_detail = f"Recalling LTM: {recall_val}"
                         elif key == "search_actions" and isinstance(value, dict):

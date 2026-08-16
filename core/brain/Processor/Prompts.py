@@ -210,13 +210,25 @@ def get_native_tools():
                             ),
                             "lifetime_recall": types.Schema(
                                 type=types.Type.ARRAY,
-                                items=types.Schema(type=types.Type.STRING),
+                                items=types.Schema(
+                                    type=types.Type.OBJECT,
+                                    properties={
+                                        "entity": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="The exact core Entity Noun (e.g., 'User', 'Rahul', 'naya project'). NEVER translate."
+                                        ),
+                                        "relation": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="Optional. If the user asks about a specific relationship, provide it here in UPPERCASE (e.g., 'FATHER', 'BROTHER', 'LIKES', 'WORKS_AS')."
+                                        )
+                                    },
+                                    required=["entity"]
+                                ),
                                 description=(
                                     "[TARGET: Relational Knowledge Graph]\n"
-                                    "[CRITICAL RULE]: Pass an ARRAY of EXACT 1-2 core Entity Nouns (e.g., ['Rahul', 'naya project', 'favorite sport']).\n"
-                                    "Combine multiple questions into one array request to save time.\n"
-                                    "NEVER pass descriptive phrases like 'project tech stack', 'what does rahul like', or 'hobbies'.\n"
-                                    "NEVER translate words. The Graph DB requires exact spoken entities."
+                                    "[CRITICAL RULE]: Pass an ARRAY of Objects. Each object MUST contain an 'entity' and optionally a 'relation'.\n"
+                                    "Example: If user asks 'mere father ka kya naam hai?', pass [{\"entity\": \"User\", \"relation\": \"FATHER\"}].\n"
+                                    "Combine multiple questions into one array request to save time. NEVER pass descriptive phrases."
                                 )
                             )
                         }

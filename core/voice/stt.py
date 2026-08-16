@@ -45,8 +45,7 @@ class UnifiedVoiceAssistant:
                 raise FileNotFoundError(f"Vosk model not found at '{model_path}'.")
             
             self.vosk_model = VoskModel(model_path)
-            grammar = json.dumps(self.WAKE_WORDS + ["[unk]", "hello", "hi", "computer"])
-            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
+            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE)
 
             self.audio = pyaudio.PyAudio()
             self.stream = self.audio.open(
@@ -161,15 +160,12 @@ class UnifiedVoiceAssistant:
             return False
 
     def _check_wake_word(self, text):
-        words = text.lower().split()
-        for phrase in self.WAKE_WORDS:
-            phrase_words = phrase.split()
-            if len(phrase_words) == 1:
-                if phrase_words[0] in words:
-                    return True
-            else:
-                if phrase in text.lower():
-                    return True
+        clean_text = text.lower().strip()
+        if not clean_text:
+            return False
+        for wake in self.WAKE_WORDS:
+            if wake == clean_text or clean_text.endswith(f" {wake}") or clean_text.startswith(f"{wake} "):
+                return True
         return False
 
     def _audio_loop(self):
@@ -187,13 +183,6 @@ class UnifiedVoiceAssistant:
                         
                         if self._check_wake_word(text) and rms >= self.MIN_RMS_THRESHOLD:
                             triggered = True
-                    else:
-                        partial = json.loads(self.vosk_recognizer.PartialResult())
-                        p_text = partial.get("partial", "").strip()
-                        
-                        if p_text in self.WAKE_WORDS and rms >= (self.MIN_RMS_THRESHOLD + 200):
-                            triggered = True
-                            self.vosk_recognizer.Reset()
 
                     if triggered:
                         try:

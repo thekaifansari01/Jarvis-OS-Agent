@@ -24,6 +24,7 @@ class LifetimeMemoryEngine:
         logger.info("⏳ Loading Semantic Embedding Model (all-MiniLM-L6-v2) for LTM...")
         self.embedder = SentenceTransformer('all-MiniLM-L6-v2') 
         self.node_embeddings = {}
+        self.metadata_embeddings = {}
         
         self._load_graph()
         self._start_auto_cleanup()
@@ -34,6 +35,12 @@ class LifetimeMemoryEngine:
             embeddings = self.embedder.encode(nodes)
             for node, emb in zip(nodes, embeddings):
                 self.node_embeddings[node] = emb
+                
+        for u, v, data in self.graph.edges(data=True):
+            if 'metadata' in data and data['metadata'] and data['metadata'].get('source_message'):
+                msg = data['metadata']['source_message']
+                if msg and msg not in self.metadata_embeddings:
+                    self.metadata_embeddings[msg] = self._get_embedding(msg)
 
     def _get_embedding(self, text):
         return self.embedder.encode([text])[0]
@@ -90,7 +97,7 @@ class LifetimeMemoryEngine:
             if to_archive:
                 self._save_graph()
 
-    def record_triplet(self, source, relation, target, date_str=None):
+    def record_triplet(self, source, relation, target, date_str=None, metadata=None, inverse=None):
         if not source or not relation or not target:
             return
         src = str(source).strip().title()
@@ -111,13 +118,31 @@ class LifetimeMemoryEngine:
                 self.graph.edges[src, tgt]['weight'] = edge_data.get('weight', 1) + 1
                 self.graph.edges[src, tgt]['count'] = edge_data.get('count', 1) + 1
                 self.graph.edges[src, tgt]['last_seen'] = date_str
+                if metadata:
+                    self.graph.edges[src, tgt]['metadata'] = metadata
                 if 'first_seen' not in edge_data:
                     self.graph.edges[src, tgt]['first_seen'] = date_str
                 if 'archived' in self.graph.edges[src, tgt]:
                     del self.graph.edges[src, tgt]['archived']
             else:
-                self.graph.add_edge(src, tgt, relation=rel, date=date_str, weight=1, count=1, first_seen=date_str, last_seen=date_str)
-        
+                self.graph.add_edge(src, tgt, relation=rel, date=date_str, weight=1, count=1, first_seen=date_str, last_seen=date_str, metadata=metadata)
+            
+            if metadata and metadata.get('source_message'):
+                msg = metadata['source_message']
+                if msg not in self.metadata_embeddings:
+                    self.metadata_embeddings[msg] = self._get_embedding(msg)
+
+            if inverse:
+                inv_rel = str(inverse.get("relation", "")).strip().upper()
+                inv_tgt = str(inverse.get("target", "")).strip().title()
+                if inv_rel and inv_tgt:
+                    inv_edge_data = self.graph.get_edge_data(tgt, inv_tgt, default=None)
+                    if inv_edge_data is not None and inv_edge_data.get('relation') == inv_rel:
+                        self.graph.edges[tgt, inv_tgt]['weight'] = inv_edge_data.get('weight', 1) + 1
+                        self.graph.edges[tgt, inv_tgt]['last_seen'] = date_str
+                    else:
+                        self.graph.add_edge(tgt, inv_tgt, relation=inv_rel, date=date_str, weight=1, count=1, first_seen=date_str, last_seen=date_str, metadata=metadata)
+
         self._save_graph()
 
     def _clean_json(self, raw_text):
@@ -129,7 +154,7 @@ class LifetimeMemoryEngine:
     def _extract_triplets(self, text):
         if not self.groq_client or not text.strip():
             return []
-        prompt = f'Extract knowledge graph triplets from the text. Return ONLY a JSON object with a "triplets" array of objects with keys: "source", "relation", "target". Keep entities short (1-2 words). Make relations UPPERCASE. Text: {text[:3000]}'
+        prompt = f'Extract knowledge graph triplets from the text. Return ONLY a JSON object with a "triplets" array of objects with keys: "source", "relation", "target", "metadata" (object with "context" and "source_message" keys), and "inverse" (object with "relation" and "target" keys). Keep entities short (1-2 words). Make relations UPPERCASE. Text: {text[:3000]}'
         for _ in range(3):
             try:
                 res = self.groq_client.chat.completions.create(
@@ -158,21 +183,30 @@ class LifetimeMemoryEngine:
                     src = str(t.get("source", "")).strip().title()
                     rel = str(t.get("relation", "")).strip().upper()
                     tgt = str(t.get("target", "")).strip().title()
+                    metadata = t.get("metadata", {})
+                    inverse = t.get("inverse")
                     if src and rel and tgt:
-                        self.record_triplet(src, rel, tgt, target_date)
+                        self.record_triplet(src, rel, tgt, target_date, metadata=metadata, inverse=inverse)
         threading.Thread(target=_process, daemon=True).start()
 
     def search_lifetime_memory(self, queries, top_k=3, threshold=0.75):
         if not queries:
             return "Observation: Query empty."
         
+        entities = []
+        relations = []
         if isinstance(queries, str):
             entities = [queries.strip()]
         elif isinstance(queries, list):
-            entities = [str(q).strip() for q in queries if str(q).strip()]
-        else:
-            return "Observation: Invalid query format."
-
+            for q in queries:
+                if isinstance(q, dict):
+                    ent = q.get('entity', '')
+                    if ent: entities.append(str(ent).strip())
+                    rel = q.get('relation', '')
+                    if rel: relations.append(str(rel).strip().lower())
+                else:
+                    if str(q).strip(): entities.append(str(q).strip())
+        
         if not entities:
             return "Observation: No clear entities provided."
         
@@ -188,6 +222,26 @@ class LifetimeMemoryEngine:
                     sim = 1 - cosine(ent_emb, node_emb)
                     if sim >= threshold or ent.lower() in node.lower() or node.lower() in ent.lower():
                         matched_nodes.append(node)
+                
+                for msg, msg_emb in self.metadata_embeddings.items():
+                    sim = 1 - cosine(ent_emb, msg_emb)
+                    if sim >= threshold:
+                        for u, v, data in self.graph.edges(data=True):
+                            if data.get('metadata', {}).get('source_message') == msg:
+                                if u not in matched_nodes: matched_nodes.append(u)
+                                if v not in matched_nodes: matched_nodes.append(v)
+
+                for u, v, data in self.graph.edges(data=True):
+                    rel = data.get('relation', '')
+                    match_found = False
+                    if ent.lower() in rel.lower():
+                        match_found = True
+                    for r in relations:
+                        if r in rel.lower():
+                            match_found = True
+                    if match_found:
+                        if u not in matched_nodes: matched_nodes.append(u)
+                        if v not in matched_nodes: matched_nodes.append(v)
                 
                 for matched_node in matched_nodes:
                     undirected_g = self.graph.to_undirected()
@@ -206,7 +260,8 @@ class LifetimeMemoryEngine:
                         weight = data.get('weight', 1)
                         count = data.get('count', 1)
                         last_seen = data.get('last_seen', data.get('date', ''))
-                        first_seen = data.get('first_seen', '')
+                        metadata = data.get('metadata', {})
+                        source_msg = metadata.get('source_message', '')
                         
                         days_diff = 0
                         if last_seen:
@@ -228,8 +283,12 @@ class LifetimeMemoryEngine:
                         
                         adjusted_weight = weight * time_penalty * depth_penalty * match_boost * count_boost
                         
+                        res_text = f"[{u}] --({rel})--> [{v}]"
+                        if source_msg:
+                            res_text += f" (Context: {source_msg})"
+                        
                         results.append({
-                            "text": f"[{u}] --({rel})--> [{v}]",
+                            "text": res_text,
                             "weight": adjusted_weight
                         })
 
