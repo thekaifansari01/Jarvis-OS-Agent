@@ -194,11 +194,11 @@ Jarvis utilizes a dual-engine architecture to optimize API costs, speed, and rea
 JARVIS implements a **four‑tier** artificial memory system, setting a new standard for open-source AI desktop agents:
 
 1. **📜 Rolling JSONL History (Short‑Term):** 15‑day rolling conversation context, auto‑pruned and archived.
-2. **🗄️ Weighted Lifetime Episodic Graph (Long‑Term):**
-   - Built on `NetworkX` with **weighted edges** and **temporal decay** (relations older than 6 months lose half their weight).
-   - **Semantic Vector Embeddings:** Uses `SentenceTransformers` (`all-MiniLM-L6-v2`) for zero-shot semantic matching. Maps conceptual synonyms (e.g., "React" matches "ReactJS") autonomously.
-   - **Batched Array Queries & Preloading:** Preloads the embedding engine at startup to process multi-entity graph queries in a single agent step with zero latency.
-   - **Subgraph Retrieval:** Extracts complete 2-hop subgraphs around matched nodes to retain secondary contextual facts.
+2. **🗄️ Bidirectional Property Graph Memory (Long‑Term):**
+   - **Enterprise Relational Graph:** Built on `NetworkX`, it abandons basic entity extraction for a robust **Property Graph**. Every fact is stored with deep context (`metadata`), exact source messages, and AI confidence scores.
+   - **Bidirectional Awareness:** Automatically creates inverse edges (e.g., saving `[User] -> (FATHER) -> [FatherName]` auto-generates `[FatherName] -> (CHILD) -> [User]`) for flawless multi-directional querying.
+   - **Semantic Edge & Context Routing:** Fixes traditional vector-search bugs by explicitly matching relational edge intent first, falling back to deep semantic similarity searches against the exact conversational context messages.
+   - **Temporal Decay & Preloading:** Implements temporal weight decay (relations older than 6 months lose half their weight). Preloads the embedding engine (`all-MiniLM-L6-v2`) at startup for zero-latency multi-entity traversal.
 3. **📚 Hybrid RAG (Workspace Documents):**
    - **Smart Chunking:** Text is chunked with 1500 character limits and a 200-character overlap to preserve cross-boundary context.
    - **Hybrid Retrieval:** Merges **BM25 keyword search** and **Gemini embedding vector search** via **Reciprocal Rank Fusion (RRF)**.
