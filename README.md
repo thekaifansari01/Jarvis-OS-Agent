@@ -3,7 +3,7 @@
 > **Welcome to the Jarvis-OS-Agent by @thekaifansari01.**  
 > *"We call it an AI Operating System because it autonomously controls your PC, Android Phone, Local Files, and Lifelong Memory — not just your code."*
 
-> **Open-Source AI Agent · Zero Line‑Drift Coding · Lifelong Episodic Memory · Voice‑First Multimodal · Proactive HITL · Android ADB Control · Telegram Remote Execution · Hybrid RAG**
+> **Open-Source AI Agent · Zero Line‑Drift Coding · Lifelong Episodic Memory · Voice‑First Multimodal · Proactive HITL · Android ADB Control · Telegram Remote Execution · Hybrid RAG · PC System Monitoring**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -38,6 +38,7 @@
 - [🧠 Lifelong Episodic Memory & Hybrid RAG System](#-lifelong-episodic-memory--hybrid-rag-system)
 - [📱 Android Mobile Control via ADB](#-android-mobile-control-via-adb)
 - [🛠️ Integrated AI Tool Ecosystem](#️-integrated-ai-tool-ecosystem)
+- [💻 PC System Monitoring & Proactive Alerts](#-pc-system-monitoring--proactive-alerts)
 - [🚀 How to Install Jarvis OS Agent (Quick Setup)](#-how-to-install-jarvis-os-agent-quick-setup)
 - [📋 Real‑World Autonomous AI Use Cases](#-realworld-autonomous-ai-use-cases)
 - [⚙️ Command Line Interface (CLI) & Agent Configuration](#️-command-line-interface-cli--agent-configuration)
@@ -60,6 +61,7 @@
 | 📱 | **Android ADB Mobile Control** | Remotely control your Android phone via ADB over Tailscale. Execute lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, and take screenshots directly from your PC. |
 | 🌍 | **Telegram Remote PC Control** | Control your Windows PC from anywhere globally via a secure Telegram bot. Commands trigger silent background execution without disrupting your active desktop workflow. |
 | 📨 | **Proactive Automation (Email/WhatsApp/Telegram)** | Background listeners for Gmail, WhatsApp, Telegram, and Google Calendar. Jarvis detects updates in real-time and utilizes Proactive HITL (Human-In-The-Loop) to ask for consent before modifying critical data. |
+| 💻 | **PC System Monitoring & Alerts** | Background listener for CPU, RAM, Disk, Battery, Network, and USB devices. Smart cooldown (60s), idle/fullscreen suppression, and LLM-filtered proactive alerts via the Scout Agent. |
 | 🗣️ | **Voice‑First Multimodal AI** | Integrates Deepgram Nova-2 STT with **Vosk KWS (Keyword Spotting)** for sub-second noise-immune triggering. Features Edge TTS voice output, multimodal vision (OCR/Image Analysis), and AI Image Generation (Flux/AI Horde). |
 | 🔌 | **Multi‑LLM Auto‑Failover (Cloud & Local)** | Seamlessly switches between Regolo, Gemini, OpenRouter, or **Local LLMs (Ollama, LM Studio, vLLM)**. Zero downtime workflow execution even if the primary provider hits API rate limits. |
 | 🎨 | **Reactive Dynamic UI Ecosystem** | Features a ZMQ‑powered floating PyQt5 Agent Panel with real‑time thought/action/observation streaming. Includes a live markdown typing popup with async image previews, glass‑morphism, and auto-resize dynamic glow. |
@@ -81,6 +83,7 @@ For developers seeking an **open-source AI coding agent** and **desktop assistan
 | **Isolated Environment:** Cannot be triggered remotely. | **Telegram Remote Bot:** Issue commands to your PC remotely via Telegram; executed silently in the background. |
 | **Reactive Only:** Waits for you to prompt it. | **Proactive HITL:** Background listeners read emails/chats and proactively suggest calendar updates or replies. |
 | **Basic RAG Integration:** Uses either semantic OR keyword search, yielding poor results. | **Hybrid RAG System:** BM25 keyword search + Vector semantic search merged via Reciprocal Rank Fusion (RRF). |
+| **No System Health Awareness:** Cannot monitor PC resources or alert you. | **PC System Monitoring:** Real-time CPU/RAM/Disk/Battery/Network/USB alerts with smart suppression. |
 
 ---
 
@@ -127,6 +130,7 @@ flowchart TD
         Vision[👁️ Vision Multimodal / OCR]
         Image[🎨 Image Gen / Edit]
         Mobile[📱 ADB / Mobile Control]
+        PC[💻 PC Monitor / System Health]
     end
     
     AgenticBrain --> Tools
@@ -146,7 +150,7 @@ flowchart TD
     InputPopup --> Router
     
     subgraph Proactive[🛡️ Proactive HITL Watchdog]
-        Listeners[📡 Gmail / WhatsApp / Telegram / Reminders]
+        Listeners[📡 Gmail / WhatsApp / Telegram / Reminders / PC Monitor]
         Scout[🛡️ Proactive Scout Agent]
         Consent[🔒 HITL Consent Gate]
     end
@@ -185,6 +189,7 @@ Jarvis utilizes a dual-engine architecture to optimize API costs, speed, and rea
 | **Multimodal Vision** | ❌ No vision processing. | ✅ `vision` (Image/Video analysis, OCR, Object detection). |
 | **Web Research** | ❌ Basic real-time search (`quick_web_search`). | ✅ `deep_research` (420s synthesis), ArXiv, YouTube scraping. |
 | **Mobile Control** | ❌ No Android connection. | ✅ Full ADB mobile control over Tailscale. |
+| **PC Monitoring** | ❌ No system health awareness. | ✅ Full PC Monitor integration (CPU/RAM/Disk/Battery/Network). |
 | **Proactive HITL** | ❌ No background scanning. | ✅ Strict Partner Confirmation Mode before permanent modifications. |
 
 ---
@@ -238,8 +243,49 @@ Control your Android smartphone completely hands-free from your Windows PC using
 | 🌍 **Remote Control** | Telegram Bot API for triggering silent PC commands externally |
 | 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript extraction, Deep Research |
 | ⚙️ **System Automation** | App launch/kill, volume/brightness control, clipboard CRUD operations |
+| 💻 **PC System Monitoring** | CPU/RAM/Disk/Battery/Network/USB monitoring with smart alerts |
 | 👁️ **Multimodal Vision** | Screen/Video analysis, Object detection, OCR data extraction |
 | 🎨 **Image Generation** | Text‑to‑image generation (Regolo/FLUX), Image‑to‑image editing (AI Horde) |
+
+---
+
+## 💻 PC System Monitoring & Proactive Alerts
+
+Jarvis now includes a **background PC Monitor** that continuously tracks your system health and proactively alerts you via the Scout Agent. This feature is completely autonomous and runs alongside your other proactive listeners.
+
+### 🔍 What It Monitors
+
+| Component | Alert Trigger | Priority |
+|-----------|---------------|----------|
+| **CPU** | Usage > 85% (sustained) | High |
+| **RAM** | Usage > 85% | High |
+| **Disk Space** | Free space < 5GB on C: drive | High |
+| **Battery** | Critical low (< 15%) or Charging status change | Critical |
+| **Network** | Internet connection lost | High |
+| **USB Devices** | New USB insertion detected | Normal |
+
+### 🛡️ Smart Alert Suppression
+
+- **Cooldown (60s):** Same alert won't repeat within 60 seconds.
+- **Deduplication:** Already processed events are cached and ignored.
+- **Idle/Fullscreen Detection:** Resource alerts are suppressed when you're away (>10 min idle) or watching a movie/game in fullscreen.
+- **LLM Filtering:** Every alert passes through the Proactive Scout Agent, which decides whether to announce, suggest action, or ignore based on context and history.
+
+### 📊 How It Integrates
+
+```
+PC Monitor (Background Thread)
+   ↓
+push_proactive_event("PC_Monitor", data, priority)
+   ↓
+Proactive Queue (Batched every 4 seconds)
+   ↓
+Proactive Scout Agent (LLM Evaluator)
+   ↓
+Decision: IGNORE / ANNOUNCE / SUGGEST_ACTION
+   ↓
+Jarvis Speaks or Executes Action
+```
 
 ---
 
@@ -328,6 +374,15 @@ jarvis
 3. **Day 100:** User: *"I really like BMW."* → Knowledge Graph Weight increases to 2.
 4. **Day 400:** User: *"What do I like?"* → Algorithm calculates temporal decay (Day 400 vs Day 100). Adjusted weight prioritizes the most relevant lifelong facts instantly.
 
+### 💻 Scenario 5: Proactive System Health Monitoring
+
+1. **Background Listener:** PC Monitor detects CPU usage at 92% with Chrome as the top process.
+2. **Jarvis (Scout Mode):** Evaluates context, checks you're not in fullscreen/idle, and decides "SUGGEST_ACTION".
+3. **Jarvis (Voice):** *"Sir, CPU usage is high at 92% due to Chrome. Should I suggest closing unused tabs or suspending background processes?"*
+4. **User:** *"Yeah, close the tabs."*
+5. **Jarvis:** Triggers AgenticBrain → runs terminal command to close Chrome or sends a browser command.
+6. **Jarvis:** *"Done sir, Chrome tabs have been closed. CPU usage is back to normal."*
+
 ---
 
 ## ⚙️ Command Line Interface (CLI) & Agent Configuration
@@ -391,18 +446,21 @@ Copy `.env.example` to `.env` in the root directory and populate your API creden
 | Custom Local Provider (Ollama) failing | Double-check `CUSTOM_BASE_URL` ends with `/v1` and the endpoint strictly follows OpenAI formatting. |
 | Knowledge Graph memory feels stale | Delete `Data/jarvis_memory/lifetime_graph.json` and reboot. Graph nodes, temporal weights, and vector embeddings will auto-rebuild. |
 | Hybrid RAG Search returning poor data | Delete `Data/jarvis_memory/rag_chroma_db` and reboot to force a fresh index with updated chunk overlap logic. |
+| PC Monitor not starting / psutil missing | Ensure `psutil`, `pywin32`, and `pygetwindow` are installed. Run `pip install psutil pywin32 pygetwindow`. |
+| Too many PC Monitor alerts | Adjust thresholds in `PCMonitorProactive.py`: `CPU_THRESHOLD`, `RAM_THRESHOLD`, `DISK_THRESHOLD_GB`, `COOLDOWN_SECONDS`. |
+| USB devices not detected | Run PowerShell as **Administrator**. PC Monitor needs admin rights to read Windows Event Logs. |
 
 ---
 
 ## 🤝 Contributing to the Open Source Agent
 
-We actively welcome contributions to make the Jarvis OS Agent the best open-source AI desktop assistant! 
+We actively welcome contributions to make the Jarvis OS Agent the best open-source AI desktop assistant!
 
 > ⚖️ **IMPORTANT: By submitting a Pull Request or any code to this repository, you automatically agree to the [Contributor License Agreement (CLA)](CONTRIBUTING.md).**  
 > This means you grant the project maintainer (Kaif Ansari) the right to use your code in both open-source (GPLv3) and **commercial/proprietary** licenses without seeking further permission from you.  
 > Please read the full `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` before contributing.
 
-Whether it's patching bugs, integrating new LLM providers, or expanding documentation, here’s how to contribute:
+Whether it's patching bugs, integrating new LLM providers, or expanding documentation, here's how to contribute:
 
 1. **Fork** the repository.
 2. **Create a Feature Branch** (`git checkout -b feature/AdvancedRAGUpdate`).

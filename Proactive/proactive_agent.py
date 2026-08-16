@@ -17,6 +17,7 @@ from Proactive.Email.EmailProactive import listen_for_emails, stop_email_listene
 from Proactive.Whatsapp.WhatsappProactive import listen_for_whatsapp
 from Proactive.Reminder.ReminderProactive import listen_for_reminders
 from Proactive.Telegram.TelegramProactive import listen_for_telegram, stop_telegram_listener
+from Proactive.SystemP.PCMonitorProactive import listen_for_pc_monitor, stop_pc_monitor
 
 PROACTIVE_AGENT = AGENT_PROACTIVE
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -66,6 +67,7 @@ def stop_proactive_agent():
     _stop_proactive.set()
     stop_email_listener()
     stop_telegram_listener()
+    stop_pc_monitor()
 
 def is_instant_spam(text: str) -> bool:
     text_lower = text.lower()
@@ -131,14 +133,14 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
             time.sleep(5)
             
     if decision in ["SUGGEST_ACTION", "ACT_AND_ANNOUNCE"] and agent_command:
-        logger.info(f"⚡ Proactive Triggering Silent Agentic Brain: {agent_command}")
+        logger.info(f"Proactive Triggering Silent Agentic Brain: {agent_command}")
         def _run_silent_agent():
             try:
                 agent_context = f"[PROACTIVE EVENT TRIGGER]\n{batched_data}"
                 result = run_agentic_loop(agent_command, agent_context, memory_instance, silent=True)
                 if result and result.get("response"):
                     reply_text = result["response"]
-                    logger.info(f"📢 Proactive Agent Confirmation: {reply_text}")
+                    logger.info(f"Proactive Agent Confirmation: {reply_text}")
                     speak(reply_text)
                     if memory_instance:
                         memory_instance.add_message(
@@ -156,7 +158,7 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
         return
         
     if decision == "ANNOUNCE" and announcement:
-        logger.info(f"📢 Proactive Announcement: {announcement}")
+        logger.info(f"Proactive Announcement: {announcement}")
         threading.Thread(target=speak, args=(announcement,), daemon=True).start()
         if memory_instance:
             try:
@@ -174,7 +176,7 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
                 logger.warning(f"Failed to add proactive message to memory: {mem_err}")
 
 def proactive_loop(memory_instance, is_jarvis_busy_callback):
-    logger.info("🛡️ Proactive Scout Agent initialized and listening...")
+    logger.info("Proactive Scout Agent initialized and listening...")
     while not _stop_proactive.is_set():
         try:
             events = get_batched_events(window_seconds=4)
@@ -233,10 +235,17 @@ def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
             if os.path.exists(cred_path):
                 t = threading.Thread(target=listener_func, daemon=True)
                 t.start()
-                logger.info(f"✅ Started Proactive Listener: {name}")
+                logger.info(f"Started Proactive Listener: {name}")
             else:
-                logger.info(f"⏭️ Skipping {name} listener (not logged in)")
+                logger.info(f"Skipping {name} listener (not logged in)")
         except Exception as e:
             logger.error(f"Failed to start listener {name}: {e}")
+
+    try:
+        t = threading.Thread(target=listen_for_pc_monitor, daemon=True)
+        t.start()
+        logger.info("Started Proactive Listener: PC Monitor")
+    except Exception as e:
+        logger.error(f"Failed to start PC Monitor: {e}")
 
     return brain_thread

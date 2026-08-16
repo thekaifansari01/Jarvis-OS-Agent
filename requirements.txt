@@ -35,6 +35,8 @@ pyautogui==0.9.54
 pyperclip==1.11.0
 screen-brightness-control==0.27.2
 pycaw==20251023
+pywin32
+pygetwindow
 
 # ===== WEB & APIs =====
 flask==3.1.0
