@@ -13,6 +13,9 @@ import ctypes
 from core.logger.logger import logger
 
 os.environ['PYTHONUNBUFFERED'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['PYTHONHTTPSVERIFY'] = '0'
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(write_through=True)
@@ -107,11 +110,11 @@ def main() -> None:
     os.system('cls' if os.name == 'nt' else 'clear')
     print(r"""
         ██╗  █████╗ ██████╗ ██╗   ██╗██╗███████╗
-        ██║ ██╔══██╗██╔══██╗██║   ██║██║██╔════╝
-        ██║ ███████║██████╔╝██║   ██║██║███████╗
-    ██  ██║ ██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║
-    ╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
-    ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
+        ██║ ██╔══██╗██╔══██╗██║   ██║██║╚══██╔══╝
+        ██║ ███████║██████╔╝██║   ██║██║   ██║   
+    ██  ██║ ██╔══██║██╔══██╗██║   ██║██║   ██║   
+    ╚████╔╝ ██║  ██║██║  ██║╚██████╔╝██║   ██║   
+     ╚═══╝  ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝   ╚═╝   
     """)
 
     import pygame
