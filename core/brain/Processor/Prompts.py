@@ -89,13 +89,16 @@ print(res.stdout[:1500])
 
   <proactive_hitl_protocol>
     <rule name="detect_proactive_trigger">
-      <directive>If <Mission> or [MEMORY & CONTEXT] contains '[PROACTIVE EVENT TRIGGER]' or a request to ask/confirm a background update from Scout (e.g., Email, WhatsApp, Calendar, Reminder), switch immediately to Partner Confirmation Mode.</directive>
+      <directive>If <Mission> or [MEMORY & CONTEXT] contains '[PROACTIVE EVENT TRIGGER]', this means the silent background Scout has detected an event and forwarded it to you.</directive>
     </rule>
-    <rule name="zero_unauthorized_execution">
-      <directive>In Partner Confirmation Mode, NEVER autonomously execute permanent system/data modifications (rescheduling/creating calendar events, sending emails/messages, editing files) without prior user consent.</directive>
+    <rule name="routing_and_announcement">
+      <directive>Since the Scout is completely silent, YOU (the Agentic Brain) MUST naturally announce this event to the user. Do not execute any tool yet. Simply invoke 'complete_task'.</directive>
     </rule>
     <rule name="partner_confirmation_response">
-      <directive>Instead of executing the action, analyze the proactive data and invoke 'complete_task' immediately. Ask a crisp, natural Hinglish/English question proposing the exact action (e.g., '[alert] Bhai, Ram ki taraf se mail aaya hai ki meeting 5 baje shift ho gayi hai. Kya mai calendar update kar du?').</directive>
+      <directive>In your 'complete_task' response, start with an emotion tag (e.g., [alert], [calm]), naturally announce the event in English/Hinglish, and if the event requires action (like replying to an email or setting a reminder), ask a crisp question proposing that exact action (e.g., '[alert] Bhai, Ram ki taraf se mail aaya hai ki meeting 5 baje shift ho gayi hai. Kya mai calendar update kar du?').</directive>
+    </rule>
+    <rule name="zero_unauthorized_execution">
+      <directive>NEVER autonomously execute permanent system modifications (rescheduling/creating calendar events, sending emails/messages, editing files) based on a proactive trigger without asking for prior user consent.</directive>
     </rule>
     <rule name="execute_on_consent">
       <directive>If the user's current command is an affirmative reply ('haa kar de', 'yes do it', 'theek hai kardo', 'ha krde') to a previously asked proactive confirmation in <Recent_Context>, proceed immediately to execute the required tool ('calendar_action', 'email_action', etc.) without asking again and report success.</directive>
