@@ -12,7 +12,7 @@ from PyQt5.QtCore import (Qt, QTimer, QPropertyAnimation, QEasingCurve,
                           pyqtProperty, QSize, qInstallMessageHandler,
                           QThread, pyqtSignal)
 from PyQt5.QtWidgets import (QWidget, QLabel, QVBoxLayout, QHBoxLayout, QApplication, 
-                             QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QFrame, QSizePolicy,
+                             QGraphicsOpacityEffect, QFrame, QSizePolicy,
                              QScrollArea)
 from PyQt5.QtGui import QFont, QColor, QFontDatabase, QFontMetrics
 
@@ -44,6 +44,8 @@ class AgentPanel(QWidget):
         self.last_status = None
         self.current_step = -1
         self.last_tag_text = ""
+        self.custom_pos = None
+        self.is_dragging = False
         
         self.MIN_WIDTH = 580
         self.MAX_WIDTH = 580
@@ -93,9 +95,9 @@ class AgentPanel(QWidget):
         self.setGeometry(rect)
 
     def initUI(self):
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowTransparentForInput)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet("background: transparent; border: none; outline: none;")
         
         self.outer_layout = QVBoxLayout(self)
         self.outer_layout.setContentsMargins(25, 20, 25, 20)
@@ -116,15 +118,10 @@ class AgentPanel(QWidget):
                     stop:1 rgba(255, 255, 255, 0.18)
                 );
                 border-radius: 28px;
+                border: none;
             }
         """
         self.container.setStyleSheet(self.default_wrapper_style)
-
-        self.shadow = QGraphicsDropShadowEffect(self)
-        self.shadow.setBlurRadius(50) 
-        self.shadow.setColor(QColor(0, 0, 0, 170)) 
-        self.shadow.setOffset(0, 12) 
-        self.container.setGraphicsEffect(self.shadow)
 
         self.wrapper_layout = QVBoxLayout(self.container)
         self.wrapper_layout.setContentsMargins(1, 1, 1, 1)
@@ -231,7 +228,7 @@ class AgentPanel(QWidget):
 
         self.separator = QFrame()
         self.separator.setFixedHeight(1)
-        self.separator.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255,255,255,0), stop:0.5 rgba(255,255,255,0.18), stop:1 rgba(255,255,255,0)); margin-top: 2px; margin-bottom: 2px;")
+        self.separator.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255,255,255,0), stop:0.5 rgba(255,255,255,0.18), stop:1 rgba(255,255,255,0)); margin-top: 2px; margin-bottom: 2px; border: none;")
         self.layout.addWidget(self.separator)
         self.separator.hide() 
 
@@ -260,7 +257,36 @@ class AgentPanel(QWidget):
         self.hide_timer.timeout.connect(self.hide_panel)
         
         self.setWindowOpacity(0.0)
+        self.setCursor(Qt.OpenHandCursor)
         self.hide()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.is_dragging = True
+            self.setCursor(Qt.ClosedHandCursor)
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            if self.resize_anim.state() == QPropertyAnimation.Running:
+                self.resize_anim.stop()
+            if hasattr(self, 'show_anim_group') and self.show_anim_group.state() == QPropertyAnimation.Running:
+                self.show_anim_group.stop()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and hasattr(self, 'drag_position'):
+            new_pos = event.globalPos() - self.drag_position
+            self.custom_pos = new_pos 
+            if self.resize_anim.state() == QPropertyAnimation.Running:
+                self.resize_anim.stop()
+            self.move(new_pos)
+            self.target_geometry = self.geometry()
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.setCursor(Qt.OpenHandCursor)
+        self.is_dragging = False
+        if hasattr(self, 'drag_position'):
+            del self.drag_position
+        event.accept()
 
     def is_hindi(self, text):
         return bool(re.search(r'[\u0900-\u097F]', text))
@@ -320,6 +346,7 @@ class AgentPanel(QWidget):
                     stop:1 rgba(255, 255, 255, 0.18)
                 );
                 border-radius: 28px;
+                border: none;
             }}
         """)
 
@@ -347,6 +374,9 @@ class AgentPanel(QWidget):
             fixed_height = 190 + self.obs_label.sizeHint().height() + 20
         else:
             fixed_height = 190
+
+        if getattr(self, 'custom_pos', None) is not None:
+            return QRect(self.custom_pos.x(), self.custom_pos.y(), fixed_width, fixed_height)
 
         screen = QApplication.primaryScreen().availableGeometry()
         x = (screen.width() - fixed_width) // 2
@@ -384,14 +414,16 @@ class AgentPanel(QWidget):
             fade_in.setEndValue(1.0)
             fade_in.setEasingCurve(QEasingCurve.InOutQuad)
             
-            slide_down = QPropertyAnimation(self, b"pos")
-            slide_down.setDuration(360)
-            slide_down.setStartValue(self.pos())
-            slide_down.setEndValue(QPoint(self.target_geometry.x(), self.target_geometry.y()))
-            slide_down.setEasingCurve(QEasingCurve.OutCubic) 
-
             self.show_anim_group.addAnimation(fade_in)
-            self.show_anim_group.addAnimation(slide_down)
+
+            if not getattr(self, 'is_dragging', False):
+                slide_down = QPropertyAnimation(self, b"pos")
+                slide_down.setDuration(360)
+                slide_down.setStartValue(self.pos())
+                slide_down.setEndValue(QPoint(self.target_geometry.x(), self.target_geometry.y()))
+                slide_down.setEasingCurve(QEasingCurve.OutCubic) 
+                self.show_anim_group.addAnimation(slide_down)
+            
             self.show_anim_group.start()
             
         else:
@@ -399,9 +431,13 @@ class AgentPanel(QWidget):
                 self.target_geometry = new_geometry
                 if self.resize_anim.state() == QPropertyAnimation.Running:
                     self.resize_anim.stop()
-                self.resize_anim.setStartValue(self.geometry())
-                self.resize_anim.setEndValue(new_geometry)
-                self.resize_anim.start()
+                
+                if getattr(self, 'is_dragging', False):
+                    self.setGeometry(new_geometry)
+                else:
+                    self.resize_anim.setStartValue(self.geometry())
+                    self.resize_anim.setEndValue(new_geometry)
+                    self.resize_anim.start()
 
     def hide_panel(self):
         if not self.isVisible():
