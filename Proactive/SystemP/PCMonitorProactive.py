@@ -76,16 +76,23 @@ def _is_jarvis_process(pid: int) -> bool:
     if psutil is None:
         return False
     _load_jarvis_pid()
-    if _JARVIS_PID is None:
-        return False
-    if pid == _JARVIS_PID:
+    
+    if _JARVIS_PID is not None and pid == _JARVIS_PID:
         return True
+        
     try:
-        parent = psutil.Process(pid).ppid()
-        if parent == _JARVIS_PID:
+        p = psutil.Process(pid)
+        if _JARVIS_PID is not None and p.ppid() == _JARVIS_PID:
+            return True
+            
+        cmdline = " ".join(p.cmdline()).lower()
+        name = p.name().lower()
+        
+        if "jarvis" in name or "jarvis" in cmdline:
             return True
     except Exception:
         pass
+        
     return False
 
 def get_idle_time_seconds() -> float:
@@ -236,7 +243,7 @@ def monitor_battery():
         if percent < BATTERY_LOW_THRESHOLD and not is_plugged:
             details = f"Battery is critically low at {percent}%. Please plug in the charger."
             if should_send_alert("battery_low"):
-                push_proactive_event("PC_Monitor", build_event_data("Battery_Alert", details, "critical"))
+                push_proactive_event("PC_Monitor", build_event_data("Battery_Alert", "critical"))
         status_key = "charging" if is_plugged else "discharging"
         if should_send_alert(f"power_{status_key}"):
             details = f"Power status changed: {'Charging' if is_plugged else 'On Battery'} ({percent}%)"
