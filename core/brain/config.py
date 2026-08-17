@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 REGOLO_API_KEY = os.getenv("REGOLO_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -13,9 +12,6 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 AGENT_PRIMARY_PROVIDER = os.getenv("AGENT_PRIMARY_PROVIDER", "regolo")
 AGENT_FALLBACK_PROVIDER = os.getenv("AGENT_FALLBACK_PROVIDER", "gemini")
-
-GROQ_FAST_MODEL = "llama-3.3-70b-versatile"
-GROQ_SUMMARY_MODEL = "openai/gpt-oss-120b"
 
 FAST_BRAIN_API_KEY = os.getenv("FAST_BRAIN_API_KEY")
 FAST_BRAIN_MODEL = os.getenv("FAST_BRAIN_MODEL")

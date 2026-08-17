@@ -22,9 +22,10 @@ try:
 except Exception as e:
     logging.critical(f"CRITICAL: Failed to initialize Pygame Mixer: {e}")
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-MODEL_ID = "canopylabs/orpheus-v1-english"
-VOICE_ID = "daniel"
+TTS_API_KEY = os.getenv("TTS_API_KEY")
+TTS_MODEL = os.getenv("TTS_MODEL")
+TTS_VOICE = os.getenv("TTS_VOICE")
+TTS_ENDPOINT = os.getenv("TTS_ENDPOINT")
 
 from core.brain.config import EDGE_TTS_VOICE
 try:
@@ -36,12 +37,12 @@ except ImportError:
 
 _stop_playback = False
 is_speaking = False
-_groq_limit_reached = False
+_tts_limit_reached = False
 _audio_queue = queue.Queue()
 _start_time = 0
 
 def clean_text_for_speech(text: str) -> str:
-    if not text: 
+    if not text:
         return ""
     try:
         text = re.sub(r'http[s]?://\S+', 'this link', text)
@@ -59,7 +60,7 @@ def smart_split_into_sentences(text: str) -> list:
         final_chunks = []
         for s in sentences:
             s = s.strip()
-            if not s: 
+            if not s:
                 continue
             if len(s) > 180:
                 sub_chunks = [sc.strip() for sc in s.split(',') if sc.strip()]
@@ -83,7 +84,7 @@ def stop_speaking():
         pygame.mixer.stop()
     except Exception as exc:
         logging.debug("Unable to stop the pygame mixer: %s", exc, exc_info=True)
-        
+
     while not _audio_queue.empty():
         try:
             _audio_queue.get_nowait()
@@ -96,54 +97,53 @@ async def _fetch_edge_tts_fallback(sentence: str) -> bytes:
         clean_sentence = re.sub(r'\[.*?\]', '', sentence).strip()
         if not clean_sentence:
             return b""
-            
+
         communicate = edge_tts.Communicate(clean_sentence, EDGE_TTS_VOICE, rate='+30%', pitch='+5Hz')
         audio_bytes = bytearray()
-        
+
         async for chunk in communicate.stream():
             if _stop_playback:
                 break
             if chunk["type"] == "audio":
                 audio_bytes.extend(chunk["data"])
-                
+
         return bytes(audio_bytes)
     except Exception as e:
         logging.error(f"Edge TTS fallback generation failed: {e}")
         return b""
 
 def _producer_thread(sentences: list):
-    global _stop_playback, _audio_queue, _groq_limit_reached
-    
-    url = "https://api.groq.com/openai/v1/audio/speech"
+    global _stop_playback, _audio_queue, _tts_limit_reached
+
     headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Authorization": f"Bearer {TTS_API_KEY}",
         "Content-Type": "application/json"
     }
 
     for sentence in sentences:
-        if _stop_playback: 
+        if _stop_playback:
             break
-            
+
         audio_data = None
-        
-        if GROQ_API_KEY and not _groq_limit_reached:
+
+        if TTS_API_KEY and not _tts_limit_reached:
             data = {
-                "model": MODEL_ID,
+                "model": TTS_MODEL,
                 "input": sentence,
-                "voice": VOICE_ID,
+                "voice": TTS_VOICE,
                 "response_format": "wav",
             }
             try:
-                response = requests.post(url, json=data, headers=headers, timeout=7)
+                response = requests.post(TTS_ENDPOINT, json=data, headers=headers, timeout=7)
                 if response.status_code == 200:
                     audio_data = response.content
                 else:
                     if response.status_code == 429 or "limit" in response.text.lower() or "quota" in response.text.lower():
-                        _groq_limit_reached = True
-                    logging.error(f"Groq API Error ({response.status_code}): {response.text}. Switching to Fallback.")
+                        _tts_limit_reached = True
+                    logging.error(f"TTS API Error ({response.status_code}): {response.text}. Switching to Fallback.")
             except Exception as e:
-                logging.error(f"Groq fetch connection failed: {e}. Switching to Fallback.")
-        
+                logging.error(f"TTS API fetch connection failed: {e}. Switching to Fallback.")
+
         if not audio_data and EDGE_TTS_AVAILABLE:
             try:
                 audio_data = asyncio.run(_fetch_edge_tts_fallback(sentence))
@@ -152,32 +152,32 @@ def _producer_thread(sentences: list):
 
         if audio_data and not _stop_playback:
             _audio_queue.put(audio_data)
-    
-    try: 
+
+    try:
         _audio_queue.put(None, timeout=2)
-    except queue.Full: 
+    except queue.Full:
         pass
 
 def _consumer_thread():
     global _stop_playback, _audio_queue, _start_time
     first_chunk = True
-    
+
     SPEED_MULTIPLIER = 1.25
-    
+
     while not _stop_playback:
         try:
             chunk = _audio_queue.get(timeout=5.0)
         except queue.Empty:
             break
-        
+
         if chunk is None:
             _audio_queue.task_done()
             break
-     
-        if not chunk or len(chunk) < 100: 
+
+        if not chunk or len(chunk) < 100:
             _audio_queue.task_done()
             continue
-            
+
         chunk_array = bytearray(chunk)
         try:
             if chunk_array[0:4] == b'RIFF' and chunk_array[8:12] == b'WAVE':
@@ -185,22 +185,23 @@ def _consumer_thread():
                 while offset < len(chunk_array) - 8:
                     chunk_id = chunk_array[offset:offset+4]
                     chunk_size = int.from_bytes(chunk_array[offset+4:offset+8], 'little')
-                    
+
                     if chunk_id == b'fmt ':
                         sr_idx = offset + 8 + 4
                         old_sr = int.from_bytes(chunk_array[sr_idx:sr_idx+4], 'little')
-                        
+
                         new_sr = int(old_sr * SPEED_MULTIPLIER)
-                        if new_sr > 48000: new_sr = 48000 
-                        
+                        if new_sr > 48000:
+                            new_sr = 48000
+
                         chunk_array[sr_idx:sr_idx+4] = new_sr.to_bytes(4, 'little')
-                        
+
                         br_idx = offset + 8 + 8
                         old_br = int.from_bytes(chunk_array[br_idx:br_idx+4], 'little')
                         new_br = int(old_br * (new_sr / max(1, old_sr)))
                         chunk_array[br_idx:br_idx+4] = new_br.to_bytes(4, 'little')
                         break
-                        
+
                     offset += 8 + chunk_size
         except Exception as e:
             pass
@@ -215,11 +216,11 @@ def _consumer_thread():
                 logging.error(f"Pygame fatal playback error: {fallback_e}")
                 _audio_queue.task_done()
                 continue
-            
+
         if first_chunk:
             print(f"⚡ Asli Reaction Time (Text se Aawaz tak): {time.time() - _start_time:.2f} seconds!")
             first_chunk = False
-            
+
         sound.play()
 
         while pygame.mixer.get_busy():
@@ -227,7 +228,7 @@ def _consumer_thread():
                 pygame.mixer.stop()
                 break
             pygame.time.Clock().tick(40)
-            
+
         _audio_queue.task_done()
 
 def speak(text: str):
@@ -237,7 +238,7 @@ def speak(text: str):
         return
 
     cleaned = clean_text_for_speech(text)
-    if not cleaned: 
+    if not cleaned:
         return
 
     if is_speaking:
@@ -249,9 +250,9 @@ def speak(text: str):
     _start_time = time.time()
 
     while not _audio_queue.empty():
-        try: 
+        try:
             _audio_queue.get_nowait()
-        except queue.Empty: 
+        except queue.Empty:
             break
 
     sentences = smart_split_into_sentences(cleaned)
@@ -271,9 +272,9 @@ def cleanup_temp():
 
 if __name__ == "__main__":
     print("System Online. Testing Unified Audio Engine...")
-    
-    speak("[cheerful] Hello boss! System is live. Testing the primary Groq pipeline.")
-    
+
+    speak("[cheerful] Hello boss! System is live. Testing the primary TTS pipeline.")
+
     print("\n--- Testing continuous multi-sentence streaming ---")
     speak("[excited] This engine is awesome! [serious] It handles network drops like a champ. [friendly] No more ffplay dependencies!")
 
