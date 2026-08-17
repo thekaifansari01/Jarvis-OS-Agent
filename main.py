@@ -16,6 +16,7 @@ os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['PYTHONHTTPSVERIFY'] = '0'
 os.environ['ANONYMIZED_TELEMETRY'] = 'False'
+os.environ['POSTHOG_DISABLED'] = '1'
 
 from core.logger.logger import logger
 
