@@ -11,7 +11,6 @@ from core.logger.logger import logger
 from core.brain.executor import execute_single_tool_sync
 from core.ui.agent_status import update_agent_status
 from core.brain.config import (
-    GROQ_FAST_MODEL,
     AGENT_PRIMARY_PROVIDER,
     AGENT_FALLBACK_PROVIDER,
 )
@@ -20,8 +19,6 @@ from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
 from core.brain.Processor.FastBrain import make_result, clean_json_string
 from core.ui.typing_status import launch_popup, update_typing_status
 from core.utils.shutdown import is_shutdown
-
-FAST_MODEL = GROQ_FAST_MODEL
 
 try:
     TOKENIZER = tiktoken.get_encoding("cl100k_base")
@@ -46,7 +43,7 @@ def optimize_observation(text: str, max_chars: int = 10000) -> str:
     text_str = str(text)
     if len(text_str) <= max_chars:
         return text_str
-    
+
     if "Vault Search Results" in text_str:
         lines = text_str.split('\n')
         metadata_lines = []
@@ -61,21 +58,21 @@ def optimize_observation(text: str, max_chars: int = 10000) -> str:
                 content_lines.append(line)
             else:
                 metadata_lines.append(line)
-        
+
         metadata_str = "\n".join(metadata_lines)
         content_str = "\n".join(content_lines)
-        
+
         if len(metadata_str) + len(content_str) <= max_chars:
             return text_str
-        
+
         half = (max_chars - len(metadata_str) - 50) // 2
         if half > 0:
             content_truncated = f"{content_str[:half]}\n...[TRUNCATED {len(content_str) - (half*2)} CHARS]...\n{content_str[-half:]}"
         else:
             content_truncated = content_str[:100] + "...[TRUNCATED]..."
-        
+
         return metadata_str + "\n" + content_truncated
-    
+
     half = max_chars // 2
     return (
         f"{text_str[:half]}\n...[TRUNCATED {len(text_str) - max_chars} CHARS]...\n{text_str[-half:]}"
