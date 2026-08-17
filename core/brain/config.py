@@ -48,6 +48,13 @@ LTM_EXTRACTION_MODEL = os.getenv("LTM_EXTRACTION_MODEL")
 LTM_EXTRACTION_ENDPOINT = os.getenv("LTM_EXTRACTION_ENDPOINT")
 
 # ================================================================
+# PROACTIVE (OpenAI-compatible)
+# ================================================================
+PROACTIVE_API_KEY = os.getenv("PROACTIVE_API_KEY")
+PROACTIVE_MODEL = os.getenv("PROACTIVE_MODEL")
+PROACTIVE_ENDPOINT = os.getenv("PROACTIVE_ENDPOINT")
+
+# ================================================================
 # GEMINI MODELS
 # ================================================================
 GEMINI_AGENT_MODEL = "gemma-4-31b-it"
