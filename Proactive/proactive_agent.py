@@ -4,27 +4,29 @@ import json
 import re
 import hashlib
 import threading
+import queue
 from typing import Dict, Any
 from groq import Groq, GroqError
-
+from Proactive.SemanticSpam import check_semantic_spam
 from core.logger.logger import logger
 from core.brain.config import GROQ_API_KEY, AGENT_PROACTIVE
 from core.voice.tts import speak
 from core.brain.Processor.AgenticBrain import run_agentic_loop
-from Proactive.event_queue import get_batched_events
+from Proactive.event_queue import get_batched_events, _agent_task_queue
 from Proactive.prompts import PROACTIVE_SCOUT_PROMPT
 from Proactive.Email.EmailProactive import listen_for_emails, stop_email_listener
 from Proactive.Whatsapp.WhatsappProactive import listen_for_whatsapp
 from Proactive.Reminder.ReminderProactive import listen_for_reminders
 from Proactive.Telegram.TelegramProactive import listen_for_telegram, stop_telegram_listener
 from Proactive.SystemP.PCMonitorProactive import listen_for_pc_monitor, stop_pc_monitor
+from core.ui.agent_status import update_agent_status, reset_agent_status
 
 PROACTIVE_AGENT = AGENT_PROACTIVE
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 _stop_proactive = threading.Event()
 
-CACHE_DIR = "Data"
-PROCESSED_EVENTS_FILE = os.path.join(CACHE_DIR, "processed_events.json")
+_processed_events_cache = {}
+CACHE_TTL = 300
 
 SPAM_KEYWORDS = [
     "newsletter", "unsubscribe", "promotions",
@@ -33,35 +35,22 @@ SPAM_KEYWORDS = [
 
 def _get_event_hash(source: str, text: str) -> str:
     clean_text = re.sub(r'\s+', ' ', text.strip().lower())
-    time_context = time.strftime("%Y-%m-%d")
-    return hashlib.md5(f"{source}_{time_context}_{clean_text}".encode('utf-8')).hexdigest()
+    return hashlib.md5(f"{source}_{clean_text}".encode('utf-8')).hexdigest()
 
 def is_event_already_processed(source: str, text: str) -> bool:
-    try:
-        if not os.path.exists(PROCESSED_EVENTS_FILE):
-            return False
-        with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
-            processed_hashes = json.load(f)
-        return _get_event_hash(source, text) in processed_hashes
-    except Exception as e:
-        logger.warning(f"Deduplication check error: {e}")
-        return False
+    current_time = time.time()
+    event_hash = _get_event_hash(source, text)
+    
+    if event_hash in _processed_events_cache:
+        if current_time - _processed_events_cache[event_hash] < CACHE_TTL:
+            return True
+        else:
+            del _processed_events_cache[event_hash]
+    return False
 
 def mark_event_as_processed(source: str, text: str):
-    try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        processed_hashes = []
-        if os.path.exists(PROCESSED_EVENTS_FILE):
-            with open(PROCESSED_EVENTS_FILE, "r", encoding="utf-8") as f:
-                processed_hashes = json.load(f)
-        event_hash = _get_event_hash(source, text)
-        if event_hash not in processed_hashes:
-            processed_hashes.append(event_hash)
-            processed_hashes = processed_hashes[-100:]
-            with open(PROCESSED_EVENTS_FILE, "w", encoding="utf-8") as f:
-                json.dump(processed_hashes, f)
-    except Exception as e:
-        logger.warning(f"Failed to save processed event hash: {e}")
+    event_hash = _get_event_hash(source, text)
+    _processed_events_cache[event_hash] = time.time()
 
 def stop_proactive_agent():
     _stop_proactive.set()
@@ -116,6 +105,47 @@ def evaluate_events_batch(batched_data: str, recent_history: str, current_mood: 
             return default_ignore
     return default_ignore
 
+def safe_proactive_speak(text: str, memory_instance):
+    def _speak_task():
+        update_agent_status(step=1, total_steps=1, thought="Announcing...", action="SPEAKING", action_detail="", tokens=0)
+        try:
+            speak(text)
+            time.sleep(1.0)
+        finally:
+            reset_agent_status()
+            if memory_instance and hasattr(memory_instance, 'get_and_clear_feedback'):
+                memory_instance.get_and_clear_feedback()
+    threading.Thread(target=_speak_task, daemon=True).start()
+
+def agentic_worker():
+    while not _stop_proactive.is_set():
+        try:
+            task = _agent_task_queue.get(timeout=2)
+            agent_command = task.get("agent_command")
+            agent_context = task.get("agent_context")
+            memory_instance = task.get("memory_instance")
+            decision = task.get("decision")
+            
+            result = run_agentic_loop(agent_command, agent_context, memory_instance, silent=True)
+            if result and result.get("response"):
+                reply_text = result["response"]
+                logger.info(f"Proactive Agent Confirmation: {reply_text}")
+                safe_proactive_speak(reply_text, memory_instance)
+                if memory_instance:
+                    memory_instance.add_message(
+                        "PROACTIVE_BACKGROUND",
+                        reply_text,
+                        metadata={
+                            "is_background_event": False,
+                            "decision": decision,
+                            "waiting_for_confirmation": True
+                        }
+                    )
+        except queue.Empty:
+            continue
+        except Exception as e:
+            logger.error(f"Failed to execute background Agentic Brain: {e}")
+
 def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, memory_instance, is_jarvis_busy_callback):
     decision = decision_data.get("decision", "IGNORE").upper()
     announcement = decision_data.get("announcement", "").strip()
@@ -134,32 +164,17 @@ def handle_proactive_decision(decision_data: Dict[str, Any], batched_data: str, 
             
     if decision in ["SUGGEST_ACTION", "ACT_AND_ANNOUNCE"] and agent_command:
         logger.info(f"Proactive Triggering Silent Agentic Brain: {agent_command}")
-        def _run_silent_agent():
-            try:
-                agent_context = f"[PROACTIVE EVENT TRIGGER]\n{batched_data}"
-                result = run_agentic_loop(agent_command, agent_context, memory_instance, silent=True)
-                if result and result.get("response"):
-                    reply_text = result["response"]
-                    logger.info(f"Proactive Agent Confirmation: {reply_text}")
-                    speak(reply_text)
-                    if memory_instance:
-                        memory_instance.add_message(
-                            "PROACTIVE_BACKGROUND",
-                            reply_text,
-                            metadata={
-                                "is_background_event": False,
-                                "decision": decision,
-                                "waiting_for_confirmation": True
-                            }
-                        )
-            except Exception as e:
-                logger.error(f"Failed to execute background Agentic Brain: {e}")
-        threading.Thread(target=_run_silent_agent, daemon=True).start()
+        _agent_task_queue.put({
+            "agent_command": agent_command,
+            "agent_context": f"[PROACTIVE EVENT TRIGGER]\n{batched_data}",
+            "memory_instance": memory_instance,
+            "decision": decision
+        })
         return
         
     if decision == "ANNOUNCE" and announcement:
         logger.info(f"Proactive Announcement: {announcement}")
-        threading.Thread(target=speak, args=(announcement,), daemon=True).start()
+        safe_proactive_speak(announcement, memory_instance)
         if memory_instance:
             try:
                 truncated_data = batched_data if len(batched_data) <= 2000 else batched_data[:2000] + "\n\n[...Message Truncated]"
@@ -183,7 +198,7 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
             if events:
                 valid_events = []
                 for ev in events:
-                    if not is_instant_spam(ev.data) and not is_event_already_processed(ev.source, ev.data):
+                    if not is_instant_spam(ev.data) and not check_semantic_spam(ev.data) and not is_event_already_processed(ev.source, ev.data):
                         valid_events.append(ev)
                 if valid_events:
                     batched_data = "\n---\n".join([
@@ -214,6 +229,9 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
 def start_proactive_agent(memory_instance, is_jarvis_busy_callback=None):
     brain_thread = threading.Thread(target=proactive_loop, args=(memory_instance, is_jarvis_busy_callback), daemon=True)
     brain_thread.start()
+    
+    worker_thread = threading.Thread(target=agentic_worker, daemon=True)
+    worker_thread.start()
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     session_dir = os.path.join(base_dir, "Data", "SessionCookies")
