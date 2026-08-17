@@ -327,22 +327,13 @@ Return STRICT JSON exactly in this schema:
             now = datetime.now()
             fifteen_days_ago = now - timedelta(days=15)
             filtered_history = []
-            messages_to_archive = []
             for msg in self.master_history:
                 try:
                     msg_time = datetime.fromisoformat(msg.get('timestamp', now.isoformat()))
                     if msg_time >= fifteen_days_ago:
                         filtered_history.append(msg)
-                    else:
-                        messages_to_archive.append(msg)
                 except Exception as e:
                     logger.error(f"Timestamp parse error: {e}")
-            if messages_to_archive:
-                try:
-                    from core.brain.Memory.LifetimeMemory import ltm_engine
-                    ltm_engine.archive_old_chats(messages_to_archive)
-                except Exception as e:
-                    logger.error(f"Archival error: {e}")
             if len(filtered_history) < len(self.master_history):
                 self.master_history = filtered_history
                 self._rewrite_history_jsonl(self.master_history_file, self.master_history)
