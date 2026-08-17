@@ -15,7 +15,7 @@ rank-bm25==0.2.2
 
 # ===== AI PROVIDERS =====
 google-genai==1.0.0
-groq==1.6.0
+openai
 together==2.30.0
 tavily-python==0.7.26
 

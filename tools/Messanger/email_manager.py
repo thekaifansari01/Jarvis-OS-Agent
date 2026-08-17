@@ -5,25 +5,20 @@ import mimetypes
 import webbrowser
 from email.message import EmailMessage
 from pathlib import Path
-from groq import Groq
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-from core.brain.config import GROQ_API_KEY
 from core.logger.logger import logger
 
 try:
     from core.voice.tts import speak
 except ImportError:
-    # Fallback: use logger instead of print
     def speak(text):
         logger.warning(f"TTS not available, speaking via log: {text}")
 
 load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 SCOPES = ['https://mail.google.com/', 'https://www.googleapis.com/auth/pubsub']
 BASE_DIR = Path(__file__).resolve().parent.parent.parent

@@ -4,17 +4,20 @@ import re
 import time
 import datetime
 from typing import Dict, Optional
-from groq import Groq
+import openai
 
 from core.logger.logger import logger
 from core.brain.Processor.Prompts import SYSTEM_PROMPT
-from core.brain.config import GROQ_FAST_MODEL, GROQ_API_KEY
+from core.brain.config import FAST_BRAIN_API_KEY, FAST_BRAIN_MODEL, FAST_BRAIN_ENDPOINT
 from core.ui.typing_status import update_typing_status, launch_popup
 
 USER_NAME = os.getenv("USER_NAME", "Sir")
-FAST_MODEL = GROQ_FAST_MODEL
+FAST_MODEL = FAST_BRAIN_MODEL
 
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+fast_client = openai.OpenAI(
+    api_key=FAST_BRAIN_API_KEY,
+    base_url=FAST_BRAIN_ENDPOINT
+) if FAST_BRAIN_API_KEY else None
 
 def make_result(response, **kwargs):
     base = {
@@ -57,10 +60,10 @@ def build_fast_brain_context(memory_instance=None, ephemeral: dict = None) -> st
     return context
 
 def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = None) -> Optional[Dict[str, any]]:
-    if not groq_client:
+    if not fast_client:
         return None
-    logger.info("⚡ Routing to Fast Brain (Groq Llama Native Tools & Streaming)")
-    
+    logger.info("⚡ Routing to Fast Brain (OpenAI-compatible API)")
+
     result = make_result("")
     
     try:
@@ -130,11 +133,11 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
         update_typing_status("typing", "...")
 
         messages = [
-            {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{system_context}"}, 
+            {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{system_context}"},
             {"role": "user", "content": raw_command}
         ]
 
-        completion = groq_client.chat.completions.create(
+        completion = fast_client.chat.completions.create(
             model=FAST_MODEL,
             messages=messages,
             temperature=0.2,
@@ -195,7 +198,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 if not result["response"]:
                     result["response"] = args.get("agent_reply", "Processing your request.")
             except Exception as e:
-                logger.error(f"Error parsing Groq tool args: {e}")
+                logger.error(f"Error parsing tool args: {e}")
 
         elif tool_call_name == "quick_web_search" and tool_call_args:
             try:
@@ -211,7 +214,7 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 
                 print("\n\033[96mJarvis (Quick Search):\033[0m ", end="", flush=True)
                 
-                final_completion = groq_client.chat.completions.create(
+                final_completion = fast_client.chat.completions.create(
                     model=FAST_MODEL,
                     messages=[
                         {"role": "system", "content": "You are Jarvis. Provide a clear, natural Hinglish/English response using Markdown based ONLY on the user's query and the provided search snippets. DO NOT leak any metadata, tags, or mention that you searched."},
