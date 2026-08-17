@@ -10,14 +10,16 @@ from core.logger.logger import logger
 from core.utils.utils import resolve_pronouns
 from core.brain.Processor.FastBrain import fetch_from_groq, make_result
 from core.brain.Processor.AgenticBrain import run_agentic_loop
+from core.brain.config import ROUTER_API_KEY, ROUTER_MODEL, ROUTER_ENDPOINT
 
 load_dotenv()
-REGOLO_API_KEY = os.getenv("REGOLO_API_KEY")
 
-class RegoloSemanticRouter:
+
+class GenericSemanticRouter:
     def __init__(self):
-        self.api_key = REGOLO_API_KEY
-        self.base_url = "https://api.regolo.ai/v1/chat/completions"
+        self.api_key = ROUTER_API_KEY
+        self.base_url = ROUTER_ENDPOINT
+        self.model = ROUTER_MODEL
         self.session = requests.Session()
         if self.api_key:
             self.session.headers.update({
@@ -29,7 +31,7 @@ class RegoloSemanticRouter:
     def analyze_route(self, command: str, history_context: str = "") -> Optional[str]:
         if not self.api_key:
             return None
-        
+
         trimmed_history = history_context[-350:].strip() if history_context else "No recent history."
 
         system_prompt = (
@@ -67,7 +69,7 @@ class RegoloSemanticRouter:
         user_content = f"[RECENT CONVERSATION HISTORY]\n{trimmed_history}\n\n[USER COMMAND]\n\"{command}\""
 
         payload = {
-            "model": "brick-complexity-pro",
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
@@ -79,24 +81,30 @@ class RegoloSemanticRouter:
 
         try:
             start_ts = time.perf_counter()
-            response = self.session.post(self.base_url, json=payload, timeout=self.timeout)
+            response = self.session.post(
+                f"{self.base_url}/chat/completions",
+                json=payload,
+                timeout=self.timeout
+            )
             latency_ms = (time.perf_counter() - start_ts) * 1000
 
             if response.status_code == 200:
                 raw_json = response.json()["choices"][0]["message"]["content"]
                 data = json.loads(raw_json)
                 route = data.get("route", "FAST").strip().upper()
-                logger.info(f"Regolo Semantic Router [{latency_ms:.1f}ms] | Decision -> {route}")
+                logger.info(f"Semantic Router [{latency_ms:.1f}ms] | Decision -> {route}")
                 return "AGENTIC" if route == "AGENTIC" else "FAST"
             else:
-                logger.warning(f"Regolo Router API non-200 status ({response.status_code}): {response.text[:100]}")
-                
+                logger.warning(f"Router API non-200 status ({response.status_code}): {response.text[:100]}")
+
         except Exception as e:
-            logger.warning(f"Regolo Router API failed ({e}). Switching to local fallback router.")
-            
+            logger.warning(f"Router API failed ({e}). Switching to local fallback router.")
+
         return None
 
-router_engine = RegoloSemanticRouter()
+
+router_engine = GenericSemanticRouter()
+
 
 def get_local_fallback_route(command: str) -> str:
     cmd_lower = command.lower().strip()
@@ -129,12 +137,13 @@ def get_local_fallback_route(command: str) -> str:
 
     return "FAST"
 
+
 def get_route_decision(command: str, memory_instance=None) -> str:
     if memory_instance and hasattr(memory_instance, "ephemeral"):
         if memory_instance.ephemeral.get("waiting_for_confirmation"):
             cmd_lower = command.lower().strip()
             confirm_keywords = [
-                "haa", "ha", "yes", "yup", "han", "ha kar de", "ha krde", 
+                "haa", "ha", "yes", "yup", "han", "ha kar de", "ha krde",
                 "theek hai", "ok", "okay", "do it", "kar do", "kardo", "bilkul"
             ]
             if any(kw in cmd_lower for kw in confirm_keywords):
@@ -158,18 +167,19 @@ def get_route_decision(command: str, memory_instance=None) -> str:
     logger.info("Using Local Rule-Based Fallback Router...")
     return get_local_fallback_route(command)
 
+
 def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Dict[str, any]]:
     try:
         decision = get_route_decision(raw_command, memory_instance)
-        
+
         if decision == "AGENTIC":
             logger.info("Smart Router: AGENTIC (Deep Tasks, Memory, Comms & Visual Analysis)")
             context_blocks = []
-            
+
             is_silent = False
             if memory_instance and hasattr(memory_instance, "ephemeral"):
                 is_silent = memory_instance.ephemeral.get("force_silent_agentic", False)
-            
+
             if memory_instance:
                 try:
                     logger.info("Fetching Initial Profile, Mood & Workspace Context...")
@@ -180,11 +190,11 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
                     logger.error(f"Memory Fetch Error: {e}")
 
             final_context = "\n".join(context_blocks)
-            
+
             return run_agentic_loop(raw_command, final_context, memory_instance, silent=is_silent)
         else:
             logger.info("Smart Router: FAST (Direct Apps / Stateless Chat / Hardware)")
-            
+
             if memory_instance and hasattr(memory_instance, 'get_and_clear_feedback'):
                 cleared_feedback = memory_instance.get_and_clear_feedback()
                 if cleared_feedback:
@@ -192,19 +202,20 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
 
             ephemeral = memory_instance.ephemeral if memory_instance else None
             return fetch_from_groq(raw_command, memory_instance, ephemeral)
-            
+
     except Exception as e:
         logger.error(f"Smart Router Error: {e}. Defaulting to Fast Brain.")
-        
+
         if memory_instance and hasattr(memory_instance, 'get_and_clear_feedback'):
             memory_instance.get_and_clear_feedback()
-            
+
         return fetch_from_groq(raw_command, memory_instance)
+
 
 def process_command(raw_command: str, memory_instance=None) -> Dict[str, any]:
     resolved_command = resolve_pronouns(raw_command)
     result = fetch_hybrid_response(resolved_command, memory_instance)
-    
+
     if not result:
         return make_result("Connection failed. Please check your internet connection.", priority="low")
 

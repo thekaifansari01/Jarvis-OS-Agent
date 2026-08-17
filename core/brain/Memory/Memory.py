@@ -5,9 +5,14 @@ import time
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from groq import Groq
+import openai
 from core.logger.logger import logger
-from core.brain.config import GROQ_SUMMARY_MODEL
+from core.brain.config import (
+    LTM_EXTRACTION_API_KEY,
+    LTM_EXTRACTION_MODEL,
+    LTM_EXTRACTION_ENDPOINT,
+)
+
 
 class ContextMemory:
     def __init__(self, memory_path="Data/jarvis_memory"):
@@ -16,7 +21,7 @@ class ContextMemory:
         self._lock = threading.Lock()
         self.master_history_file = self.memory_path / "master_chat_history.jsonl"
         old_json_file = self.memory_path / "master_chat_history.json"
-        
+
         if old_json_file.exists() and not self.master_history_file.exists():
             old_data = self._load_json(old_json_file, [])
             self._rewrite_history_jsonl(self.master_history_file, old_data)
@@ -33,28 +38,37 @@ class ContextMemory:
         self._confirmation_timer = None
 
         try:
-            self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+            self.ltm_client = openai.OpenAI(
+                api_key=LTM_EXTRACTION_API_KEY,
+                base_url=LTM_EXTRACTION_ENDPOINT,
+            ) if LTM_EXTRACTION_API_KEY else None
         except Exception as e:
-            logger.error(f"Failed to initialize Groq client: {e}")
-            self.groq_client = None
+            logger.error(f"Failed to initialize LTM extraction client: {e}")
+            self.ltm_client = None
 
         self._start_background_pruning()
 
     def _is_valid_triplet(self, src, rel, tgt):
-        invalid_entities = {"agent", "info", "system", "jarvis", "data", "unknown", "yes", "no", "today", "tomorrow", "now", "thing", "stuff"}
+        invalid_entities = {
+            "agent", "info", "system", "jarvis", "data", "unknown",
+            "yes", "no", "today", "tomorrow", "now", "thing", "stuff"
+        }
         if src.lower() in invalid_entities or tgt.lower() in invalid_entities:
             return False
         if len(src) < 2 or len(tgt) < 2:
             return False
         if src.lower() == tgt.lower():
             return False
-        family_relations = {"father", "mother", "brother", "sister", "son", "daughter", "spouse", "uncle", "aunt"}
+        family_relations = {
+            "father", "mother", "brother", "sister", "son",
+            "daughter", "spouse", "uncle", "aunt"
+        }
         if rel.lower() in family_relations:
             if len(src.split()) > 3 or len(tgt.split()) > 3:
                 return False
         ephemeral_relations = {
-            "is_doing", "eating", "going", "will_give", "must_remember", 
-            "status_update", "remember", "searching", "asking", "said", 
+            "is_doing", "eating", "going", "will_give", "must_remember",
+            "status_update", "remember", "searching", "asking", "said",
             "talking_to", "wants_to", "planning_to"
         }
         if rel.lower() in ephemeral_relations:
@@ -174,13 +188,16 @@ class ContextMemory:
             logger.error(f"Thread starting error: {e}")
 
     def _extract_permanent_facts_ai(self, message):
-        if not self.groq_client or len(message.split()) < 2:
+        if not self.ltm_client or len(message.split()) < 2:
             return
-        
+
         recent_history = ""
         if self.master_history:
-            recent_history = "\n".join([f"{msg.get('role', '')}: {msg.get('message', '')}" for msg in self.master_history[-6:]])
-        
+            recent_history = "\n".join([
+                f"{msg.get('role', '')}: {msg.get('message', '')}"
+                for msg in self.master_history[-6:]
+            ])
+
         existing_nodes_str = "None"
         try:
             from core.brain.Memory.LifetimeMemory import ltm_engine
@@ -252,8 +269,8 @@ Return STRICT JSON exactly in this schema:
 """
         for _ in range(3):
             try:
-                response = self.groq_client.chat.completions.create(
-                    model=GROQ_SUMMARY_MODEL,
+                response = self.ltm_client.chat.completions.create(
+                    model=LTM_EXTRACTION_MODEL,
                     messages=[
                         {"role": "system", "content": "You are a precise knowledge graph extraction engine. Output strictly valid JSON."},
                         {"role": "user", "content": prompt}
@@ -264,7 +281,7 @@ Return STRICT JSON exactly in this schema:
                 raw_text = response.choices[0].message.content.strip()
                 clean_text = re.sub(r'^```json\n|```$', '', raw_text, flags=re.MULTILINE).strip()
                 data = json.loads(clean_text)
-                
+
                 if data.get("is_permanent_fact") is True:
                     triplets = data.get("triplets", [])
                     if triplets:
@@ -276,10 +293,10 @@ Return STRICT JSON exactly in this schema:
                                 tgt = str(t.get("target", "")).strip().title()
                                 metadata = t.get("metadata", {})
                                 inverse = t.get("inverse")
-                                
+
                                 if not (src and rel and tgt) or not self._is_valid_triplet(src, rel, tgt):
                                     continue
-                                
+
                                 with ltm_engine._lock:
                                     if ltm_engine.graph.has_edge(src, tgt):
                                         existing_rel = ltm_engine.graph.edges[src, tgt].get('relation')
