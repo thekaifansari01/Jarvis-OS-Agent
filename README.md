@@ -7,19 +7,23 @@
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Groq LPU](https://img.shields.io/badge/Powered%20By-Groq%20LPU-f55036?style=for-the-badge)](https://groq.com/)
-[![Gemini](https://img.shields.io/badge/Reasoning-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
-[![Regolo AI](https://img.shields.io/badge/Agentic-Regolo%20MoE-FF6F00?style=for-the-badge)](https://regolo.ai)
-[![OpenRouter](https://img.shields.io/badge/Failover-OpenRouter-FF6B6B?style=for-the-badge)](https://openrouter.ai)
-[![Custom Provider](https://img.shields.io/badge/Custom-Any%20OpenAI%20Compatible-00BFFF?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
+[![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
+[![OpenAI Compatible](https://img.shields.io/badge/API-OpenAI%20Compatible-412991?style=for-the-badge&logo=openai&logoColor=white)](https://platform.openai.com)
+[![Multi-Provider](https://img.shields.io/badge/Providers-Regolo%20%7C%20Gemini%20%7C%20OpenRouter%20%7C%20Custom-FF6F00?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
+[![Voice Control](https://img.shields.io/badge/Voice-Deepgram%20Nova--2-00BFFF?style=for-the-badge&logo=deepgram&logoColor=white)](https://deepgram.com)
+[![Android ADB](https://img.shields.io/badge/Android-ADB%20Control-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/studio/command-line/adb)
+[![Telegram Bot](https://img.shields.io/badge/Telegram-Remote%20Bot-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.org)
+[![Lifelong Memory](https://img.shields.io/badge/Memory-Lifelong%20LTM-FF6B6B?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
+[![Hybrid RAG](https://img.shields.io/badge/RAG-Hybrid%20%28BM25%2BVector%29-00B4D8?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://whatsapp.com)
-[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.org)
 [![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](https://mail.google.com)
 [![Google Calendar](https://img.shields.io/badge/Google%20Calendar-4285F4?style=for-the-badge&logo=google-calendar&logoColor=white)](https://calendar.google.com)
-
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-00e676?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent/pulls)
+[![GitHub Stars](https://img.shields.io/github/stars/thekaifansari01/Jarvis-OS-Agent?style=for-the-badge&logo=github)](https://github.com/thekaifansari01/Jarvis-OS-Agent/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/thekaifansari01/Jarvis-OS-Agent?style=for-the-badge&logo=github)](https://github.com/thekaifansari01/Jarvis-OS-Agent/forks)
+[![Made with ❤️](https://img.shields.io/badge/Made%20with-%E2%9D%A4%EF%B8%8F-ff69b4?style=for-the-badge)](https://github.com/thekaifansari01)
 
 **Built by an 18‑year‑old solo developer. Commerce background. BCA first year. No team. No funding. Just late nights, coffee, and a burning passion to build the impossible.** ☕
 
@@ -57,12 +61,12 @@
 | 💻 | **Autonomous Software Engineering** | Can autonomously explore codebases (`repo_map`), read files (`view`), replace exact code blocks (`replace_block`), execute Python scripts (`run_python_code`), and run terminal commands. Proven to autonomously fix bugs in milliseconds. |
 | 🛡️ | **Zero Line‑Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers. This eliminates the "line‑drift bug" plaguing Claude Code. Auto-catches syntax errors via AST linter and self‑corrects without human intervention. |
 | 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-based semantic knowledge graph backed by SentenceTransformers (`all-MiniLM-L6-v2`). Indexes local documents with **smart chunk overlap**, **Hybrid search (Vector + BM25 + RRF)**, and **Recency boost**. Remembers history from months ago. |
-| 🔄 | **Hybrid Semantic AI Routing** | Cloud Regolo router + local rule‑based fallback. Intelligently routes simple commands to ultra‑fast **FastBrain** (Groq LPU, <1.5 sec), and complex tasks to deep‑reasoning **AgenticBrain**. |
+| 🔄 | **Hybrid Semantic AI Routing** | Cloud Regolo router + local rule‑based fallback. Intelligently routes simple commands to ultra‑fast **FastBrain** (sub‑second LLM), and complex tasks to deep‑reasoning **AgenticBrain**. |
 | 📱 | **Android ADB Mobile Control** | Remotely control your Android phone via ADB over Tailscale. Execute lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, and take screenshots directly from your PC. |
 | 🌍 | **Telegram Remote PC Control** | Control your Windows PC from anywhere globally via a secure Telegram bot. Commands trigger silent background execution without disrupting your active desktop workflow. |
 | 📨 | **Proactive Automation (Email/WhatsApp/Telegram)** | Background listeners for Gmail, WhatsApp, Telegram, and Google Calendar. Jarvis detects updates in real-time and utilizes Proactive HITL (Human-In-The-Loop) to ask for consent before modifying critical data. |
 | 💻 | **PC System Monitoring & Alerts** | Background listener for CPU, RAM, Disk, Battery, Network, and USB devices. Smart cooldown (60s), idle/fullscreen suppression, and LLM-filtered proactive alerts via the Scout Agent. |
-| 🗣️ | **Voice‑First Multimodal AI** | Integrates Deepgram Nova-2 STT with **Vosk KWS (Keyword Spotting)** for sub-second noise-immune triggering. Features Edge TTS voice output, multimodal vision (OCR/Image Analysis), and AI Image Generation (Flux/AI Horde). |
+| 🗣️ | **Voice‑First Multimodal AI** | Integrates Deepgram Nova-2 STT with **Vosk KWS (Keyword Spotting)** for sub-second noise-immune triggering. Features Edge TTS voice output, multimodal vision (OCR/Image Analysis), and AI Image Generation (OpenAI-compatible API + AI Horde fallback). |
 | 🔌 | **Multi‑LLM Auto‑Failover (Cloud & Local)** | Seamlessly switches between Regolo, Gemini, OpenRouter, or **Local LLMs (Ollama, LM Studio, vLLM)**. Zero downtime workflow execution even if the primary provider hits API rate limits. |
 | 🎨 | **Reactive Dynamic UI Ecosystem** | Features a ZMQ‑powered floating PyQt5 Agent Panel with real‑time thought/action/observation streaming. Includes a live markdown typing popup with async image previews, glass‑morphism, and auto-resize dynamic glow. |
 | 🔒 | **Enterprise‑Grade Command Security** | Utilizes `shlex` tokenization and `os.path.realpath` canonicalization to auto‑block system‑destroying terminal commands (e.g., `rm -rf /`, `format C:`). Safe commands (`pip`, `git`) execute frictionlessly. |
@@ -102,8 +106,9 @@ flowchart TD
     TelegramBot -->|Silent Flag| Router
     STT --> Router
     Router -->|Fallback| LocalRouter[🔄 Local Rule-Based Router]
+    LocalRouter --> FastBrain   <!-- 🔧 FIX: dead-end removed -->
     
-    Router -->|Simple / Stateless| FastBrain[⚡ FastBrain<br/>Groq Llama-3.3-70B]
+    Router -->|Simple / Stateless| FastBrain[⚡ FastBrain<br/>Fast LLM (OpenAI‑compatible)]
     Router -->|Complex / Stateful| AgenticBrain[🧠 AgenticBrain<br/>Regolo/Gemini/OpenRouter/Custom]
     
     AgenticBrain --> Providers[🔌 Provider Abstraction Layer]
@@ -176,7 +181,7 @@ flowchart TD
 
 Jarvis utilizes a dual-engine architecture to optimize API costs, speed, and reasoning depth.
 
-| Feature / Capability | ⚡ FastBrain (Groq LPU) | 🧠 AgenticBrain (Regolo/Gemini/OpenRouter/Local) |
+| Feature / Capability | ⚡ FastBrain (Fast LLM) | 🧠 AgenticBrain (Regolo/Gemini/OpenRouter/Local) |
 | --- | --- | --- |
 | **Core Philosophy** | Stateless, sub‑second latency (<1.5s). | Stateful, deep reasoning, multi-step tool execution. |
 | **Routing Trigger** | Short commands, casual chat, simple OS toggles. | Complex prompts, software engineering, long-term memory. |
@@ -245,7 +250,7 @@ Control your Android smartphone completely hands-free from your Windows PC using
 | ⚙️ **System Automation** | App launch/kill, volume/brightness control, clipboard CRUD operations |
 | 💻 **PC System Monitoring** | CPU/RAM/Disk/Battery/Network/USB monitoring with smart alerts |
 | 👁️ **Multimodal Vision** | Screen/Video analysis, Object detection, OCR data extraction |
-| 🎨 **Image Generation** | Text‑to‑image generation (Regolo/FLUX), Image‑to‑image editing (AI Horde) |
+| 🎨 **Image Generation** | Text‑to‑image generation (OpenAI-compatible API), Image‑to‑image editing (AI Horde fallback) |
 
 ---
 
@@ -414,11 +419,29 @@ jarvis
 
 Copy `.env.example` to `.env` in the root directory and populate your API credentials. **For 100% Local LLM Execution (e.g., Ollama), configure the Custom Provider block:**
 
-| Environment Variable | Description | Default Status |
+| Environment Variable | Description | Default / Status |
 | --- | --- | --- |
-| `GROQ_API_KEY` | FastBrain Routing & Sub-second Tasks | (Required) |
-| `GEMINI_API_KEY` | Embeddings, Vision Processing, Reasoning | (Required) |
-| `REGOLO_API_KEY` | Primary Agentic Engine Provider | (Required) |
+| `FAST_BRAIN_API_KEY` | FastBrain LLM API Key | (Required) |
+| `FAST_BRAIN_MODEL` | FastBrain LLM Model Name | `llama-3.3-70b-versatile` |
+| `FAST_BRAIN_ENDPOINT` | FastBrain OpenAI‑compatible endpoint | `https://api.groq.com/openai/v1` |
+| `ROUTER_API_KEY` | Semantic Router LLM API Key | (Required) |
+| `ROUTER_MODEL` | Router LLM Model Name | `llama-3.3-70b-versatile` |
+| `ROUTER_ENDPOINT` | Router OpenAI‑compatible endpoint | `https://api.groq.com/openai/v1` |
+| `LTM_EXTRACTION_API_KEY` | LTM Fact Extraction API Key | (Required) |
+| `LTM_EXTRACTION_MODEL` | LTM Extraction Model | `llama-3.3-70b-versatile` |
+| `LTM_EXTRACTION_ENDPOINT` | LTM OpenAI‑compatible endpoint | `https://api.groq.com/openai/v1` |
+| `IMAGE_GEN_API_KEY` | Image Generation API Key | (Optional – required for image gen) |
+| `IMAGE_GEN_MODEL` | Image Generation Model | `dall-e-3` |
+| `IMAGE_GEN_ENDPOINT` | Image Gen OpenAI‑compatible endpoint | `https://api.openai.com/v1` |
+| `PROACTIVE_API_KEY` | Proactive Scout API Key | (Required) |
+| `PROACTIVE_MODEL` | Proactive Scout Model | `llama-3.3-70b-versatile` |
+| `PROACTIVE_ENDPOINT` | Proactive OpenAI‑compatible endpoint | `https://api.groq.com/openai/v1` |
+| `TTS_API_KEY` | TTS API Key | (Optional – falls back to Edge TTS) |
+| `TTS_MODEL` | TTS Model | `canopylabs/orpheus-v1-english` |
+| `TTS_ENDPOINT` | TTS OpenAI‑compatible endpoint | `https://api.groq.com/openai/v1` |
+| `GROQ_API_KEY` | Backward-compatible alias for `FAST_BRAIN_API_KEY` | (Optional – use `FAST_BRAIN_*` instead) |
+| `GEMINI_API_KEY` | Agentic Brain (Fallback) / Embeddings | (Optional) |
+| `REGOLO_API_KEY` | Primary Agentic Engine Provider | (Required for Regolo) |
 | `OPENROUTER_API_KEY` | Fallback Agentic Provider (Claude 3.7/DeepSeek) | (Optional) |
 | `TAVILY_API_KEY` | Real-time Web Search Engine | (Required) |
 | `DEEPGRAM_API_KEY` | Ultra-low latency Speech-to-Text | (Required) |
@@ -449,6 +472,7 @@ Copy `.env.example` to `.env` in the root directory and populate your API creden
 | PC Monitor not starting / psutil missing | Ensure `psutil`, `pywin32`, and `pygetwindow` are installed. Run `pip install psutil pywin32 pygetwindow`. |
 | Too many PC Monitor alerts | Adjust thresholds in `PCMonitorProactive.py`: `CPU_THRESHOLD`, `RAM_THRESHOLD`, `DISK_THRESHOLD_GB`, `COOLDOWN_SECONDS`. |
 | USB devices not detected | Run PowerShell as **Administrator**. PC Monitor needs admin rights to read Windows Event Logs. |
+| FastBrain API key missing or invalid | Ensure `FAST_BRAIN_API_KEY` is set in `.env` and the endpoint/model are correct. |
 
 ---
 
