@@ -56,12 +56,16 @@ from terminalCommands import handle_cli_commands, create_lock_file, remove_lock_
 
 _is_running = True
 
+SW_HIDE = 0
+SW_SHOW = 5
+SW_RESTORE = 9
+
 def restore_console():
     if platform.system() == "Windows":
         try:
             hwnd = ctypes.windll.kernel32.GetConsoleWindow()
             if hwnd:
-                ctypes.windll.user32.ShowWindow(hwnd, 5)
+                ctypes.windll.user32.ShowWindow(hwnd, SW_SHOW)
         except Exception:
             pass
 
@@ -116,7 +120,7 @@ def start_tray_icon():
     hwnd = ctypes.windll.kernel32.GetConsoleWindow()
 
     def show_window(icon, item):
-        ctypes.windll.user32.ShowWindow(hwnd, 9)
+        ctypes.windll.user32.ShowWindow(hwnd, SW_RESTORE)
         ctypes.windll.user32.SetForegroundWindow(hwnd)
 
     def exit_app(icon, item):
@@ -139,30 +143,15 @@ def start_tray_icon():
     def monitor():
         while _is_running:
             if ctypes.windll.user32.IsIconic(hwnd):
-                ctypes.windll.user32.ShowWindow(hwnd, 0)
+                ctypes.windll.user32.ShowWindow(hwnd, SW_HIDE)
             time.sleep(0.1)
 
     threading.Thread(target=monitor, daemon=True).start()
     icon.run()
 
-def main() -> None:
+def run_jarvis():
     global _is_running
-
-    set_terminal_title("Jarvis")
-
-    if handle_cli_commands():
-        sys.exit(0)
-
-    if is_jarvis_running():
-        logger.error("Jarvis is ALREADY running in another terminal window!")
-        logger.error("Please close the existing Jarvis instance before starting a new one.")
-        sys.exit(1)
-
-    create_lock_file()
-
-    if platform.system() == "Windows":
-        threading.Thread(target=start_tray_icon, daemon=True).start()
-
+    
     os.system('cls' if os.name == 'nt' else 'clear')
     print(r"""
          ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗
@@ -173,17 +162,21 @@ def main() -> None:
      ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
     """)
 
-    import pygame
-    from concurrent.futures import ThreadPoolExecutor
-    from core.brain.Memory.Memory import ContextMemory
-    from core.voice import stt, tts, interrupt
-    from core.voice.stt_status import hide_stt_popup
-    from core.utils.ProcessManager import proc_manager
-    from Proactive.proactive_agent import start_proactive_agent
-    from core.main.BackgroundServices import start_agent_panel, start_stt_popup, start_rag_engine, start_baileys_server, start_mobile_connection, stop_all_services
-    from core.main.CommandHandler import main_command_processor, is_jarvis_busy
-    from core.main.HotKeyManager import setup_hotkeys
-    from core.main.ServiceWatchdog import start_watchdog, stop_watchdog
+    try:
+        import pygame
+        from concurrent.futures import ThreadPoolExecutor
+        from core.brain.Memory.Memory import ContextMemory
+        from core.voice import stt, tts, interrupt
+        from core.voice.stt_status import hide_stt_popup
+        from core.utils.ProcessManager import proc_manager
+        from Proactive.proactive_agent import start_proactive_agent
+        from core.main.BackgroundServices import start_agent_panel, start_stt_popup, start_rag_engine, start_baileys_server, start_mobile_connection, stop_all_services
+        from core.main.CommandHandler import main_command_processor, is_jarvis_busy
+        from core.main.HotKeyManager import setup_hotkeys
+        from core.main.ServiceWatchdog import start_watchdog, stop_watchdog
+    except ImportError as e:
+        logger.error(f"Critical module missing: {e}. Please ensure all dependencies are installed.")
+        sys.exit(1)
 
     args = [arg.lower() for arg in sys.argv[1:]]
     is_dev_mode = "test_jarvis" in args
@@ -311,6 +304,38 @@ def main() -> None:
             logger.error(f"Error cleaning up process manager: {e}")
         logger.info("Shutdown sequence complete.")
         os._exit(0)
+
+def main() -> None:
+    global _is_running
+
+    set_terminal_title("Jarvis")
+
+    if handle_cli_commands():
+        sys.exit(0)
+
+    if is_jarvis_running():
+        logger.error("Jarvis is ALREADY running in another terminal window!")
+        logger.error("Please close the existing Jarvis instance before starting a new one.")
+        sys.exit(1)
+
+    create_lock_file()
+
+    if platform.system() == "Windows":
+        tray_ready = False
+        try:
+            import pystray
+            from PIL import Image
+            tray_ready = True
+        except ImportError:
+            pass
+        
+        if tray_ready:
+            threading.Thread(target=run_jarvis, daemon=True).start()
+            start_tray_icon()
+        else:
+            run_jarvis()
+    else:
+        run_jarvis()
 
 if __name__ == "__main__":
     main()
