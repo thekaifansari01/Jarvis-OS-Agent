@@ -330,8 +330,8 @@ def main() -> None:
             pass
         
         if tray_ready:
-            threading.Thread(target=run_jarvis, daemon=True).start()
-            start_tray_icon()
+            threading.Thread(target=start_tray_icon, daemon=True).start()
+            run_jarvis()
         else:
             run_jarvis()
     else:

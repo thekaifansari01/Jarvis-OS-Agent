@@ -189,6 +189,27 @@ def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
         logger.warning(f"[SECURITY] Potentially unsafe command blocked: {command}")
         return "Observation: Command blocked for safety reasons. If you trust this command, modify the safety rules."
 
+    if command.strip().lower().startswith("adb "):
+        logger.info(f"[DIRECT ADB EXECUTION]: {command}")
+        try:
+            result = subprocess.run(
+                command, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout_seconds,
+                encoding='utf-8',
+                errors='replace'
+            )
+            output = (result.stdout + "\n" + result.stderr).strip()
+            if output:
+                return f"Observation: Command executed.\nOutput:\n{output}"
+            return "Observation: Command executed successfully with no output."
+        except subprocess.TimeoutExpired:
+            return f"Observation: ADB command timed out after {timeout_seconds} seconds."
+        except Exception as e:
+            return f"Observation: ADB execution crashed -> {str(e)}"
+
     heavy_keywords = ['pip install', 'npm install', 'npm i ', 'git clone', 'yarn add', 'pnpm install', 'apt-get install']
     if any(kw in command.lower() for kw in heavy_keywords) and timeout_seconds <= 30:
         timeout_seconds = 180
