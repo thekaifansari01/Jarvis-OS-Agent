@@ -18,8 +18,8 @@ class LifetimeMemoryEngine:
         self.graph = nx.DiGraph()
         self._lock = threading.RLock()
 
-        logger.info("⏳ Loading Semantic Embedding Model (all-MiniLM-L6-v2) for LTM...")
-        self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
+        logger.info("⏳ Loading Semantic Embedding Model (BAAI/bge-small-en-v1.5) for LTM...")
+        self.embedder = SentenceTransformer('BAAI/bge-small-en-v1.5')
         self.node_embeddings = {}
         self.metadata_embeddings = {}
 
@@ -142,7 +142,7 @@ class LifetimeMemoryEngine:
 
         self._save_graph()
 
-    def search_lifetime_memory(self, queries, top_k=3, threshold=0.75):
+    def search_lifetime_memory(self, queries, top_k=3, threshold=0.82):
         if not queries:
             return "Observation: Query empty."
 
@@ -206,7 +206,7 @@ class LifetimeMemoryEngine:
                 for matched_node in matched_nodes:
                     undirected_g = self.graph.to_undirected()
                     try:
-                        neighbors_dict = nx.single_source_shortest_path_length(undirected_g, matched_node, cutoff=2)
+                        neighbors_dict = nx.single_source_shortest_path_length(undirected_g, matched_node, cutoff=1)
                     except Exception as e:
                         logger.error(f"Shortest path calculation failed: {e}")
                         continue

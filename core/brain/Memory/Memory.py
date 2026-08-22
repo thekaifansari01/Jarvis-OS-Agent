@@ -207,12 +207,16 @@ class ContextMemory:
         except Exception as e:
             logger.error(f"Failed to fetch LTM nodes: {e}")
 
-        prompt = f"""You are the core LTM Engine for Jarvis.
-Your job is to analyze the user's latest message with the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure.
+        prompt = f"""You are the core LTM (Lifetime Memory) Engine for Jarvis.
+Your job is to analyze the user's latest message using the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure.
+
+[CRITICAL GUARDRAILS]:
+1. ZERO-HALLUCINATION: If the message does not contain a CLEAR, UNDENIABLE permanent fact, you MUST return "is_permanent_fact": false. Do not guess, infer, or force a relation.
+2. THE 1-YEAR TEST: Will this fact likely still be true or relevant 1 years from now? If 'No' (e.g., current mood, current task, upcoming trip), IGNORE it entirely and return false.
 
 [WHAT TO IGNORE]:
 - Commands & Actions ("open google", "send mail", "remind me").
-- Temporary states ("I am eating pizza", "I am tired", "going to Delhi").
+- Temporary states ("I am eating pizza", "I am tired", "going to Delhi today").
 - Chit-chat or greetings ("hello", "how are you", "ok", "thanks").
 - Meta-instructions ("remember this", "note this down", "store this").
 
@@ -228,14 +232,14 @@ PROFESSIONAL: WORKS_AS, EMPLOYED_AT, MANAGER_OF, COLLEAGUE
 PERSONAL: FRIEND, NEIGHBOR, ROOMMATE, PARTNER
 CORE: IS_A, LIKES, DISLIKES, OWNS, USES, PREFERS, HAS_SKILL, LOCATED_IN, CREATED
 
-[RULES]:
-1. Use the MOST SPECIFIC relation possible. For example, if the user says "my father", use FATHER instead of HAS_RELATION.
-2. Never store generic facts like "User is_a Person". Skip such entries.
-3. Resolve pronouns (he/she/it) using the Context History.
-4. Keep entities short (1-3 words max) and in Title Case.
-5. Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.
-6. If the relation is family-related, ensure both source and target are people.
-7. If a fact is temporary or not permanent, set "is_permanent_fact" to false.
+[EXTRACTION RULES]:
+1. SPECIFICITY: Use the MOST SPECIFIC relation possible (e.g., FATHER instead of HAS_RELATION).
+2. NO GENERICS: Never store generic facts like "User IS_A Person". Skip such entries.
+3. PRONOUN RESOLUTION: Resolve pronouns (he/she/it) using the Context History. Replace pronouns with the actual entity names.
+4. ENTITY NORMALIZATION: Keep entities short (1-3 words max) and in Title Case. Strip all articles (A, An, The). For example, "The Red Car" MUST become "Red Car".
+5. NODE REUSE: Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.
+6. FAMILY VALIDATION: If the relation is family-related, ensure both source and target are humans.
+7. CONFLICT RESOLUTION: If a new fact contradicts an existing node in the graph, extract the NEW fact and explicitly explain the override in your reasoning.
 
 [EXISTING GRAPH NODES]:
 {existing_nodes_str}
@@ -247,7 +251,7 @@ CORE: IS_A, LIKES, DISLIKES, OWNS, USES, PREFERS, HAS_SKILL, LOCATED_IN, CREATED
 
 Return STRICT JSON exactly in this schema:
 {{
-    "reasoning": "string",
+    "reasoning": "Explain why this passes the 5-Year Test, or why it fails/overrides.",
     "is_permanent_fact": boolean,
     "triplets": [
         {{
