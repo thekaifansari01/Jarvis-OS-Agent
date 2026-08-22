@@ -10,22 +10,6 @@ import sys
 import shlex
 from core.logger.logger import logger
 
-def is_terminal_command_safe(command: str) -> bool:
-    cmd_lower = command.lower()
-    suspicious_patterns = [
-        r'\bcurl\b', r'\bwget\b', r'\biwr\b', r'\binvoke-webrequest\b',
-        r'\bssh\b', r'\bftp\b', r'\btelnet\b', r'\bnc\b', r'\bnetcat\b',
-        r'\breg\s+add\b', r'\breg\s+delete\b', r'\bregedit\b',
-        r'\btaskkill\b', r'\bkill\b', r'\bstop-process\b',
-        r'\bchmod\b', r'\bchown\b', r'\bicacls\b', r'\btakeown\b',
-        r'\bformat\b', r'\bdiskpart\b', r'\bvssadmin\b', r'\bwmic\b',
-        r'\bnet\s+user\b', r'\bnet\s+localgroup\b'
-    ]
-    for pattern in suspicious_patterns:
-        if re.search(pattern, cmd_lower):
-            return False
-    return True
-
 def _is_system_destroyer(command: str) -> bool:
     if not command or not command.strip():
         return False
@@ -96,10 +80,9 @@ def is_python_code_safe(code: str) -> bool:
     if uses_os_exec:
         risky_shell_words = [
             r'\brm\b', r'\bdel\b', r'\berase\b', r'\bformat\b', r'\bfdisk\b',
-            r'\bmkfs\b', r'\bparted\b', r'\bkill\b', r'\btaskkill\b',
-            r'\bshutdown\b', r'\breboot\b', r'\bpoweroff\b', r'\bcurl\b',
-            r'\bwget\b', r'\biwr\b', r'\bchmod\b', r'\bchown\b', r'\battrib\b',
-            r'\breg\b', r'\bnetsh\b', r'\bdiskpart\b', r'\bvssadmin\b',
+            r'\bmkfs\b', r'\bparted\b', r'\bshutdown\b', r'\breboot\b', 
+            r'\bpoweroff\b', r'\bchmod\b', r'\bchown\b',
+            r'\breg\b', r'\bdiskpart\b', r'\bvssadmin\b',
             r'>', r'>>', r'\|'
         ]
         code_lower = code.lower()
@@ -184,10 +167,6 @@ def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
     if _is_system_destroyer(command):
         logger.error(f"[SYSTEM PROTECTION] Auto-blocked lethal command: {command}")
         return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Command targets system core and was automatically blocked. No execution took place."
-
-    if not is_terminal_command_safe(command):
-        logger.warning(f"[SECURITY] Potentially unsafe command blocked: {command}")
-        return "Observation: Command blocked for safety reasons. If you trust this command, modify the safety rules."
 
     if command.strip().lower().startswith("adb "):
         logger.info(f"[DIRECT ADB EXECUTION]: {command}")
