@@ -471,16 +471,18 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
             )
 
             ignore_keys = ["thought", "is_task_complete", "response"]
-            action_key = ""
-            action_detail = ""
+            executed_tools = []
+            action_details_list = []
 
             if ai_response:
                 for key, value in ai_response.items():
                     if key not in ignore_keys:
-                        action_key = key
+                        executed_tools.append(key)
+                        current_detail = f"Running {key}"
+                        
                         if key == "memory_actions" and isinstance(value, dict):
                             if value.get("recent_logs"):
-                                action_detail = "Fetching 15-Day Recent Logs"
+                                current_detail = "Fetching 15-Day Recent Logs"
                             elif value.get("lifetime_recall"):
                                 recall_val = value.get("lifetime_recall")
                                 if isinstance(recall_val, list):
@@ -495,72 +497,43 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                                                 parsed_entities.append(entity)
                                         elif isinstance(item, str):
                                             parsed_entities.append(item)
-                                    action_detail = f"Recalling LTM: {', '.join(parsed_entities)}"
+                                    current_detail = f"Recalling LTM: {', '.join(parsed_entities)}"
                                 else:
-                                    action_detail = f"Recalling LTM: {recall_val}"
+                                    current_detail = f"Recalling LTM: {recall_val}"
                         elif key == "search_actions" and isinstance(value, dict):
-                            action_detail = (
-                                value.get("web", "")
-                                or value.get("youtube", "")
-                                or value.get("arxiv", "")
-                                or value.get("vault", "")
-                                or value.get("read_webpage", "")
-                            )
-                        elif key == "execute_terminal_command" and isinstance(
-                            value, dict
-                        ):
-                            action_detail = value.get("command", "")
+                            current_detail = (value.get("web", "") or value.get("youtube", "") or value.get("arxiv", "") or value.get("vault", "") or value.get("read_webpage", ""))
+                        elif key == "execute_terminal_command" and isinstance(value, dict):
+                            current_detail = value.get("command", "")
                         elif key == "run_python_code" and isinstance(value, dict):
                             code = value.get("code_string", "").strip()
                             if code:
-                                emoji_map = {
-                                    "✅": "[OK]",
-                                    "❌": "[ERR]",
-                                    "🎉": "[DONE]",
-                                    "✨": "[STAR]",
-                                    "🔥": "[FIRE]",
-                                    "🚀": "[ROCKET]",
-                                    "✓": "[V]",
-                                    "✔": "[V]",
-                                    "✗": "[X]",
-                                    "✘": "[X]",
-                                    "\\u2705": "[OK]",
-                                    "\\u274C": "[ERR]",
-                                    "\\u2713": "[V]",
-                                    "\\u2717": "[X]",
-                                }
-                                for emoji, text in emoji_map.items():
-                                    code = code.replace(emoji, text)
+                                emoji_map = {"✅": "[OK]", "❌": "[ERR]", "🎉": "[DONE]", "✨": "[STAR]", "🔥": "[FIRE]", "🚀": "[ROCKET]", "✓": "[V]", "✔": "[V]", "✗": "[X]", "✘": "[X]", "\\u2705": "[OK]", "\\u274C": "[ERR]", "\\u2713": "[V]", "\\u2717": "[X]"}
+                                for emoji, text in emoji_map.items(): code = code.replace(emoji, text)
                                 ai_response["run_python_code"]["code_string"] = code
-                            action_detail = (
-                                code.split("\n")[0][:60] if code else "Running Script"
-                            )
+                            current_detail = code.split("\n")[0][:60] if code else "Running Script"
                         elif key == "deep_research" and isinstance(value, dict):
-                            action_detail = value.get("topic", "")
+                            current_detail = value.get("topic", "")
                         elif key == "email_action" and isinstance(value, dict):
-                            action_detail = f"To: {value.get('to', '')}"
+                            current_detail = f"To: {value.get('to', '')}"
                         elif key == "whatsapp_action" and isinstance(value, dict):
-                            action_detail = f"To: {value.get('to', '')}"
+                            current_detail = f"To: {value.get('to', '')}"
                         elif key == "image_command" and isinstance(value, dict):
-                            action_detail = value.get("prompt", "")
+                            current_detail = value.get("prompt", "")
                         elif key == "calendar_action" and isinstance(value, dict):
-                            action_detail = (
-                                f"{value.get('action', '').capitalize()} Calendar"
-                            )
+                            current_detail = f"{value.get('action', '').capitalize()} Calendar"
                         elif key == "clipboard_action" and isinstance(value, dict):
-                            action_detail = (
-                                f"{value.get('action', '').upper()} Clipboard"
-                            )
+                            current_detail = f"{value.get('action', '').upper()} Clipboard"
                         elif key == "vision" and isinstance(value, dict):
-                            action_detail = value.get("query", "Inspecting media")
+                            current_detail = value.get("query", "Inspecting media")
                         elif key == "file_operations" and isinstance(value, dict):
-                            action_detail = value.get("action", "File operation")
+                            current_detail = value.get("action", "File operation")
                         elif key == "system_controller" and isinstance(value, dict):
-                            if value.get("system_action") == "screenshot":
-                                action_detail = "Capturing Screen..."
-                            else:
-                                action_detail = "Controlling System"
-                        break
+                            current_detail = "Capturing Screen..." if value.get("system_action") == "screenshot" else "Controlling System"
+                        
+                        action_details_list.append(current_detail)
+
+            action_key = " | ".join(executed_tools) if executed_tools else ""
+            action_detail = " | ".join(action_details_list) if action_details_list else ""
 
             if not silent:
                 update_agent_status(
@@ -607,7 +580,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
             observation = None
             for attempt in range(retry_limit):
                 try:
-                    if action_key == "memory_actions":
+                    if "memory_actions" in executed_tools:
                         mem_data = ai_response.get("memory_actions", {})
 
                         if mem_data.get("recent_logs"):
@@ -645,8 +618,9 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         else:
                             observation = "Observation: No valid memory target provided. Use 'recent_logs' or 'lifetime_recall'."
 
-                    elif action_key and action_key != "THINKING":
-                        observation = execute_single_tool_sync(ai_response)
+                    elif executed_tools:
+                        from core.brain.executor import execute_tools_parallel
+                        observation = execute_tools_parallel(ai_response)
 
                     if observation:
                         if isinstance(observation, dict) and observation.get("type") == "image_payload":
@@ -671,95 +645,41 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         is_failure = any(kw in obs_lower for kw in error_keywords)
 
                         if not is_failure:
-                            action_fingerprint = f"{action_key}:{str(ai_response.get(action_key, ''))[:100]}"
-                            completed_actions.add(
-                                f"{action_fingerprint} -> [SUCCESS]"
-                            )
-                            update_confirmed_facts(
-                                confirmed_facts,
-                                action_key,
-                                action_detail,
-                                observation,
-                            )
+                            for t_key in executed_tools:
+                                t_val = ai_response.get(t_key, {})
+                                action_fingerprint = f"{t_key}:{str(t_val)[:100]}"
+                                completed_actions.add(f"{action_fingerprint} -> [SUCCESS]")
+                                
+                                update_confirmed_facts(confirmed_facts, t_key, action_detail, observation)
 
-                            if action_key in ["email_action", "whatsapp_action"]:
-                                ephemeral["last_contact"] = ai_response.get(
-                                    action_key, {}
-                                ).get("to", "")
+                                if t_key in ["email_action", "whatsapp_action"]:
+                                    ephemeral["last_contact"] = t_val.get("to", "")
 
-                            if "http" in observation and "link" in observation.lower():
-                                urls = re.findall(r"https?://[^\s]+", observation)
-                                if urls:
-                                    ephemeral["last_found_links"] = urls[:3]
-                            if (
-                                "file" in observation.lower()
-                                and (
-                                    ".png" in observation
-                                    or ".md" in observation
-                                    or ".txt" in observation
-                                    or ".jpg" in observation
-                                )
-                            ):
-                                file_match = re.search(
-                                    r"([\w\-:\\/.]+\.(png|md|txt|jpg))", observation
-                                )
-                                if file_match:
-                                    ephemeral["last_accessed_file"] = (
-                                        file_match.group(1)
-                                    )
+                                if "http" in observation and "link" in observation.lower():
+                                    urls = re.findall(r"https?://[^\s]+", observation)
+                                    if urls: ephemeral["last_found_links"] = urls[:3]
+                                
+                                if "file" in observation.lower() and (".png" in observation or ".md" in observation or ".txt" in observation or ".jpg" in observation):
+                                    file_match = re.search(r"([\w\-:\\/.]+\.(png|md|txt|jpg))", observation)
+                                    if file_match: ephemeral["last_accessed_file"] = file_match.group(1)
 
-                            try:
-                                if action_key == "system_controller":
-                                    sys_data = ai_response.get(
-                                        "system_controller", {}
-                                    )
-                                    if sys_data.get("apps_to_open"):
-                                        metadata_tracker["apps_opened"].extend(
-                                            sys_data["apps_to_open"]
-                                        )
-                                    if sys_data.get("apps_to_close"):
-                                        metadata_tracker["apps_closed"].extend(
-                                            sys_data["apps_to_close"]
-                                        )
-                                    if sys_data.get("urls_to_open"):
-                                        metadata_tracker["system_events"].append(
-                                            f"Opened URLs: {', '.join(sys_data['urls_to_open'])}"
-                                        )
-                                    if sys_data.get("system_action"):
-                                        metadata_tracker["system_events"].append(
-                                            f"System Action: {sys_data['system_action']}"
-                                        )
-
-                                    if (
-                                        sys_data.get("system_action") == "screenshot"
-                                        and sys_data.get("screenshot_filename")
-                                    ):
-                                        ephemeral["last_screenshot"] = (
-                                            sys_data.get("screenshot_filename")
-                                        )
-
-                                elif action_key == "execute_terminal_command":
-                                    cmd_data = ai_response.get(
-                                        "execute_terminal_command", {}
-                                    )
-                                    metadata_tracker["system_events"].append(
-                                        f"Terminal Command: {cmd_data.get('command', '')}"
-                                    )
-
-                                elif action_key == "run_python_code":
-                                    metadata_tracker["system_events"].append(
-                                        "Executed Python Code Script"
-                                    )
-
-                                else:
-                                    metadata_tracker["system_events"].append(
-                                        f"Executed {action_key}: {action_detail}"
-                                    )
-
-                            except Exception as meta_err:
-                                logger.error(
-                                    f"⚠️ Error tracking metadata: {meta_err}"
-                                )
+                                try:
+                                    if t_key == "system_controller":
+                                        if t_val.get("apps_to_open"): metadata_tracker["apps_opened"].extend(t_val["apps_to_open"])
+                                        if t_val.get("apps_to_close"): metadata_tracker["apps_closed"].extend(t_val["apps_to_close"])
+                                        if t_val.get("urls_to_open"): metadata_tracker["system_events"].append(f"Opened URLs: {', '.join(t_val['urls_to_open'])}")
+                                        if t_val.get("system_action"):
+                                            metadata_tracker["system_events"].append(f"System Action: {t_val['system_action']}")
+                                            if t_val.get("system_action") == "screenshot" and t_val.get("screenshot_filename"):
+                                                ephemeral["last_screenshot"] = t_val.get("screenshot_filename")
+                                    elif t_key == "execute_terminal_command":
+                                        metadata_tracker["system_events"].append(f"Terminal Command: {t_val.get('command', '')}")
+                                    elif t_key == "run_python_code":
+                                        metadata_tracker["system_events"].append("Executed Python Code Script")
+                                    else:
+                                        metadata_tracker["system_events"].append(f"Executed {t_key}")
+                                except Exception as meta_err:
+                                    logger.error(f"⚠️ Error tracking metadata: {meta_err}")
 
                             if not silent:
                                 update_agent_status(

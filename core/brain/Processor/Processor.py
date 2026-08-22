@@ -39,12 +39,14 @@ class GenericSemanticRouter:
             "with a single key 'route' having value either 'FAST' or 'AGENTIC'.\n\n"
             "CRITICAL RULE: If a user command contains MULTIPLE intents (e.g., a simple task + a complex task), ALWAYS prioritize routing to 'AGENTIC'.\n\n"
             "### STRICT NEGATIVE CONSTRAINTS (NEVER ROUTE TO AGENTIC)\n"
+            "- General 'How-to' queries or explanations: If the user is just asking HOW to do something (e.g., 'how to create an email', 'what is python', 'email account kaise banate hai') and NOT asking you to perform the action.\n"
             "- Casual conversation, greetings, jokes, time, date, or personal chit-chat.\n"
             "- Simple hardware controls: volume up/down/mute, brightness, screen lock, sleep, or screenshots.\n"
             "- Simple app/web launching or closing: 'Open Chrome', 'Close Notepad', 'Launch YouTube'.\n"
             "- Direct media playback: 'Play [song/video] on YouTube'.\n"
             "- Simple real-time web lookups: weather forecasts, live scores, quick definitions, or news.\n\n"
             "### POSITIVE ROUTING RULES (ROUTE TO 'AGENTIC' ONLY IF REQUIRED)\n"
+            "- Mobile Device Control: Any command to interact with, control, or fetch data from a connected mobile phone (e.g., 'turn on phone hotspot', 'read my mobile SMS', 'mobile me flight mode on karo').\n"
             "- Email or WhatsApp messaging (sending, attaching files, or reading chat history).\n"
             "- File system CRUD operations: creating, reading, replacing, or deleting local files/folders.\n"
             "- Coding & Terminal: writing/executing Python scripts, CMD commands, pip/npm installs, or git.\n"
@@ -53,16 +55,17 @@ class GenericSemanticRouter:
             "- Compound multi-step workflows combining apps and communications (e.g., 'Open Chrome and email the summary').\n"
             "- Image/Screen analysis: inspecting, describing, extracting text from images, photos, screenshots, or visual content.\n\n"
             "### FEW-SHOT EXAMPLES\n"
+            "User: 'Email account kaise banate hai?' -> {\"route\": \"FAST\"}\n"
             "User: 'Volume badha do aur Youtube par Arijit Singh ka gana chalao' -> {\"route\": \"FAST\"}\n"
             "User: 'Chrome kholo aur aaj ka weather search karo' -> {\"route\": \"FAST\"}\n"
             "User: 'Ek joke sunao aur brightness kam kar do' -> {\"route\": \"FAST\"}\n"
             "User: 'Is YouTube link ka video summary batao' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Kaif ko mail bhejo ki meeting 5 baje hai' -> {\"route\": \"AGENTIC\"}\n"
+            "User: 'Mere mobile par flight mode on kar do' -> {\"route\": \"AGENTIC\"}\n"
+            "User: 'Phone ka hotspot chalu karo' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Desktop par ek naya file bano test.txt nam se' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Kal maine tumse kya kaha tha coffee ke bare me?' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Is image mein kya likha hai?' -> {\"route\": \"AGENTIC\"}\n"
-            "User: 'Is photo ko describe karo' -> {\"route\": \"AGENTIC\"}\n"
-            "User: 'Mere screenshot mein kya dikh raha hai?' -> {\"route\": \"AGENTIC\"}\n"
             "User: 'Weather check karo aur ek python script likho' -> {\"route\": \"AGENTIC\"}"
         )
 
@@ -116,7 +119,9 @@ def get_local_fallback_route(command: str) -> str:
         r'\b(search|find|check|yaad|recall|batao|kahan).{0,20}(memory|history|vault|notes|kal|aaj)\b',
         r'\b(terminal|cmd|powershell|pip install|npm install|git clone|subprocess)\b',
         r'\b(arxiv|vault|deep research|scrape|webpage)\b',
-        r'\b(calendar|reminder|event|schedule)\b'
+        r'\b(calendar|reminder|event|schedule)\b',
+        r'\b(turn on|turn off|connect|read|send|check|control|chalu|band|on|off).{0,20}(mobile|phone|smartphone|sms|hotspot|flight mode|wifi)\b',
+        r'\b(mobile|phone).{0,20}(control|connect|hotspot|sms)\b'
     ]
 
     absolute_fast_patterns = [
@@ -124,7 +129,8 @@ def get_local_fallback_route(command: str) -> str:
         r'\b(open|kholo|close|band|start|launch)\b',
         r'\b(play|chalao|song|gana|music|youtube)\b',
         r'\b(weather|mausam|time|date|score|news|joke)\b',
-        r'^(hi|hello|hey|kaise ho|what is up|good morning|good evening)$'
+        r'^(hi|hello|hey|kaise ho|what is up|good morning|good evening)$',
+        r'\b(kaise banate|kaise karte|how to create|how to make|what is|kya hota hai|how do i|kaise banta)\b'
     ]
 
     for pattern in agentic_strict_patterns:

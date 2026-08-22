@@ -506,3 +506,32 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
             if isinstance(tool_data, dict):
                 return handler_func(tool_data)
     return "Observation: No valid action executed or tool not found in registry."
+
+from concurrent.futures import as_completed
+
+def execute_tools_parallel(action_dict: Dict[str, any]) -> str:
+    observations = []
+    
+    def run_tool(t_name, t_data):
+        handler = TOOL_REGISTRY.get(t_name)
+        if handler:
+            res = handler(t_data)
+            return f"[{t_name} Result]:\n{res}"
+        return f"[{t_name} Result]: Tool not found in registry."
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for tool_name, tool_data in action_dict.items():
+            if tool_name in TOOL_REGISTRY and isinstance(tool_data, dict):
+                futures.append(executor.submit(run_tool, tool_name, tool_data))
+        
+        for future in as_completed(futures):
+            try:
+                observations.append(future.result())
+            except Exception as e:
+                observations.append(f"Observation Error: {e}")
+
+    if not observations:
+        return "Observation: No valid action executed."
+    
+    return "\n\n".join(observations)
