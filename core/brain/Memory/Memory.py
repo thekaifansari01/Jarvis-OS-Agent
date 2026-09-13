@@ -59,6 +59,8 @@ class ContextMemory:
             return False
         if src.lower() == tgt.lower():
             return False
+        
+        # Family relation structural check
         family_relations = {
             "father", "mother", "brother", "sister", "son",
             "daughter", "spouse", "uncle", "aunt"
@@ -66,6 +68,7 @@ class ContextMemory:
         if rel.lower() in family_relations:
             if len(src.split()) > 3 or len(tgt.split()) > 3:
                 return False
+                
         ephemeral_relations = {
             "is_doing", "eating", "going", "will_give", "must_remember",
             "status_update", "remember", "searching", "asking", "said",
@@ -199,13 +202,18 @@ class ContextMemory:
             ])
 
         existing_nodes_str = "None"
+        existing_relations_str = "None"
         try:
             from core.brain.Memory.LifetimeMemory import ltm_engine
             top_nodes = ltm_engine.get_all_node_names(limit=100)
             if top_nodes:
                 existing_nodes_str = ", ".join(top_nodes)
+            
+            top_relations = ltm_engine.get_all_relations(limit=50)
+            if top_relations:
+                existing_relations_str = ", ".join(top_relations)
         except Exception as e:
-            logger.error(f"Failed to fetch LTM nodes: {e}")
+            logger.error(f"Failed to fetch LTM nodes or relations: {e}")
 
         prompt = f"""You are the core LTM (Lifetime Memory) Engine for Jarvis.
 Your job is to analyze the user's latest message using the context of the recent conversation, and extract ONLY permanent, long-lasting factual knowledge into a Graph structure.
@@ -214,31 +222,23 @@ Your job is to analyze the user's latest message using the context of the recent
 1. ZERO-HALLUCINATION: If the message does not contain a CLEAR, UNDENIABLE permanent fact, you MUST return "is_permanent_fact": false. Do not guess, infer, or force a relation.
 2. THE 1-YEAR TEST: Will this fact likely still be true or relevant 1 years from now? If 'No' (e.g., current mood, current task, upcoming trip), IGNORE it entirely and return false.
 
-[WHAT TO IGNORE]:
-- Commands & Actions ("open google", "send mail", "remind me").
-- Temporary states ("I am eating pizza", "I am tired", "going to Delhi today").
-- Chit-chat or greetings ("hello", "how are you", "ok", "thanks").
-- Meta-instructions ("remember this", "note this down", "store this").
-
 [WHAT TO SAVE]:
 - Identity & Traits (Profession, Age, Habits, Skills).
 - Relationships (Friends, Family, Colleagues).
 - Hard Preferences (Likes, Dislikes, Allergies, Favorite things).
 - Assets (Car owned, Phone model, Pets).
+- Contact Information (Phone numbers, Emails, Addresses).
 
-[ALLOWED RELATIONS]:
-FAMILY: FATHER, MOTHER, BROTHER, SISTER, SON, DAUGHTER, SPOUSE, UNCLE, AUNT
-PROFESSIONAL: WORKS_AS, EMPLOYED_AT, MANAGER_OF, COLLEAGUE
-PERSONAL: FRIEND, NEIGHBOR, ROOMMATE, PARTNER
-CORE: IS_A, LIKES, DISLIKES, OWNS, USES, PREFERS, HAS_SKILL, LOCATED_IN, CREATED
+[EXISTING GRAPH RELATIONS]:
+{existing_relations_str}
 
 [EXTRACTION RULES]:
-1. SPECIFICITY: Use the MOST SPECIFIC relation possible (e.g., FATHER instead of HAS_RELATION).
-2. NO GENERICS: Never store generic facts like "User IS_A Person". Skip such entries.
-3. PRONOUN RESOLUTION: Resolve pronouns (he/she/it) using the Context History. Replace pronouns with the actual entity names.
-4. ENTITY NORMALIZATION: Keep entities short (1-3 words max) and in Title Case. Strip all articles (A, An, The). For example, "The Red Car" MUST become "Red Car".
-5. NODE REUSE: Check EXISTING GRAPH NODES below. If the concept exists, use the EXACT matching node name.
-6. FAMILY VALIDATION: If the relation is family-related, ensure both source and target are humans.
+1. REUSE RELATIONS FIRST: Look at the [EXISTING GRAPH RELATIONS] list above. If an exact or highly similar relation already exists, YOU MUST USE IT (e.g., if FATHER is there, use it).
+2. INVENTING RELATIONS: If no suitable relation exists, you are free to invent a new one. The new relation MUST be UPPERCASE, strictly 1-3 words, and represent a permanent state (e.g., LIKES, OWNS, WORKS_AS).
+3. ENTITY VS ATTRIBUTE (CRITICAL): If the target is an attribute like a phone number, email address, or age, DO NOT make the relation a number (e.g. 9927272822). Use a general property relation like HAS_CONTACT, HAS_PHONE, HAS_EMAIL, or HAS_AGE, and put the actual data in the "target".
+4. NODE REUSE: Check the [EXISTING GRAPH NODES] below. If the concept exists, use the EXACT matching node name.
+5. ENTITY NORMALIZATION: Keep entities short (1-3 words max) and in Title Case. Strip all articles (A, An, The).
+6. PRONOUN RESOLUTION: Resolve pronouns (he/she/it) using the Context History. Replace pronouns with actual entity names.
 7. CONFLICT RESOLUTION: If a new fact contradicts an existing node in the graph, extract the NEW fact and explicitly explain the override in your reasoning.
 
 [EXISTING GRAPH NODES]:
@@ -251,12 +251,12 @@ CORE: IS_A, LIKES, DISLIKES, OWNS, USES, PREFERS, HAS_SKILL, LOCATED_IN, CREATED
 
 Return STRICT JSON exactly in this schema:
 {{
-    "reasoning": "Explain why this passes the 5-Year Test, or why it fails/overrides.",
+    "reasoning": "Explain why this passes the 1-Year Test and why you chose/invented this relation.",
     "is_permanent_fact": boolean,
     "triplets": [
         {{
             "source": "Entity1",
-            "relation": "ALLOWED_RELATION",
+            "relation": "YOUR_RELATION",
             "target": "Entity2",
             "metadata": {{
                 "confidence": float,
@@ -276,7 +276,7 @@ Return STRICT JSON exactly in this schema:
                 response = self.ltm_client.chat.completions.create(
                     model=LTM_EXTRACTION_MODEL,
                     messages=[
-                        {"role": "system", "content": "You are a precise knowledge graph extraction engine. Output strictly valid JSON."},
+                        {"role": "system", "content": "You are a precise, autonomous knowledge graph extraction engine. Output strictly valid JSON."},
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.0,
@@ -307,7 +307,7 @@ Return STRICT JSON exactly in this schema:
                                         if existing_rel == 'HAS_RELATION' and rel != 'HAS_RELATION':
                                             ltm_engine.graph.remove_edge(src, tgt)
                                     ltm_engine.record_triplet(src, rel, tgt, metadata=metadata, inverse=inverse)
-                                    logger.info(f"LTM Saved: [{src}] --({rel})--> [{tgt}]")
+                                    logger.info(f"LTM Final DB Entry: [{src}] --({rel})--> [{tgt}]")
                         except Exception as e:
                             logger.error(f"LTM Engine Save Error: {e}")
                 break

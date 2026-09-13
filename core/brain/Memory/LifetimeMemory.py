@@ -22,6 +22,7 @@ class LifetimeMemoryEngine:
         self.embedder = SentenceTransformer('BAAI/bge-small-en-v1.5')
         self.node_embeddings = {}
         self.metadata_embeddings = {}
+        self.relation_embeddings = {} 
 
         self._load_graph()
         self._start_auto_cleanup()
@@ -33,11 +34,19 @@ class LifetimeMemoryEngine:
             for node, emb in zip(nodes, embeddings):
                 self.node_embeddings[node] = emb
 
+        unique_relations = set()
         for u, v, data in self.graph.edges(data=True):
             if 'metadata' in data and data['metadata'] and data['metadata'].get('source_message'):
                 msg = data['metadata']['source_message']
                 if msg and msg not in self.metadata_embeddings:
                     self.metadata_embeddings[msg] = self._get_embedding(msg)
+            if 'relation' in data:
+                unique_relations.add(data['relation'].upper())
+        
+        if unique_relations:
+            rel_embeddings = self.embedder.encode(list(unique_relations))
+            for rel, emb in zip(unique_relations, rel_embeddings):
+                self.relation_embeddings[rel] = emb
 
     def _get_embedding(self, text):
         return self.embedder.encode([text])[0]
@@ -46,6 +55,42 @@ class LifetimeMemoryEngine:
         with self._lock:
             nodes = sorted(self.graph.degree, key=lambda x: x[1], reverse=True)
             return [n[0] for n in nodes[:limit]]
+
+    def get_all_relations(self, limit=50):
+        """Returns a list of unique relations currently in the graph."""
+        with self._lock:
+            relations = set()
+            for u, v, data in self.graph.edges(data=True):
+                if 'relation' in data:
+                    relations.add(data['relation'])
+            return list(relations)[:limit]
+
+    def _deduplicate_relation(self, rel, threshold=0.85):
+        """Uses Semantic Similarity to auto-merge synonymous relations."""
+        if not rel: 
+            return rel
+        rel = rel.upper()
+        
+        with self._lock:
+            if rel in self.relation_embeddings:
+                return rel
+            
+            rel_emb = self._get_embedding(rel)
+            best_match = None
+            best_sim = -1
+            
+            for ex_rel, ex_emb in self.relation_embeddings.items():
+                sim = 1 - cosine(rel_emb, ex_emb)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_match = ex_rel
+                    
+            if best_match and best_sim >= threshold:
+                logger.info(f"🧠 LTM Semantic Deduplication: Merged '{rel}' -> '{best_match}' (Sim: {best_sim:.2f})")
+                return best_match
+                
+            self.relation_embeddings[rel] = rel_emb
+            return rel
 
     def _load_graph(self):
         if self.db_path.exists():
@@ -97,9 +142,12 @@ class LifetimeMemoryEngine:
     def record_triplet(self, source, relation, target, date_str=None, metadata=None, inverse=None):
         if not source or not relation or not target:
             return
+        
         src = str(source).strip().title()
-        rel = str(relation).strip().upper()
         tgt = str(target).strip().title()
+      
+        rel = self._deduplicate_relation(str(relation).strip())
+        
         if not src or not rel or not tgt:
             return
         date_str = date_str or datetime.now().strftime("%Y-%m-%d")
@@ -130,8 +178,9 @@ class LifetimeMemoryEngine:
                     self.metadata_embeddings[msg] = self._get_embedding(msg)
 
             if inverse:
-                inv_rel = str(inverse.get("relation", "")).strip().upper()
                 inv_tgt = str(inverse.get("target", "")).strip().title()
+                inv_rel = self._deduplicate_relation(str(inverse.get("relation", "")).strip())
+                
                 if inv_rel and inv_tgt:
                     inv_edge_data = self.graph.get_edge_data(tgt, inv_tgt, default=None)
                     if inv_edge_data is not None and inv_edge_data.get('relation') == inv_rel:
