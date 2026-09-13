@@ -19,6 +19,7 @@ from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
 from core.brain.Processor.FastBrain import make_result, clean_json_string
 from core.ui.typing_status import launch_popup, update_typing_status
 from core.utils.shutdown import is_shutdown
+from core.ui.telegram_status import send_telegram_update, clear_telegram_context
 
 try:
     TOKENIZER = tiktoken.get_encoding("cl100k_base")
@@ -120,10 +121,10 @@ def run_agentic_loop(
             logger.info(f"🔄 Using fallback provider: {AGENT_FALLBACK_PROVIDER}")
         except Exception as e2:
             logger.error(f"❌ All providers failed to initialize: {e2}")
-            return make_result(
-                "Bhai, AI provider start nahi ho pa raha. Check API keys.",
-                priority="high",
-            )
+            msg = "Bhai, AI provider start nahi ho pa raha. Check API keys."
+            send_telegram_update(final_response=msg)
+            clear_telegram_context()
+            return make_result(msg, priority="high")
 
     recent_context_xml = (
         memory_instance.get_agentic_fast_context()
@@ -182,9 +183,9 @@ User Command: "{raw_command}"
                 update_typing_status("completed", timeout_msg)
             else:
                 timeout_msg = "Background task timeout."
-            return make_result(
-                timeout_msg, priority="high", agent_executed=True
-            )
+            send_telegram_update(final_response=timeout_msg)
+            clear_telegram_context()
+            return make_result(timeout_msg, priority="high", agent_executed=True)
 
         if is_shutdown():
             logger.warning("🛑 Shutdown signal detected. Aborting Agentic Loop immediately.")
@@ -197,11 +198,10 @@ User Command: "{raw_command}"
                     action_detail="",
                     tokens=total_loop_tokens,
                 )
-            return make_result(
-                "Shutdown signal received. Task aborted.",
-                priority="high",
-                agent_executed=True
-            )
+            msg = "Shutdown signal received. Task aborted."
+            send_telegram_update(final_response=msg)
+            clear_telegram_context()
+            return make_result(msg, priority="high", agent_executed=True)
 
         logger.info(
             f"🔄 Agent Loop Step {step + 1}/{max_steps} (Provider: {current_provider.__class__.__name__})"
@@ -544,6 +544,12 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                     action_detail=action_detail,
                     tokens=total_loop_tokens,
                 )
+                
+            send_telegram_update(
+                step=f"{step + 1}/{max_steps}",
+                thought=ai_response.get("thought", ""),
+                action=f"{action_key} ({action_detail})" if action_key else "Thinking..."
+            )
 
             if ai_response.get("is_task_complete"):
                 logger.info("✅ Agent declared task complete!")
@@ -568,6 +574,9 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
 
                 launch_popup()
                 update_typing_status("completed", final_text)
+                
+                send_telegram_update(final_response=final_text)
+                clear_telegram_context()
 
                 return make_result(
                     final_text,
@@ -691,6 +700,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                                     observation=str(observation)[:200],
                                     tokens=total_loop_tokens,
                                 )
+                            send_telegram_update(observation=str(observation))
                             break
                         else:
                             logger.warning(
@@ -755,6 +765,9 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                     update_typing_status("completed", limit_msg)
                 else:
                     limit_msg = "All providers exhausted."
+                
+                send_telegram_update(final_response=limit_msg)
+                clear_telegram_context()
                 return make_result(
                     limit_msg, priority="high", agent_executed=True
                 )
@@ -786,6 +799,9 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
     else:
         limit_msg = f"Max steps ({max_steps}) reached."
 
+    send_telegram_update(final_response=limit_msg)
+    clear_telegram_context()
+    
     return make_result(
         limit_msg,
         priority="high",

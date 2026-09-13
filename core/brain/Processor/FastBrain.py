@@ -10,6 +10,7 @@ from core.logger.logger import logger
 from core.brain.Processor.Prompts import SYSTEM_PROMPT
 from core.brain.config import FAST_BRAIN_API_KEY, FAST_BRAIN_MODEL, FAST_BRAIN_ENDPOINT
 from core.ui.typing_status import update_typing_status, launch_popup
+from core.ui.telegram_status import send_telegram_update, clear_telegram_context
 
 USER_NAME = os.getenv("USER_NAME", "Sir")
 FAST_MODEL = FAST_BRAIN_MODEL
@@ -245,9 +246,14 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
                 result["response"] = "[sad] Sorry sir, abhi real-time data check karne me dikkat aa rahi hai."
 
         update_typing_status("completed", result["response"])
+        send_telegram_update(final_response=result["response"])
+        clear_telegram_context()
         return result
 
     except Exception as e:
         logger.error(f"Fast Brain Error: {e}")
-        update_typing_status("completed", f"Error occurred: {e}")
+        err_msg = f"Error occurred: {e}"
+        update_typing_status("completed", err_msg)
+        send_telegram_update(final_response=err_msg)
+        clear_telegram_context()
         return None

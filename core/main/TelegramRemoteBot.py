@@ -1,11 +1,12 @@
 import os
 import time
 import threading
+import re
 from concurrent.futures import ThreadPoolExecutor
 import telebot
-from core.logger.logger import logger
 from core.security import load_decrypted_token
 from core.main.CommandHandler import main_command_processor, is_jarvis_busy
+from core.ui.telegram_status import set_telegram_context, clear_telegram_context
 
 _bot_instance = None
 _bot_thread = None
@@ -22,6 +23,16 @@ def set_telegram_remote_context(executor: ThreadPoolExecutor, memory):
     _global_executor = executor
     _global_memory = memory
 
+def _telegram_sender_callback(chat_id, message_text):
+    if _bot_instance:
+        try:
+            _bot_instance.send_message(chat_id, message_text, parse_mode="MarkdownV2")
+        except Exception:
+            try:
+                _bot_instance.send_message(chat_id, message_text)
+            except Exception:
+                pass
+
 def start_telegram_remote_listener():
     global _bot_instance, _bot_thread, _is_polling
 
@@ -32,14 +43,12 @@ def start_telegram_remote_listener():
     try:
         data = load_decrypted_token(token_path)
         if not data:
-            logger.error("Telegram Remote Bot: token decryption failed.")
             return False
 
         token = data.get("token")
         allowed_chat_id = data.get("allowed_chat_id")
 
         if not token:
-            logger.error("Telegram Remote Bot: token missing in config.")
             return False
 
         if _is_polling and _bot_instance:
@@ -50,33 +59,41 @@ def start_telegram_remote_listener():
 
         @_bot_instance.message_handler(commands=['start', 'help'])
         def send_welcome(message):
-            msg = "🤖 **Jarvis Remote Controller Bot Active!**\n\nSend any text command to execute on your PC."
+            msg = "🤖 *Jarvis Remote Controller Bot Active!*\n\nSend any text command to execute on your PC."
             _bot_instance.reply_to(message, msg, parse_mode="Markdown")
 
         @_bot_instance.message_handler(func=lambda message: True)
         def handle_remote_command(message):
             if allowed_chat_id and str(message.chat.id) != str(allowed_chat_id):
-                _bot_instance.reply_to(message, "⛔ Unauthorized access denied.")
                 return
 
             cmd_text = message.text.strip() if message.text else ""
             if not cmd_text:
                 return
 
-            logger.info(f"Remote Telegram Command: '{cmd_text}' from Chat ID: {message.chat.id}")
+            is_silent = False
+            if cmd_text.lower().startswith('/silent'):
+                is_silent = True
+                cmd_text = re.sub(r'(?i)^/silent\s*', '', cmd_text).strip()
+                if not cmd_text:
+                    return
 
             if is_jarvis_busy():
-                _bot_instance.reply_to(message, "Jarvis is currently busy. Added to live feedback queue.")
                 if _global_memory and hasattr(_global_memory, 'add_live_feedback'):
                     _global_memory.add_live_feedback(cmd_text)
             else:
-                _bot_instance.reply_to(message, f"Executing: `{cmd_text}`", parse_mode="Markdown")
+                if _global_memory:
+                    if not hasattr(_global_memory, "ephemeral"):
+                        _global_memory.ephemeral = {}
+                    _global_memory.ephemeral["force_silent_agentic"] = is_silent
+                    
+                set_telegram_context(message.chat.id, _telegram_sender_callback)
+                
                 if _global_executor and _global_memory:
                     _global_executor.submit(main_command_processor, cmd_text, _global_executor, _global_memory, "telegram_bot")
 
         def _poll_worker():
             global _is_polling
-            logger.info("Telegram Remote Bot Service started listening...")
             retries = 0
             while _is_polling:
                 try:
@@ -87,21 +104,17 @@ def start_telegram_remote_listener():
                     if "polling exited" in error_msg or "break infinity polling" in error_msg:
                         break
                     retries += 1
-                    logger.error(f"Telegram Bot Polling Error: {e}. Retry {retries}/5.")
                     if retries >= 5:
-                        logger.error("Max retries reached. Stopping Telegram polling.")
                         _is_polling = False
                         break
                     time.sleep(5)
             _is_polling = False
-            logger.info("Telegram polling stopped.")
 
         _bot_thread = threading.Thread(target=_poll_worker, daemon=True)
         _bot_thread.start()
         return True
 
-    except Exception as e:
-        logger.error(f"Failed to start Telegram Remote Bot: {e}")
+    except Exception:
         _is_polling = False
         return False
 
@@ -111,12 +124,12 @@ def stop_telegram_remote_listener():
         try:
             _bot_instance.stop_bot()
             _bot_instance.stop_polling()
-            logger.info("Telegram Remote Bot listener stopped.")
-        except Exception as e:
-            logger.error(f"Error stopping Telegram Bot: {e}")
+        except Exception:
+            pass
         finally:
             _is_polling = False
             _bot_instance = None
+            clear_telegram_context()
 
 def is_telegram_remote_running() -> bool:
     global _is_polling
