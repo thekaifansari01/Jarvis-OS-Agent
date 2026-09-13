@@ -32,9 +32,9 @@ When writing "agent_command", structure it clearly for the Agentic Brain:
 - REQUIRED AGENT ACTION: [e.g., "Announce this to the user", or "Announce this and ask if they want to draft a reply using the email tool"]
 
 JSON RESPONSE SCHEMA:
-{
+{{
   "decision": "IGNORE | SUGGEST_ACTION",
   "emotion_tag": "[tag]",
   "agent_command": "Structured formal English instruction for the Agentic Brain if SUGGEST_ACTION, else empty string"
-}
+}}
 """

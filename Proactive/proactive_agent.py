@@ -77,7 +77,7 @@ def clean_json_string(raw_text: str) -> str:
         return json_match.group(1).strip()
     return re.sub(r'^```json\n|```$', '', raw_text, flags=re.MULTILINE).strip()
 
-def evaluate_events_batch(batched_data: str, recent_history: str, current_mood: str) -> Dict[str, Any]:
+def evaluate_events_batch(batched_data: str, recent_history: str) -> Dict[str, Any]:
     default_ignore = {"decision": "IGNORE", "emotion_tag": "[calm]", "agent_command": ""}
     if not proactive_client:
         return default_ignore
@@ -85,7 +85,6 @@ def evaluate_events_batch(batched_data: str, recent_history: str, current_mood: 
     for attempt in range(3):
         try:
             prompt = PROACTIVE_SCOUT_PROMPT.format(
-                mood=current_mood,
                 history=recent_history,
                 batched_data=batched_data
             )
@@ -189,17 +188,13 @@ def proactive_loop(memory_instance, is_jarvis_busy_callback):
                         for ev in valid_events
                     ])
                     recent_history = "No recent history."
-                    current_mood = "Neutral"
                     if memory_instance:
                         try:
                             recent_history = memory_instance.get_fast_history_context()
-                            mood_history = memory_instance.user_mood.get("mood_history", [])
-                            if mood_history:
-                                current_mood = mood_history[-1].get("mood", "Neutral")
                         except Exception as mem_err:
                             logger.warning(f"Failed to fetch memory context: {mem_err}")
 
-                    decision_data = evaluate_events_batch(batched_data, recent_history, current_mood)
+                    decision_data = evaluate_events_batch(batched_data, recent_history)
                     handle_proactive_decision(decision_data, batched_data, memory_instance, is_jarvis_busy_callback)
 
                     if decision_data.get("decision", "IGNORE").upper() != "IGNORE":
