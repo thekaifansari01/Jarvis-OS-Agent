@@ -7,6 +7,7 @@ KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Data', 'Ses
 
 def get_or_create_key():
     if not os.path.exists(KEY_FILE):
+        os.makedirs(os.path.dirname(KEY_FILE), exist_ok=True)
         key = Fernet.generate_key()
         with open(KEY_FILE, 'wb') as f:
             f.write(key)
@@ -19,6 +20,7 @@ cipher_suite = Fernet(get_or_create_key())
 
 def save_encrypted_token(data: dict, file_path: str):
     try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         json_data = json.dumps(data).encode('utf-8')
         encrypted_data = cipher_suite.encrypt(json_data)
         with open(file_path, 'wb') as f:
