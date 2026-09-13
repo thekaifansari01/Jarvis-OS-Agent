@@ -96,9 +96,6 @@ def signal_handler(signum, frame):
     finally:
         os._exit(0)
 
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-
 def set_terminal_title(title="Jarvis"):
     try:
         if platform.system() == "Windows":
@@ -151,7 +148,10 @@ def start_tray_icon():
 
 def run_jarvis():
     global _is_running
-    
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     os.system('cls' if os.name == 'nt' else 'clear')
     print(r"""
          ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗
@@ -310,7 +310,11 @@ def main() -> None:
 
     set_terminal_title("Jarvis")
 
-    if handle_cli_commands():
+    try:
+        if handle_cli_commands():
+            sys.exit(0)
+    except KeyboardInterrupt:
+        logger.info("Operation cancelled by user.")
         sys.exit(0)
 
     if is_jarvis_running():
