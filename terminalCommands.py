@@ -439,12 +439,26 @@ def handle_cli_commands():
                         
                     bot_username = bot_data.get("username", "Unknown")
                     bot_name = bot_data.get("first_name", "Jarvis Bot")
-                    
+
+                    logger.info("To find your Chat ID, message @userinfobot on Telegram.")
+                    while True:
+                        chat_id_input = input("Enter your Telegram Chat ID (mandatory): ").strip()
+                        if not chat_id_input:
+                            logger.error("Chat ID is required for security. Please enter your Chat ID.")
+                            continue
+                        if not chat_id_input.lstrip("-").isdigit():
+                            logger.error("Invalid Chat ID. It must be a number (e.g., 123456789).")
+                            continue
+                        break
+
+                    allowed_chat_id = chat_id_input
+
                     os.makedirs(SESSION_DIR, exist_ok=True)
                     save_encrypted_token({
                         "token": token,
                         "bot_name": bot_name,
                         "bot_username": bot_username,
+                        "allowed_chat_id": allowed_chat_id,
                         "active": True
                     }, token_path)
                         

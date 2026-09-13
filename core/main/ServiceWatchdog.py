@@ -35,7 +35,7 @@ class ServiceWatchdog:
         self._thread = None
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self._creds_path = os.path.join(base_dir, "Data", "SessionCookies", "auth_info_baileys", "creds.json")
-        self._telegram_token_path = os.path.join(base_dir, "Data", "SessionCookies", "telegram_bot_token.json")
+        self._telegram_token_path = os.path.join(base_dir, "Data", "SessionCookies", "telegram_bot_token.enc")
         self._skip_log_times = {}
         self.services = {
             "baileys": {

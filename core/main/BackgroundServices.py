@@ -194,7 +194,7 @@ def is_mobile_connected():
 def start_telegram_remote_service():
     try:
         session_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "SessionCookies")
-        token_file = os.path.join(session_dir, "telegram_bot_token.json")
+        token_file = os.path.join(session_dir, "telegram_bot_token.enc")
         if not os.path.exists(token_file):
             return
         if start_telegram_remote_listener():

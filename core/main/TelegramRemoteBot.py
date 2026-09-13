@@ -1,10 +1,10 @@
 import os
-import json
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import telebot
 from core.logger.logger import logger
+from core.security import load_decrypted_token
 from core.main.CommandHandler import main_command_processor, is_jarvis_busy
 
 _bot_instance = None
@@ -15,7 +15,7 @@ _global_memory = None
 
 def get_token_path():
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base_dir, "Data", "SessionCookies", "telegram_bot_token.json")
+    return os.path.join(base_dir, "Data", "SessionCookies", "telegram_bot_token.enc")
 
 def set_telegram_remote_context(executor: ThreadPoolExecutor, memory):
     global _global_executor, _global_memory
@@ -30,12 +30,16 @@ def start_telegram_remote_listener():
         return False
 
     try:
-        with open(token_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            token = data.get("token")
-            allowed_chat_id = data.get("allowed_chat_id")
+        data = load_decrypted_token(token_path)
+        if not data:
+            logger.error("Telegram Remote Bot: token decryption failed.")
+            return False
+
+        token = data.get("token")
+        allowed_chat_id = data.get("allowed_chat_id")
 
         if not token:
+            logger.error("Telegram Remote Bot: token missing in config.")
             return False
 
         if _is_polling and _bot_instance:
