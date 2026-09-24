@@ -168,8 +168,8 @@ def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
         logger.error(f"[SYSTEM PROTECTION] Auto-blocked lethal command: {command}")
         return "Observation: 🚫 CRITICAL SYSTEM PROTECTION ACTIVE. Command targets system core and was automatically blocked. No execution took place."
 
-    if command.strip().lower().startswith("adb "):
-        logger.info(f"[DIRECT ADB EXECUTION]: {command}")
+    if command.strip().lower().startswith("ssh "):
+        logger.info(f"[DIRECT SSH EXECUTION]: {command}")
         try:
             result = subprocess.run(
                 command, 
@@ -185,9 +185,9 @@ def execute_terminal_command(command: str, timeout_seconds: int = 30) -> str:
                 return f"Observation: Command executed.\nOutput:\n{output}"
             return "Observation: Command executed successfully with no output."
         except subprocess.TimeoutExpired:
-            return f"Observation: ADB command timed out after {timeout_seconds} seconds."
+            return f"Observation: SSH command timed out after {timeout_seconds} seconds."
         except Exception as e:
-            return f"Observation: ADB execution crashed -> {str(e)}"
+            return f"Observation: SSH execution crashed -> {str(e)}"
 
     heavy_keywords = ['pip install', 'npm install', 'npm i ', 'git clone', 'yarn add', 'pnpm install', 'apt-get install']
     if any(kw in command.lower() for kw in heavy_keywords) and timeout_seconds <= 30:

@@ -4,7 +4,7 @@
 > **Welcome to the Jarvis-OS-Agent by @thekaifansari01.**  
 > *"We call it an AI Operating System because it autonomously controls your PC, Android Phone, Local Files, and Lifelong Memory — not just your code."*
 
-> **Open-Source AI Agent · Zero Line-Drift Coding · Lifelong Episodic Memory · Voice-First Multimodal · Proactive HITL · Android ADB Control · Telegram Remote Execution · Hybrid RAG · PC System Monitoring**
+> **Open-Source AI Agent · Zero Line-Drift Coding · Lifelong Episodic Memory · Voice-First Multimodal · Proactive HITL · Android Termux SSH Control · Telegram Remote Execution · Hybrid RAG · PC System Monitoring**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -13,7 +13,7 @@
 [![Multi-Provider](https://img.shields.io/badge/Providers-Regolo%20%7C%20Gemini%20%7C%20OpenRouter%20%7C%20Custom-FF6F00?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
 [![Voice Control](https://img.shields.io/badge/Voice-Deepgram%20Nova--2-00BFFF?style=for-the-badge&logo=deepgram&logoColor=white)](https://deepgram.com)
-[![Android ADB](https://img.shields.io/badge/Android-ADB%20Control-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/studio/command-line/adb)
+[![Android SSH](https://img.shields.io/badge/Android-Termux%20SSH-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://termux.dev/)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-Remote%20Bot-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.org)
 [![Lifelong Memory](https://img.shields.io/badge/Memory-Lifelong%20LTM-FF6B6B?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![Hybrid RAG](https://img.shields.io/badge/RAG-Hybrid%20%28BM25%2BVector%29-00B4D8?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
@@ -41,7 +41,7 @@
 - [🏗️ Technical Architecture of Jarvis OS](#️-technical-architecture-of-jarvis-os)
 - [⚡ Dual-Engine AI: FastBrain vs 🧠 AgenticBrain](#-dualengine-ai-fastbrain-vs--agenticbrain)
 - [🧠 Lifelong Episodic Memory & Hybrid RAG System](#-lifelong-episodic-memory--hybrid-rag-system)
-- [📱 Android Mobile Control via ADB](#-android-mobile-control-via-adb)
+- [📱 Android Mobile Control via Termux SSH](#-android-mobile-control-via-termux-ssh)
 - [🛠️ Integrated AI Tool Ecosystem](#️-integrated-ai-tool-ecosystem)
 - [💻 PC System Monitoring & Proactive Alerts](#-pc-system-monitoring--proactive-alerts)
 - [🚀 How to Install Jarvis OS Agent (Quick Setup)](#-how-to-install-jarvis-os-agent-quick-setup)
@@ -63,7 +63,7 @@
 | 🛡️ | **Zero Line-Drift Code Editing** | Uses exact `replace_block` diffs instead of fragile line numbers. This eliminates the "line-drift bug" plaguing Claude Code. Auto-catches syntax errors via AST linter and self-corrects without human intervention. |
 | 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-based semantic knowledge graph backed by SentenceTransformers (`all-MiniLM-L6-v2`). Indexes local documents with **smart chunk overlap**, **Hybrid search (Vector + BM25 + RRF)**, and **Recency boost**. Remembers history from months ago. |
 | 🔄 | **Hybrid Semantic AI Routing** | Cloud Regolo router + local rule-based fallback. Intelligently routes simple commands to ultra-fast **FastBrain** (sub-second LLM), and complex tasks to deep-reasoning **AgenticBrain**. |
-| 📱 | **Android ADB Mobile Control** | Remotely control your Android phone via ADB over Tailscale. Execute lock/unlock, open apps, make calls, send SMS, toggle WiFi/Data, and take screenshots directly from your PC. |
+| 📱 | **Android Termux SSH Control** | Remotely control your Android phone natively via Termux API over a Tailscale SSH tunnel. Execute calls, send SMS, toggle hardware sensors, and get clean JSON data without ADB lag. |
 | 🌍 | **Telegram Remote PC Control** | Control your Windows PC from anywhere globally via a secure Telegram bot. Commands trigger silent background execution without disrupting your active desktop workflow. |
 | 📨 | **Proactive Automation (Email/WhatsApp/Telegram)** | Background listeners for Gmail, WhatsApp, Telegram, and Google Calendar. Jarvis detects updates in real-time and utilizes Proactive HITL (Human-In-The-Loop) to ask for consent before modifying critical data. |
 | 💻 | **PC System Monitoring & Alerts** | Background listener for CPU, RAM, Disk, Battery, Network, and USB devices. Smart cooldown (60s), idle/fullscreen suppression, and LLM-filtered proactive alerts via the Scout Agent. |
@@ -71,7 +71,7 @@
 | 🔌 | **Multi-LLM Auto-Failover (Cloud & Local)** | Seamlessly switches between Regolo, Gemini, OpenRouter, or **Local LLMs (Ollama, LM Studio, vLLM)**. Zero downtime workflow execution even if the primary provider hits API rate limits. |
 | 🎨 | **Reactive Dynamic UI Ecosystem** | Features a ZMQ-powered floating PyQt5 Agent Panel with real-time thought/action/observation streaming. Includes a live markdown typing popup with async image previews, glass-morphism, and auto-resize dynamic glow. |
 | 🔒 | **Enterprise-Grade Command Security** | Utilizes `shlex` tokenization to auto-block system-destroying terminal commands (e.g., `rm -rf /`). Features local AES-Encryption (`.enc`) for Gmail, Calendar, and Telegram session tokens to prevent credential theft. |
-| ⚙️ | **ServiceWatchdog Resilience** | A dedicated background watchdog monitors processes (STT, Baileys, ADB, Telegram). It intelligently auto-restarts crashed services while skipping unauthenticated modules to prevent spam. |
+| ⚙️ | **ServiceWatchdog Resilience** | A dedicated background watchdog monitors processes (STT, Baileys, Telegram). It intelligently auto-restarts crashed services while skipping unauthenticated modules to prevent spam. |
 
 ---
 
@@ -84,7 +84,7 @@ For developers seeking an **open-source AI coding agent** and **desktop assistan
 | **High Cost & Subscription Walls:** Expensive API usage and monthly recurring fees. | **100% Free & Open Source:** Run entirely on local models (Ollama/LM Studio) or free-tier cloud APIs. |
 | **Line-Drift Bugs:** Edits often fail because LLMs miscalculate line numbers during code modification. | **Exact Diff-Matching (`replace_block`):** Guaranteed zero line-drift. Finds the exact code block irrespective of line numbers. |
 | **Amnesia (Session-Only Memory):** Forgets context within 2 minutes of a new chat. | **Lifelong Episodic Memory (LTM):** Powered by local vector embeddings, temporal decay, and subgraph extraction. |
-| **Text-Only Constraints:** Generates code but lacks real-world native execution capabilities. | **Native Tool Execution:** Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and Android ADB. |
+| **Text-Only Constraints:** Generates code but lacks real-world native execution capabilities. | **Native Tool Execution:** Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and Android Termux SSH. |
 | **Isolated Environment:** Cannot be triggered remotely. | **Telegram Remote Bot:** Issue commands to your PC remotely via Telegram; executed silently in the background. |
 | **Reactive Only:** Waits for you to prompt it. | **Proactive HITL:** Background listeners read emails/chats and proactively suggest calendar updates or replies. |
 | **Basic RAG Integration:** Uses either semantic OR keyword search, yielding poor results. | **Hybrid RAG System:** BM25 keyword search + Vector semantic search merged via Reciprocal Rank Fusion (RRF). |
@@ -135,7 +135,7 @@ flowchart TD
         Search["🌐 Tavily / ArXiv / Scraper"]
         Vision["👁️ Vision Multimodal / OCR"]
         Image["🎨 Image Gen / Edit"]
-        Mobile["📱 ADB / Mobile Control"]
+        Mobile["📱 Termux SSH / Mobile Control"]
         PC["💻 PC Monitor / System Health"]
     end
 
@@ -195,7 +195,7 @@ Jarvis utilizes a dual-engine architecture to optimize API costs, speed, and rea
 | **Memory Recall** | ❌ No LTM; only short-term context. | ✅ `memory_actions` (Lifetime vector graph recall + temporal decay). |
 | **Multimodal Vision** | ❌ No vision processing. | ✅ `vision` (Image/Video analysis, OCR, Object detection). |
 | **Web Research** | ❌ Basic real-time search (`quick_web_search`). | ✅ `deep_research` (420s synthesis), ArXiv, YouTube scraping. |
-| **Mobile Control** | ❌ No Android connection. | ✅ Full ADB mobile control over Tailscale. |
+| **Mobile Control** | ❌ No Android connection. | ✅ Full Termux SSH mobile control over Tailscale. |
 | **PC Monitoring** | ❌ No system health awareness. | ✅ Full PC Monitor integration (CPU/RAM/Disk/Battery/Network). |
 | **Proactive HITL** | ❌ No background scanning. | ✅ Strict Partner Confirmation Mode before permanent modifications. |
 
@@ -219,23 +219,19 @@ JARVIS implements a **four-tier** artificial memory system, setting a new standa
 
 ---
 
-## 📱 Android Mobile Control via ADB
+## 📱 Android Mobile Control via Termux SSH
 
-Control your Android smartphone completely hands-free from your Windows PC using the Jarvis Agent via ADB and Tailscale:
+Control your Android smartphone completely hands-free and natively from your Windows PC using the Jarvis Agent via Termux API and a Tailscale SSH tunnel:
 
 | Capability Category | Example Agentic Commands |
 | --- | --- |
-| **System Actions** | Lock/Unlock, Home Button, Back Button, Recent Apps |
-| **Volume & Media** | Volume Up/Down, Mute Device, Flashlight Toggle |
-| **App Launching** | Open WhatsApp, Chrome, YouTube, Spotify, Camera, Settings |
-| **Telecom (Calls & SMS)** | Make direct phone calls, Open dialer, Read/Send SMS messages |
-| **Screenshots** | Capture Android screenshot and save/analyze on Windows PC |
-| **Network Toggles** | Enable/Disable WiFi, Toggle Mobile Data |
-| **Notifications** | Expand notification panel, Access Quick Settings |
-| **Battery & Sensors** | Check exact battery percentage and charging state |
-| **File Transfer** | Pull files from Android to PC, Push files to Android |
+| **Telecom (Calls & SMS)** | Make direct phone calls without dialer UI, Read/Send SMS messages instantly |
+| **Volume & Media** | Volume Up/Down, Mute Device, Play custom media/alerts |
+| **Hardware Sensors** | Toggle Flashlight (Torch), Vibrate, Read Battery, Location, Accelerometer |
+| **Notifications** | Read incoming notifications, Push custom rich notifications to status bar |
+| **System Automation** | Clipboard Sync, Camera Photo capture without opening app |
 
-*Setup Note:* Enable USB debugging on your Android, run `adb tcpip 5555`, connect your devices via Tailscale, and assign `ADB_PHONE_IP` in the `.env` file.
+*Setup Note:* Install Termux and Termux:API on your Android (via F-Droid). Setup OpenSSH (`sshd`) with passwordless key authentication from your PC, and connect both devices via Tailscale VPN.
 
 ---
 
@@ -246,7 +242,7 @@ Control your Android smartphone completely hands-free from your Windows PC using
 | 💻 **Software Engineering** | `repo_map`, `replace_block` (zero line-drift), AST linting, `create_many` |
 | 📨 **Communication Agents** | Gmail Pub/Sub (send/read), WhatsApp & Telegram API, Google Calendar OAuth |
 | 📂 **Workspace & RAG** | Single-file CRUD, recursive repo scanning, Hybrid RAG (BM25+Vector+RRF) |
-| 📱 **Mobile Control** | ADB Suite (lock, apps, calls, SMS, screenshot, WiFi/Data, file push/pull) |
+| 📱 **Mobile Control** | Termux API Suite (native calls, SMS, battery, torch, sensors, notifications) |
 | 🌍 **Remote Control** | Telegram Bot API for triggering silent PC commands externally |
 | 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript extraction, Deep Research |
 | ⚙️ **System Automation** | App launch/kill, volume/brightness control, clipboard CRUD operations |
@@ -447,7 +443,6 @@ Copy `.env.example` to `.env` in the root directory and populate your API creden
 | `OPENROUTER_API_KEY` | Fallback Agentic Provider (Claude 3.7/DeepSeek) | (Optional) |
 | `TAVILY_API_KEY` | Real-time Web Search Engine | (Required) |
 | `DEEPGRAM_API_KEY` | Ultra-low latency Speech-to-Text | (Required) |
-| `ADB_PHONE_IP` | Tailscale IP for Android Mobile Control | (Optional) |
 | `TELEGRAM_API_ID` | Telegram App API ID for Desktop Client | (Optional) |
 | `TELEGRAM_API_HASH` | Telegram App API Hash for Desktop Client | (Optional) |
 | `CUSTOM_BASE_URL` | Local OpenAI-compatible endpoint (Ollama/LM Studio) | `http://localhost:11434/v1` |
@@ -467,7 +462,7 @@ Copy `.env.example` to `.env` in the root directory and populate your API creden
 | Remote Telegram Bot is unresponsive | Ensure activation via `jarvis bot --activate` with a valid BotFather token and restart the Jarvis OS Agent. |
 | `jarvis` command not recognized globally | Run `python SetupRegistry.py` from your activated virtual environment in the **root directory**, then launch a **new terminal**. |
 | Unwanted popup authentications on boot | Run `jarvis logout --service`. Proactive listeners only start if valid credentials exist. |
-| Mobile ADB Connection Timeout | Verify `ADB_PHONE_IP` in `.env`, confirm Tailscale VPN status, and manually test `adb devices` in CMD. |
+| Mobile SSH Connection Timed Out | Confirm Tailscale VPN is connected on both devices, and ensure `sshd` is running in Termux on your phone. |
 | Custom Local Provider (Ollama) failing | Double-check `CUSTOM_BASE_URL` ends with `/v1` and the endpoint strictly follows OpenAI formatting. |
 | Knowledge Graph memory feels stale | Delete `Data/jarvis_memory/lifetime_graph.json` and reboot. Graph nodes, temporal weights, and vector embeddings will auto-rebuild. |
 | Hybrid RAG Search returning poor data | Delete `Data/jarvis_memory/rag_chroma_db` and reboot to force a fresh index with updated chunk overlap logic. |

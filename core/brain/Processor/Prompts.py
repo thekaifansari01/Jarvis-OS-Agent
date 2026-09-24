@@ -38,26 +38,21 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
 
    <mobile_android_control>
     <directive>
-      Your user has an Android phone connected via ADB. To control the phone, use 'execute_terminal_command' for simple 'adb shell' commands OR 'run_python_code' for complex queries.
+      Your user has an Android phone connected via a secure Tailscale SSH tunnel to a native Termux Linux environment. YOU MUST NEVER USE 'adb shell'.
+      To control the phone, ALWAYS use the 'execute_terminal_command' tool with this exact SSH prefix: ssh -p 8022 u0_a340@100.115.120.44 "termux-command-here"
       TREAT THE PHONE AS A SMART TELECOM & SENSOR BRIDGE:
-      1. Messaging & Email Priority: ALWAYS use PC native tools ('whatsapp_action', 'email_action') for sending messages, emails, or files. NEVER open mobile UI apps for messaging unless explicitly commanded by the user.
-      2. Telecom & OTP Superpowers: Use direct zero-tap Android Intents and Content Providers for calling, reading OTP/SMS, and checking system sensors.
-      3. Unrestricted Fallback: You retain full freedom to execute UI taps, keyevents, or custom app launches if the user explicitly asks for a mobile-specific task.
-      4. CMD Quoting Protection (CRITICAL SPEED RULE): For simple ADB commands ('keyevent', 'dumpsys', 'am start'), use 'execute_terminal_command'. BUT for complex queries involving SQL filters, projections, or quotes (e.g., SMS 'content query --sort'), ALWAYS execute via 'run_python_code' using Python's 'subprocess.run()' with a list of arguments to prevent Windows CMD quote-stripping syntax errors and guarantee 1-attempt execution.
+      1. Native Termux API: Use Termux:API commands (termux-telephony-call, termux-sms-list, termux-sms-send, termux-battery-status, termux-toast, termux-vibrate) for all phone operations.
+      2. Messaging Priority: Always prefer PC native tools ('whatsapp_action', 'email_action') for WhatsApp/Emails. Use SSH Termux only for native phone SMS, calls, or hardware sensors.
+      3. Clean Execution: Termux API commands return clean JSON. You can execute them directly via 'execute_terminal_command' without worrying about Windows CMD quoting bugs that ADB had.
     </directive>
     <smart_examples>
-      <example use_case="Read Latest SMS / OTP Invisible Capture (Use run_python_code to avoid Windows CMD quoting bugs)">
-import subprocess
-cmd = ["adb", "shell", "content query --uri content://sms/inbox --projection address:body:date --sort 'date DESC'"]
-res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
-print(res.stdout[:1500])
-      </example>
-      <example use_case="Direct SIM Calling - No Dialer UI Lag (Use execute_terminal_command)">adb shell am start -a android.intent.action.CALL -d tel:+91XXXXXXXXXX</example>
-      <example use_case="Check Battery Level Silent Audit (Use execute_terminal_command)">adb shell dumpsys battery</example>
-      <example use_case="Find My Phone - Un-silence & Ring (Use execute_terminal_command)">adb shell cmd notification set_zen_mode 0 && adb shell media volume --show --stream 3 --set 15</example>
-      <example use_case="Hardware Key Control (Use execute_terminal_command)">adb shell input keyevent 3 for HOME, adb shell input keyevent 26 for LOCK.</example>
+      <example use_case="Read Latest SMS / Fetch OTP (Use execute_terminal_command)">ssh -p 8022 u0_a340@100.115.120.44 "termux-sms-list -l 5"</example>
+      <example use_case="Direct SIM Calling (Use execute_terminal_command)">ssh -p 8022 u0_a340@100.115.120.44 "termux-telephony-call +91XXXXXXXXXX"</example>
+      <example use_case="Check Battery Level (Use execute_terminal_command)">ssh -p 8022 u0_a340@100.115.120.44 "termux-battery-status"</example>
+      <example use_case="Send Native SMS (Use execute_terminal_command)">ssh -p 8022 u0_a340@100.115.120.44 "termux-sms-send -n +91XXXXXXXXXX 'Hello from Jarvis'"</example>
+      <example use_case="Find My Phone / Alert (Use execute_terminal_command)">ssh -p 8022 u0_a340@100.115.120.44 "termux-volume ring 15 && termux-vibrate -d 3000 && termux-toast 'I AM HERE'"</example>
     </smart_examples>
-    <note>If 'error: device not found' appears, the system will auto-reconnect. Inform the user.</note>
+    <note>If 'Connection timed out' appears, it means the phone's Tailscale VPN is disconnected or Termux sshd is not running. Inform the user to check their phone.</note>
    </mobile_android_control>
 
   <intelligence_core_workflow>

@@ -2,29 +2,15 @@ import time
 import logging
 import threading
 import os
-import subprocess
 import platform
 from core.main.BackgroundServices import (
     start_baileys_server,
     start_stt_popup,
-    start_mobile_connection,
     start_telegram_remote_service,
     is_baileys_running,
     is_stt_popup_running,
-    is_mobile_connected,
-    is_telegram_remote_service_running,
-    ADB_HOST
+    is_telegram_remote_service_running
 )
-
-def is_device_reachable(ip):
-    if not ip:
-        return False
-    param = '-n' if platform.system().lower() == 'windows' else '-c'
-    try:
-        result = subprocess.run(["ping", param, "1", "-w", "1000", ip], capture_output=True)
-        return result.returncode == 0
-    except Exception:
-        return False
 
 class ServiceWatchdog:
     def __init__(self, check_interval=5, max_retries=3, cooldown=15):
@@ -63,15 +49,6 @@ class ServiceWatchdog:
                 "has_creds": lambda: os.path.exists(self._telegram_token_path)
             }
         }
-        if ADB_HOST is not None:
-            self.services["mobile_adb"] = {
-                "is_running_check": is_mobile_connected,
-                "start_func": start_mobile_connection,
-                "retries": 0,
-                "last_restart": 0,
-                "next_retry_time": 0,
-                "has_creds": lambda: is_device_reachable(ADB_HOST)
-            }
 
     def start(self):
         if self._is_running:
