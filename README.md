@@ -106,7 +106,7 @@ flowchart TD
     TelegramBot -->|Silent Flag| Router
     STT --> Router
     Router -->|Fallback| LocalRouter[🔄 Local Rule-Based Router]
-    LocalRouter --> FastBrain   <!-- 🔧 FIX: dead-end removed -->
+    LocalRouter --> FastBrain 
     
     Router -->|Simple / Stateless| FastBrain[⚡ FastBrain<br/>Fast LLM (OpenAI‑compatible)]
     Router -->|Complex / Stateful| AgenticBrain[🧠 AgenticBrain<br/>Regolo/Gemini/OpenRouter/Custom]
