@@ -456,32 +456,55 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="gui_controller",
                     description=(
-                        "[WHEN TO USE]: Use ONLY when the user explicitly requests visual interaction with the screen (e.g., 'click the search bar', 'type in Chrome', 'scroll down').\n"
-                        "[WHEN NOT TO USE]: NEVER use this for background tasks, file editing, terminal commands, or merely opening/closing applications (use 'system_controller' to launch apps first).\n"
+                        "[WHEN TO USE]: Use ONLY when the user explicitly requests visual interaction with the screen.\n"
+                        "[WHEN NOT TO USE]: NEVER use this for background tasks, file editing, terminal commands, or merely opening/closing apps (use 'system_controller' to launch apps first).\n"
                         "[CRITICAL STRICT WORKFLOW]:\n"
-                        "1. OBSERVATION PHASE: You MUST ALWAYS call action='observe' first. You will receive an image payload with Magenta boxes and numeric tags (e.g., [12]).\n"
-                        "2. ANTI-LOOP EXECUTION: DO NOT overthink, describe the image, or debate in your internal thoughts. Once you see the image, IMMEDIATELY call this tool again with action='click' or 'type' and the EXACT 'element_id'.\n"
-                        "3. HIDDEN ELEMENTS: If the target is not visible in the current image, use action='scroll_down' or 'scroll_up'. After scrolling, you MUST call 'observe' again to get updated tags.\n"
-                        "[ANTI-HALLUCINATION RULE]: NEVER guess an 'element_id' or coordinates. If you don't see the numeric tag on the target, do not attempt to click it."
+                        "1. OBSERVATION PHASE: You MUST ALWAYS call action='observe' first to get the image payload with Magenta boxes and numeric tags (e.g., [12]).\n"
+                        "2. ANTI-LOOP EXECUTION: DO NOT overthink or describe the image in your thoughts. Immediately call this tool again with an action and the EXACT 'element_id'.\n"
+                        "3. ADVANCED ACTIONS: You can now use 'right_click', 'double_click', 'drag_and_drop' (requires start/end IDs), 'hover', and 'hotkey' (for keyboard combos like Ctrl+C).\n"
+                        "4. CLICK PRECISION: By default, clicks happen at the 'center' of the box. Use 'click_position' to target 'top_left', 'bottom_right' etc. for large boxes.\n"
+                        "5. UI LAG: If clicking opens a heavy app/menu, set 'wait_after_action' (e.g., 2.0) to let UI load before returning.\n"
+                        "[ANTI-HALLUCINATION RULE]: NEVER guess an 'element_id'. If the tag is hidden, use 'scroll_down' and 'observe' again."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
                             "action": types.Schema(
                                 type=types.Type.STRING, 
-                                description="MANDATORY. Choose exactly one: 'observe', 'click', 'type', 'scroll_down', 'scroll_up', 'press_key'."
+                                description="MANDATORY. Choose exactly one: 'observe', 'click', 'left_click', 'right_click', 'double_click', 'hover', 'drag_and_drop', 'type', 'press_key', 'hotkey', 'scroll_down', 'scroll_up'."
                             ),
                             "element_id": types.Schema(
                                 type=types.Type.INTEGER, 
-                                description="MANDATORY for 'click' and 'type'. The exact numeric ID (e.g., 12) from the Magenta tagged image. DO NOT pass strings."
+                                description="Required for most actions. The exact numeric ID (e.g., 12) from the tagged image."
+                            ),
+                            "start_element_id": types.Schema(
+                                type=types.Type.INTEGER, 
+                                description="Required ONLY for 'drag_and_drop'. The starting ID."
+                            ),
+                            "end_element_id": types.Schema(
+                                type=types.Type.INTEGER, 
+                                description="Required ONLY for 'drag_and_drop'. The destination ID."
+                            ),
+                            "click_position": types.Schema(
+                                type=types.Type.STRING, 
+                                description="Optional. Choose: 'center', 'top_left', 'top_right', 'bottom_left', 'bottom_right'. Default is 'center'."
                             ),
                             "text": types.Schema(
                                 type=types.Type.STRING, 
-                                description="MANDATORY for 'type'. The exact text to type into the chosen element."
+                                description="Required for 'type'. The text to type."
                             ),
                             "key": types.Schema(
                                 type=types.Type.STRING, 
-                                description="MANDATORY for 'press_key'. Examples: 'enter', 'tab', 'esc', 'space', 'backspace', 'win'."
+                                description="Required for 'press_key'. Examples: 'enter', 'tab', 'esc', 'win'."
+                            ),
+                            "keys": types.Schema(
+                                type=types.Type.ARRAY,
+                                items=types.Schema(type=types.Type.STRING),
+                                description="Required for 'hotkey'. Array of keys. Example: ['ctrl', 'shift', 'esc']."
+                            ),
+                            "wait_after_action": types.Schema(
+                                type=types.Type.NUMBER, 
+                                description="Optional. Seconds to wait after the action completes before returning. Use 1.0-3.0 for heavy UI transitions."
                             )
                         },
                         required=["action"]

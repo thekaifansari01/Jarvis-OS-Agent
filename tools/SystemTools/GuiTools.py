@@ -58,9 +58,14 @@ def _generate_som():
             draw.rectangle([x, max(0, y - 16), x + tag_width, y], fill=tag_bg_color)
             draw.text((x + 2, max(0, y - 15)), tag, fill=tag_text_color, font=font)
             
-            center_x = x + (w // 2)
-            center_y = y + (h // 2)
-            ui_elements[element_id] = {'x': center_x, 'y': center_y}
+            ui_elements[element_id] = {
+                'cx': x + (w // 2), 
+                'cy': y + (h // 2),
+                'x': x,
+                'y': y,
+                'w': w,
+                'h': h
+            }
             
             element_id += 1
 
@@ -72,14 +77,22 @@ def _generate_som():
     logger.info(f"Scan complete. Found {element_id - 1} UI zones.")
     return output_path, ui_elements
 
+def _get_target_coords(elem_id, position="center"):
+    coords = _gui_memory[elem_id]
+    if position == "top_left":
+        return coords['x'] + 5, coords['y'] + 5
+    elif position == "top_right":
+        return coords['x'] + coords['w'] - 5, coords['y'] + 5
+    elif position == "bottom_left":
+        return coords['x'] + 5, coords['y'] + coords['h'] - 5
+    elif position == "bottom_right":
+        return coords['x'] + coords['w'] - 5, coords['y'] + coords['h'] - 5
+    return coords['cx'], coords['cy']
 
 def handle_gui_controller(gui_cmd: dict):
-    """
-    NOTE: DO NOT wrap this function with @with_observation in executor.py.
-    It returns a dictionary payload for images, which the decorator would break.
-    """
     try:
         action = gui_cmd.get("action")
+        wait_time = float(gui_cmd.get("wait_after_action", 0.0))
         
         if action == "observe":
             _gui_memory.clear()
@@ -95,13 +108,13 @@ def handle_gui_controller(gui_cmd: dict):
                 "observation": "Observation: Screen scanned and UI elements tagged with Magenta boxes. Look at the image and provide the exact 'element_id' to interact."
             }
 
-        elif action in ["click", "type"]:
+        if action in ["click", "left_click", "right_click", "double_click", "hover", "type"]:
             raw_id = gui_cmd.get("element_id")
+            position = gui_cmd.get("click_position", "center")
             
             if raw_id is None:
                 return "Observation: Error -> Missing 'element_id'."
                 
-            # Safely cast AI output to integer
             try:
                 elem_id = int(raw_id)
             except ValueError:
@@ -110,40 +123,81 @@ def handle_gui_controller(gui_cmd: dict):
             if elem_id not in _gui_memory:
                 return f"Observation: Error -> Element ID [{elem_id}] not found on current screen. Call 'observe' again to refresh."
                 
-            coords = _gui_memory[elem_id]
-            x, y = coords["x"], coords["y"]
+            tx, ty = _get_target_coords(elem_id, position)
+            logger.info(f"Executing {action} at ({tx}, {ty}) for element [{elem_id}]")
             
-            if action == "click":
-                logger.info(f"Executing click at ({x}, {y}) for element [{elem_id}]")
-                pyautogui.moveTo(x, y, duration=0.2)
+            pyautogui.moveTo(tx, ty, duration=0.2)
+            
+            if action in ["click", "left_click"]:
                 pyautogui.click()
-                return f"Observation: Successfully clicked element [{elem_id}]."
-                
+            elif action == "right_click":
+                pyautogui.rightClick()
+            elif action == "double_click":
+                pyautogui.doubleClick()
             elif action == "type":
-                text_to_type = gui_cmd.get("text", "")
-                logger.info(f"Typing text into element [{elem_id}]")
-                pyautogui.moveTo(x, y, duration=0.2)
                 pyautogui.click()
-                time.sleep(0.1) # UI ko active hone ka time dena chahiye
-                pyautogui.write(text_to_type, interval=0.01)
-                return f"Observation: Typed text into element [{elem_id}]."
+                time.sleep(0.1)
+                pyautogui.write(gui_cmd.get("text", ""), interval=0.01)
+                
+            if wait_time > 0:
+                time.sleep(wait_time)
+                
+            return f"Observation: Successfully performed {action} on element [{elem_id}] at position '{position}'."
+
+        elif action == "drag_and_drop":
+            start_id = gui_cmd.get("start_element_id")
+            end_id = gui_cmd.get("end_element_id")
+            
+            if start_id is None or end_id is None:
+                return "Observation: Error -> drag_and_drop requires 'start_element_id' and 'end_element_id'."
+            
+            try:
+                start_id, end_id = int(start_id), int(end_id)
+            except ValueError:
+                return "Observation: Error -> IDs must be valid numbers."
+                
+            if start_id not in _gui_memory or end_id not in _gui_memory:
+                return "Observation: Error -> One or both element IDs not found."
+                
+            sx, sy = _get_target_coords(start_id)
+            ex, ey = _get_target_coords(end_id)
+            
+            logger.info(f"Dragging from [{start_id}] to [{end_id}]")
+            pyautogui.moveTo(sx, sy, duration=0.2)
+            pyautogui.dragTo(ex, ey, duration=0.5, button='left')
+            
+            if wait_time > 0:
+                time.sleep(wait_time)
+                
+            return f"Observation: Successfully dragged from [{start_id}] to [{end_id}]."
 
         elif action == "press_key":
             key = gui_cmd.get("key")
             logger.info(f"Pressing key: {key}")
             pyautogui.press(key)
+            if wait_time > 0: time.sleep(wait_time)
             return f"Observation: Pressed key '{key}'."
+            
+        elif action == "hotkey":
+            keys = gui_cmd.get("keys", [])
+            if not isinstance(keys, list) or not keys:
+                return "Observation: Error -> 'keys' array is missing or empty."
+            logger.info(f"Pressing hotkey: {keys}")
+            pyautogui.hotkey(*keys)
+            if wait_time > 0: time.sleep(wait_time)
+            return f"Observation: Pressed hotkey combo {keys}."
 
         elif action in ["scroll_down", "scroll_up"]:
             amount = -500 if action == "scroll_down" else 500
             logger.info(f"Scrolling screen: {action}")
             pyautogui.scroll(amount)
+            if wait_time > 0: time.sleep(wait_time)
             return "Observation: Scrolled screen. UI layout changed. You MUST call 'observe' again before clicking anything."
 
         return "Observation: Unknown GUI action requested."
         
     except pyautogui.FailSafeException:
-        logger.warning("PyAutoGUI FailSafe Triggered (Mouse pushed to corner).")
+        logger.warning("PyAutoGUI FailSafe Triggered.")
         return "Observation: Error -> Action aborted. The mouse was forcefully moved to the corner of the screen triggering the FailSafe."
     except Exception as e:
         logger.error(f"Failed to process GUI action: {e}")
