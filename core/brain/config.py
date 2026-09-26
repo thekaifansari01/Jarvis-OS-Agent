@@ -64,7 +64,7 @@ GEMINI_EMBEDDING_MODEL = "gemini-embedding-2"
 # REGOLO (Legacy / Agentic Provider)
 # ================================================================
 REGOLO_BASE_URL = "https://api.regolo.ai/v1"
-REGOLO_MODEL = "glm5.2"
+REGOLO_MODEL = "qwen3.5-122b"
 REGOLO_THINKING_ENABLED = True
 
 # ================================================================

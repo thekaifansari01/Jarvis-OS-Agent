@@ -68,6 +68,7 @@
 | 📨 | **Proactive Automation (Email/WhatsApp/Telegram)** | Background listeners for Gmail, WhatsApp, Telegram, and Google Calendar. Jarvis detects updates in real-time and utilizes Proactive HITL (Human-In-The-Loop) to ask for consent before modifying critical data. |
 | 💻 | **PC System Monitoring & Alerts** | Background listener for CPU, RAM, Disk, Battery, Network, and USB devices. Smart cooldown (60s), idle/fullscreen suppression, and LLM-filtered proactive alerts via the Scout Agent. |
 | 🗣️ | **Voice-First Multimodal AI** | Integrates Deepgram Nova-2 STT with **Vosk KWS (Keyword Spotting)** for sub-second noise-immune triggering. Features Edge TTS voice output, multimodal vision (OCR/Image Analysis), and AI Image Generation (OpenAI-compatible API + AI Horde fallback). |
+| 🖱️ | **Vision-Based GUI Automation** | True autonomous mouse/keyboard control using OpenCV Edge-Vision and Magenta UI Tagging (Set-of-Mark). AI visually interacts with any desktop app, browser, or game with 100% pixel-perfect accuracy. |
 | 🔌 | **Multi-LLM Auto-Failover (Cloud & Local)** | Seamlessly switches between Regolo, Gemini, OpenRouter, or **Local LLMs (Ollama, LM Studio, vLLM)**. Zero downtime workflow execution even if the primary provider hits API rate limits. |
 | 🎨 | **Reactive Dynamic UI Ecosystem** | Features a ZMQ-powered floating PyQt5 Agent Panel with real-time thought/action/observation streaming. Includes a live markdown typing popup with async image previews, glass-morphism, and auto-resize dynamic glow. |
 | 🔒 | **Enterprise-Grade Command Security** | Utilizes `shlex` tokenization to auto-block system-destroying terminal commands (e.g., `rm -rf /`). Features local AES-Encryption (`.enc`) for Gmail, Calendar, and Telegram session tokens to prevent credential theft. |
@@ -84,7 +85,7 @@ For developers seeking an **open-source AI coding agent** and **desktop assistan
 | **High Cost & Subscription Walls:** Expensive API usage and monthly recurring fees. | **100% Free & Open Source:** Run entirely on local models (Ollama/LM Studio) or free-tier cloud APIs. |
 | **Line-Drift Bugs:** Edits often fail because LLMs miscalculate line numbers during code modification. | **Exact Diff-Matching (`replace_block`):** Guaranteed zero line-drift. Finds the exact code block irrespective of line numbers. |
 | **Amnesia (Session-Only Memory):** Forgets context within 2 minutes of a new chat. | **Lifelong Episodic Memory (LTM):** Powered by local vector embeddings, temporal decay, and subgraph extraction. |
-| **Text-Only Constraints:** Generates code but lacks real-world native execution capabilities. | **Native Tool Execution:** Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Image Gen, and Android Termux SSH. |
+| **Text-Only Constraints:** Generates code but lacks real-world native execution capabilities. | **Native Tool Execution:** Terminal, Python REPL, File CRUD, Email, WhatsApp, Telegram, Calendar, Android Termux, and **Vision-Based GUI Automation (Mouse/Keyboard)**. |
 | **Isolated Environment:** Cannot be triggered remotely. | **Telegram Remote Bot:** Issue commands to your PC remotely via Telegram; executed silently in the background. |
 | **Reactive Only:** Waits for you to prompt it. | **Proactive HITL:** Background listeners read emails/chats and proactively suggest calendar updates or replies. |
 | **Basic RAG Integration:** Uses either semantic OR keyword search, yielding poor results. | **Hybrid RAG System:** BM25 keyword search + Vector semantic search merged via Reciprocal Rank Fusion (RRF). |
@@ -132,6 +133,7 @@ flowchart TD
         Code["💻 Repo-Map / Replace-Block / AST Linter"]
         Comms["📨 Gmail / WhatsApp / Telegram / Calendar"]
         System["⚙️ OS Control / Apps / Clipboard"]
+        GUI["🖱️ GUI Automation (SOM / OpenCV)"]
         Search["🌐 Tavily / ArXiv / Scraper"]
         Vision["👁️ Vision Multimodal / OCR"]
         Image["🎨 Image Gen / Edit"]
@@ -246,6 +248,7 @@ Control your Android smartphone completely hands-free and natively from your Win
 | 🌍 **Remote Control** | Telegram Bot API for triggering silent PC commands externally |
 | 🌐 **Search & Research** | Tavily web search, ArXiv academic search, YouTube transcript extraction, Deep Research |
 | ⚙️ **System Automation** | App launch/kill, volume/brightness control, clipboard CRUD operations |
+| 🖱️ **GUI Automation** | OpenCV Edge-Vision SOM, Magenta Tagging, Autonomous Mouse & Keyboard control |
 | 💻 **PC System Monitoring** | CPU/RAM/Disk/Battery/Network/USB monitoring with smart alerts |
 | 👁️ **Multimodal Vision** | Screen/Video analysis, Object detection, OCR data extraction |
 | 🎨 **Image Generation** | Text-to-image generation (OpenAI-compatible API), Image-to-image editing (AI Horde fallback) |

@@ -13,6 +13,7 @@ from core.voice.tts import speak
 from tools.SystemTools.clipboard_tool import read_clipboard, write_clipboard
 from tools.SystemTools.SystemTools import SystemController
 from tools.SystemTools.fileEditor import JarvisFileEditor
+from tools.SystemTools.GuiTools import handle_gui_controller
 from tools.SearchTools.DeepResearch import deep_research_as_tool
 from tools.Calendar.CalendarTool import create_event, check_events, delete_event
 from tools.Terminal.terminalTool import execute_terminal_command, run_python_code
@@ -497,7 +498,8 @@ TOOL_REGISTRY = {
     'deep_research': handle_deep_research,
     'calendar_action': handle_calendar_action,
     'file_operations': handle_file_operations,
-    'clipboard_action': handle_clipboard_action
+    'clipboard_action': handle_clipboard_action,
+    'gui_controller': handle_gui_controller
 }
 
 def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
@@ -509,13 +511,16 @@ def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
 
 from concurrent.futures import as_completed
 
-def execute_tools_parallel(action_dict: Dict[str, any]) -> str:
+def execute_tools_parallel(action_dict: Dict[str, any]):
     observations = []
+    image_payload = None
     
     def run_tool(t_name, t_data):
         handler = TOOL_REGISTRY.get(t_name)
         if handler:
             res = handler(t_data)
+            if isinstance(res, dict):
+                return res
             return f"[{t_name} Result]:\n{res}"
         return f"[{t_name} Result]: Tool not found in registry."
 
@@ -527,9 +532,16 @@ def execute_tools_parallel(action_dict: Dict[str, any]) -> str:
         
         for future in as_completed(futures):
             try:
-                observations.append(future.result())
+                result = future.result()
+                if isinstance(result, dict) and result.get("type") == "image_payload":
+                    image_payload = result
+                else:
+                    observations.append(str(result))
             except Exception as e:
                 observations.append(f"Observation Error: {e}")
+
+    if image_payload:
+        return image_payload
 
     if not observations:
         return "Observation: No valid action executed."

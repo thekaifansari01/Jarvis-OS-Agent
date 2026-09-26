@@ -154,6 +154,7 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
 
   <language_and_tone_directive>
     <rule name="internal_thought">Internal thought MUST be purely logical, objective, and fast English analysis.</rule>
+    <rule name="gui_zero_latency">GUI Interaction demands Zero-Latency. Do NOT write more than 1 sentence of thought process when handling element_ids. Execute immediately.</rule>
     <rule name="spoken_response">When calling 'complete_task', final 'response' text MUST be in natural English/Hinglish (Roman script), clean Markdown format.</rule>
     <rule name="emotion_tags">Start the final 'complete_task' response with an emotion tag (e.g., [cheerful], [focused], [calm]).</rule>
   </language_and_tone_directive>
@@ -453,6 +454,40 @@ def get_native_tools():
                     )
                 ),
                 types.FunctionDeclaration(
+                    name="gui_controller",
+                    description=(
+                        "[WHEN TO USE]: Use ONLY when the user explicitly requests visual interaction with the screen (e.g., 'click the search bar', 'type in Chrome', 'scroll down').\n"
+                        "[WHEN NOT TO USE]: NEVER use this for background tasks, file editing, terminal commands, or merely opening/closing applications (use 'system_controller' to launch apps first).\n"
+                        "[CRITICAL STRICT WORKFLOW]:\n"
+                        "1. OBSERVATION PHASE: You MUST ALWAYS call action='observe' first. You will receive an image payload with Magenta boxes and numeric tags (e.g., [12]).\n"
+                        "2. ANTI-LOOP EXECUTION: DO NOT overthink, describe the image, or debate in your internal thoughts. Once you see the image, IMMEDIATELY call this tool again with action='click' or 'type' and the EXACT 'element_id'.\n"
+                        "3. HIDDEN ELEMENTS: If the target is not visible in the current image, use action='scroll_down' or 'scroll_up'. After scrolling, you MUST call 'observe' again to get updated tags.\n"
+                        "[ANTI-HALLUCINATION RULE]: NEVER guess an 'element_id' or coordinates. If you don't see the numeric tag on the target, do not attempt to click it."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "action": types.Schema(
+                                type=types.Type.STRING, 
+                                description="MANDATORY. Choose exactly one: 'observe', 'click', 'type', 'scroll_down', 'scroll_up', 'press_key'."
+                            ),
+                            "element_id": types.Schema(
+                                type=types.Type.INTEGER, 
+                                description="MANDATORY for 'click' and 'type'. The exact numeric ID (e.g., 12) from the Magenta tagged image. DO NOT pass strings."
+                            ),
+                            "text": types.Schema(
+                                type=types.Type.STRING, 
+                                description="MANDATORY for 'type'. The exact text to type into the chosen element."
+                            ),
+                            "key": types.Schema(
+                                type=types.Type.STRING, 
+                                description="MANDATORY for 'press_key'. Examples: 'enter', 'tab', 'esc', 'space', 'backspace', 'win'."
+                            )
+                        },
+                        required=["action"]
+                    )
+                ),
+                types.FunctionDeclaration(
                     name="telegram_action",
                     description=(
                         "[WHEN TO USE]: Mode 1 ('send'): Send a Telegram message or multiple documents/images. "
@@ -547,9 +582,8 @@ def get_native_tools():
                     name="system_controller",
                     description=(
                         "[WHEN TO USE]: Use to open/close desktop software, open website URLs, play a YouTube song/video directly, "
-                        "change volume/brightness, lock/sleep computer, OR take a screen screenshot.\n"
-                        "[CRITICAL SCREENSHOT RULE]: If you need to SEE or inspect the user's screen, trigger this tool FIRST "
-                        "with system_action='screenshot' and provide a 'screenshot_filename', then inspect it in the next step."
+                        "change volume/brightness, or lock/sleep the computer.\n"
+                        "[WHEN NOT TO USE]: NEVER use this to look at the screen or take screenshots. Use 'gui_controller' for any visual/screen tasks."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
@@ -562,8 +596,7 @@ def get_native_tools():
                             "volume_value": types.Schema(type=types.Type.INTEGER, description="Percentage (0-100)."),
                             "brightness_action": types.Schema(type=types.Type.STRING, description="Must be 'set', 'increase', or 'decrease'."),
                             "brightness_value": types.Schema(type=types.Type.INTEGER, description="Percentage (0-100)."),
-                            "system_action": types.Schema(type=types.Type.STRING, description="Must be exactly 'lock', 'sleep', or 'screenshot'."),
-                            "screenshot_filename": types.Schema(type=types.Type.STRING, description="Optional: Absolute file path to save screenshot.")
+                            "system_action": types.Schema(type=types.Type.STRING, description="Must be exactly 'lock' or 'sleep'.")
                         }
                     )
                 ),
