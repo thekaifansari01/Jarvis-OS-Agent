@@ -459,12 +459,12 @@ def get_native_tools():
                         "[WHEN TO USE]: Use ONLY when the user explicitly requests visual interaction with the screen.\n"
                         "[WHEN NOT TO USE]: NEVER use this for background tasks, file editing, terminal commands, or merely opening/closing apps (use 'system_controller' to launch apps first).\n"
                         "[CRITICAL STRICT WORKFLOW]:\n"
-                        "1. OBSERVATION PHASE: You MUST ALWAYS call action='observe' first to get the image payload with Magenta boxes and numeric tags (e.g., [12]).\n"
-                        "2. ANTI-LOOP EXECUTION: DO NOT overthink or describe the image in your thoughts. Immediately call this tool again with an action and the EXACT 'element_id'.\n"
-                        "3. ADVANCED ACTIONS: You can now use 'right_click', 'double_click', 'drag_and_drop' (requires start/end IDs), 'hover', and 'hotkey' (for keyboard combos like Ctrl+C).\n"
-                        "4. CLICK PRECISION: By default, clicks happen at the 'center' of the box. Use 'click_position' to target 'top_left', 'bottom_right' etc. for large boxes.\n"
-                        "5. UI LAG: If clicking opens a heavy app/menu, set 'wait_after_action' (e.g., 2.0) to let UI load before returning.\n"
-                        "[ANTI-HALLUCINATION RULE]: NEVER guess an 'element_id'. If the tag is hidden, use 'scroll_down' and 'observe' again."
+                        "1. OBSERVATION PHASE: You MUST ALWAYS call action='observe' first. You will receive a screenshot with a Pixel Ruler (Axis Scale) drawn on the Top edge (X-axis) and Left edge (Y-axis).\n"
+                        "2. PRECISE COORDINATE PREDICTION: Look at your target UI element. Trace its position up to the Top Ruler to find the exact 'x' coordinate. Trace its position left to the Left Ruler to find the exact 'y' coordinate.\n"
+                        "3. EXECUTION: Call this tool again with the calculated 'x' and 'y' integer values to perform actions like 'click', 'type', or 'hover'.\n"
+                        "4. DRAG AND DROP: For 'drag_and_drop', you must provide 'start_x', 'start_y', 'end_x', and 'end_y'.\n"
+                        "5. UI LAG: If clicking opens a heavy app/menu, set 'wait_after_action' (e.g., 2.0-4.0) to let the UI load before returning.\n"
+                        "[ANTI-HALLUCINATION RULE]: ALWAYS use the rulers to guide your X and Y calculations. DO NOT GUESS."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
@@ -473,25 +473,33 @@ def get_native_tools():
                                 type=types.Type.STRING, 
                                 description="MANDATORY. Choose exactly one: 'observe', 'click', 'left_click', 'right_click', 'double_click', 'hover', 'drag_and_drop', 'type', 'press_key', 'hotkey', 'scroll_down', 'scroll_up'."
                             ),
-                            "element_id": types.Schema(
+                            "x": types.Schema(
                                 type=types.Type.INTEGER, 
-                                description="Required for most actions. The exact numeric ID (e.g., 12) from the tagged image."
+                                description="Required for most mouse actions. The exact X pixel coordinate traced from the Top Ruler."
                             ),
-                            "start_element_id": types.Schema(
+                            "y": types.Schema(
                                 type=types.Type.INTEGER, 
-                                description="Required ONLY for 'drag_and_drop'. The starting ID."
+                                description="Required for most mouse actions. The exact Y pixel coordinate traced from the Left Ruler."
                             ),
-                            "end_element_id": types.Schema(
+                            "start_x": types.Schema(
                                 type=types.Type.INTEGER, 
-                                description="Required ONLY for 'drag_and_drop'. The destination ID."
+                                description="Required ONLY for 'drag_and_drop'. The starting X coordinate."
                             ),
-                            "click_position": types.Schema(
-                                type=types.Type.STRING, 
-                                description="Optional. Choose: 'center', 'top_left', 'top_right', 'bottom_left', 'bottom_right'. Default is 'center'."
+                            "start_y": types.Schema(
+                                type=types.Type.INTEGER, 
+                                description="Required ONLY for 'drag_and_drop'. The starting Y coordinate."
+                            ),
+                            "end_x": types.Schema(
+                                type=types.Type.INTEGER, 
+                                description="Required ONLY for 'drag_and_drop'. The destination X coordinate."
+                            ),
+                            "end_y": types.Schema(
+                                type=types.Type.INTEGER, 
+                                description="Required ONLY for 'drag_and_drop'. The destination Y coordinate."
                             ),
                             "text": types.Schema(
                                 type=types.Type.STRING, 
-                                description="Required for 'type'. The text to type."
+                                description="Required for 'type'. The text to type after clicking the x,y coordinates."
                             ),
                             "key": types.Schema(
                                 type=types.Type.STRING, 
@@ -504,7 +512,7 @@ def get_native_tools():
                             ),
                             "wait_after_action": types.Schema(
                                 type=types.Type.NUMBER, 
-                                description="Optional. Seconds to wait after the action completes before returning. Use 1.0-3.0 for heavy UI transitions."
+                                description="Optional. Seconds to wait after the action completes before returning. Use 2.0-4.0 for heavy UI transitions."
                             )
                         },
                         required=["action"]

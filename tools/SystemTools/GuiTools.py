@@ -1,10 +1,8 @@
 import os
-import cv2
 import time
 import base64
 import tempfile
 import ctypes
-import numpy as np
 import pyautogui
 from PIL import Image, ImageDraw, ImageFont
 from core.logger.logger import logger
@@ -14,120 +12,135 @@ try:
 except Exception:
     pass
 
-_gui_memory = {}
 
-def _generate_som():
-    logger.info("Capturing screen for GUI automation...")
+def _draw_rulers(img):
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    w, h = img.size
+
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    grid_color = (0, 255, 255, 40)
+    grid_mid = (255, 255, 0, 30)
+
+    for x in range(100, w, 100):
+        od.line([(x, 0), (x, h)], fill=grid_color, width=1)
+    for x in range(50, w, 100):
+        od.line([(x, 0), (x, h)], fill=grid_mid, width=1)
+    for y in range(100, h, 100):
+        od.line([(0, y), (w, y)], fill=grid_color, width=1)
+    for y in range(50, h, 100):
+        od.line([(0, y), (w, y)], fill=grid_mid, width=1)
+
+    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    font_major = None
+    font_minor = None
+    for fname in ("arialbd.ttf", "arial.ttf", "DejaVuSans-Bold.ttf",
+                  "DejaVuSans.ttf", "LiberationSans-Bold.ttf"):
+        try:
+            font_major = ImageFont.truetype(fname, 14)
+            font_minor = ImageFont.truetype(fname, 11)
+            break
+        except Exception:
+            continue
+    if font_major is None:
+        font_major = ImageFont.load_default()
+        font_minor = font_major
+
+    RULER = 30
+    BG = (10, 10, 10, 255)
+    MAJOR = (0, 255, 255, 255)
+    MEDIUM = (255, 220, 0, 255)
+    MINOR = (170, 170, 170, 255)
+    TEXT = (255, 255, 255, 255)
+    ACCENT_BG = (40, 40, 40, 255)
+
+    draw.rectangle([0, 0, w, RULER], fill=BG)
+    draw.rectangle([0, 0, RULER, h], fill=BG)
+    draw.rectangle([0, 0, RULER, RULER], fill=ACCENT_BG)
+
+    for x in range(0, w, 10):
+        if x % 100 == 0:
+            draw.line([(x, 0), (x, RULER)], fill=MAJOR, width=2)
+            draw.text((x + 3, 4), str(x), fill=TEXT, font=font_major)
+        elif x % 50 == 0:
+            draw.line([(x, RULER - 12), (x, RULER)], fill=MEDIUM, width=2)
+            draw.text((x + 2, RULER - 16), str(x), fill=MEDIUM, font=font_minor)
+        else:
+            draw.line([(x, RULER - 5), (x, RULER)], fill=MINOR, width=1)
+
+    for y in range(0, h, 10):
+        if y % 100 == 0:
+            draw.line([(0, y), (RULER, y)], fill=MAJOR, width=2)
+            draw.text((3, y + 3), str(y), fill=TEXT, font=font_major)
+        elif y % 50 == 0:
+            draw.line([(RULER - 12, y), (RULER, y)], fill=MEDIUM, width=2)
+            draw.text((RULER - 22, y + 2), str(y), fill=MEDIUM, font=font_minor)
+        else:
+            draw.line([(RULER - 5, y), (RULER, y)], fill=MINOR, width=1)
+
+    draw.text((4, 8), "0,0", fill=MAJOR, font=font_minor)
+    draw.text((w - 60, 6), "X ->", fill=MAJOR, font=font_major)
+    draw.text((4, h - 22), "Y v", fill=MAJOR, font=font_major)
+
+    draw.line([(0, RULER), (w, RULER)], fill=MAJOR, width=1)
+    draw.line([(RULER, 0), (RULER, h)], fill=MAJOR, width=1)
+
+    return img
+
+
+def _capture_ruler_screen():
+    logger.info("Capturing screen and drawing axis rulers...")
     screenshot = pyautogui.screenshot()
-    img_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-    
-    gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    edges = cv2.Canny(blurred, 30, 150)
-    
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 4))
-    dilated = cv2.dilate(edges, kernel, iterations=1)
-    
-    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    overlay = screenshot.convert('RGBA')
-    draw = ImageDraw.Draw(overlay)
-    
-    try:
-        font = ImageFont.truetype("arial.ttf", 12)
-    except:
-        font = ImageFont.load_default()
-
-    ui_elements = {}
-    element_id = 1
-    
-    box_color = (255, 0, 255, 180)
-    tag_bg_color = (255, 0, 255, 230)
-    tag_text_color = (255, 255, 255, 255)
-
-    logger.debug("Scanning and tagging UI elements...")
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-        
-        if 10 < w < 1000 and 10 < h < 800:
-            draw.rectangle([x, y, x + w, y + h], outline=box_color, width=2)
-            
-            tag = f"[{element_id}]"
-            tag_width = len(tag) * 7 + 4
-            
-            draw.rectangle([x, max(0, y - 16), x + tag_width, y], fill=tag_bg_color)
-            draw.text((x + 2, max(0, y - 15)), tag, fill=tag_text_color, font=font)
-            
-            ui_elements[element_id] = {
-                'cx': x + (w // 2), 
-                'cy': y + (h // 2),
-                'x': x,
-                'y': y,
-                'w': w,
-                'h': h
-            }
-            
-            element_id += 1
-
-    final_img = overlay.convert("RGB")
+    w, h = screenshot.size
+    annotated_img = _draw_rulers(screenshot)
     temp_dir = tempfile.gettempdir()
-    output_path = os.path.join(temp_dir, "jarvis_active_som.png")
-    final_img.save(output_path)
-    
-    logger.info(f"Scan complete. Found {element_id - 1} UI zones.")
-    return output_path, ui_elements
+    output_path = os.path.join(temp_dir, "jarvis_ruler_screen.png")
+    annotated_img.save(output_path)
+    return output_path, w, h
 
-def _get_target_coords(elem_id, position="center"):
-    coords = _gui_memory[elem_id]
-    if position == "top_left":
-        return coords['x'] + 5, coords['y'] + 5
-    elif position == "top_right":
-        return coords['x'] + coords['w'] - 5, coords['y'] + 5
-    elif position == "bottom_left":
-        return coords['x'] + 5, coords['y'] + coords['h'] - 5
-    elif position == "bottom_right":
-        return coords['x'] + coords['w'] - 5, coords['y'] + coords['h'] - 5
-    return coords['cx'], coords['cy']
 
 def handle_gui_controller(gui_cmd: dict):
     try:
         action = gui_cmd.get("action")
         wait_time = float(gui_cmd.get("wait_after_action", 0.0))
-        
+
         if action == "observe":
-            _gui_memory.clear()
-            filepath, elements = _generate_som()
-            _gui_memory.update(elements)
-            
+            filepath, width, height = _capture_ruler_screen()
+
             with open(filepath, "rb") as f:
                 img_b64 = base64.b64encode(f.read()).decode('utf-8')
-            
+
             return {
                 "type": "image_payload",
                 "data": [{"mime_type": "image/png", "data": img_b64}],
-                "observation": "Observation: Screen scanned and UI elements tagged with Magenta boxes. Look at the image and provide the exact 'element_id' to interact."
+                "observation": (
+                    f"Observation: Screen captured. Resolution: {width}x{height}. "
+                    "Top ruler = X axis (cyan ticks every 100px, yellow every 50px). "
+                    "Left ruler = Y axis (cyan ticks every 100px, yellow every 50px). "
+                    "Faint cyan/yellow grid lines also cross the screen at those intervals. "
+                    "Use these rulers + grid intersections to compute EXACT (X, Y) coordinates "
+                    "for any UI element before clicking."
+                )
             }
 
         if action in ["click", "left_click", "right_click", "double_click", "hover", "type"]:
-            raw_id = gui_cmd.get("element_id")
-            position = gui_cmd.get("click_position", "center")
-            
-            if raw_id is None:
-                return "Observation: Error -> Missing 'element_id'."
-                
+            x = gui_cmd.get("x")
+            y = gui_cmd.get("y")
+
+            if x is None or y is None:
+                return "Observation: Error -> Missing 'x' or 'y' coordinates."
+
             try:
-                elem_id = int(raw_id)
+                x, y = int(x), int(y)
             except ValueError:
-                return f"Observation: Error -> 'element_id' must be a valid number, got '{raw_id}'."
-                
-            if elem_id not in _gui_memory:
-                return f"Observation: Error -> Element ID [{elem_id}] not found on current screen. Call 'observe' again to refresh."
-                
-            tx, ty = _get_target_coords(elem_id, position)
-            logger.info(f"Executing {action} at ({tx}, {ty}) for element [{elem_id}]")
-            
-            pyautogui.moveTo(tx, ty, duration=0.2)
-            
+                return "Observation: Error -> 'x' and 'y' must be valid integers."
+
+            logger.info(f"Executing {action} at ({x}, {y})")
+            pyautogui.moveTo(x, y, duration=0.2)
+
             if action in ["click", "left_click"]:
                 pyautogui.click()
             elif action == "right_click":
@@ -138,67 +151,66 @@ def handle_gui_controller(gui_cmd: dict):
                 pyautogui.click()
                 time.sleep(0.1)
                 pyautogui.write(gui_cmd.get("text", ""), interval=0.01)
-                
+
             if wait_time > 0:
                 time.sleep(wait_time)
-                
-            return f"Observation: Successfully performed {action} on element [{elem_id}] at position '{position}'."
+
+            return f"Observation: Successfully performed {action} at ({x}, {y})."
 
         elif action == "drag_and_drop":
-            start_id = gui_cmd.get("start_element_id")
-            end_id = gui_cmd.get("end_element_id")
-            
-            if start_id is None or end_id is None:
-                return "Observation: Error -> drag_and_drop requires 'start_element_id' and 'end_element_id'."
-            
+            sx = gui_cmd.get("start_x")
+            sy = gui_cmd.get("start_y")
+            ex = gui_cmd.get("end_x")
+            ey = gui_cmd.get("end_y")
+
+            if None in [sx, sy, ex, ey]:
+                return "Observation: Error -> drag_and_drop requires start_x, start_y, end_x, end_y."
+
             try:
-                start_id, end_id = int(start_id), int(end_id)
+                sx, sy, ex, ey = int(sx), int(sy), int(ex), int(ey)
             except ValueError:
-                return "Observation: Error -> IDs must be valid numbers."
-                
-            if start_id not in _gui_memory or end_id not in _gui_memory:
-                return "Observation: Error -> One or both element IDs not found."
-                
-            sx, sy = _get_target_coords(start_id)
-            ex, ey = _get_target_coords(end_id)
-            
-            logger.info(f"Dragging from [{start_id}] to [{end_id}]")
+                return "Observation: Error -> Coordinates must be valid integers."
+
+            logger.info(f"Dragging from ({sx}, {sy}) to ({ex}, {ey})")
             pyautogui.moveTo(sx, sy, duration=0.2)
             pyautogui.dragTo(ex, ey, duration=0.5, button='left')
-            
+
             if wait_time > 0:
                 time.sleep(wait_time)
-                
-            return f"Observation: Successfully dragged from [{start_id}] to [{end_id}]."
+
+            return f"Observation: Successfully dragged from ({sx}, {sy}) to ({ex}, {ey})."
 
         elif action == "press_key":
             key = gui_cmd.get("key")
             logger.info(f"Pressing key: {key}")
             pyautogui.press(key)
-            if wait_time > 0: time.sleep(wait_time)
+            if wait_time > 0:
+                time.sleep(wait_time)
             return f"Observation: Pressed key '{key}'."
-            
+
         elif action == "hotkey":
             keys = gui_cmd.get("keys", [])
             if not isinstance(keys, list) or not keys:
                 return "Observation: Error -> 'keys' array is missing or empty."
             logger.info(f"Pressing hotkey: {keys}")
             pyautogui.hotkey(*keys)
-            if wait_time > 0: time.sleep(wait_time)
+            if wait_time > 0:
+                time.sleep(wait_time)
             return f"Observation: Pressed hotkey combo {keys}."
 
         elif action in ["scroll_down", "scroll_up"]:
             amount = -500 if action == "scroll_down" else 500
             logger.info(f"Scrolling screen: {action}")
             pyautogui.scroll(amount)
-            if wait_time > 0: time.sleep(wait_time)
-            return "Observation: Scrolled screen. UI layout changed. You MUST call 'observe' again before clicking anything."
+            if wait_time > 0:
+                time.sleep(wait_time)
+            return "Observation: Scrolled screen. You MUST call 'observe' again to see updated UI."
 
         return "Observation: Unknown GUI action requested."
-        
+
     except pyautogui.FailSafeException:
         logger.warning("PyAutoGUI FailSafe Triggered.")
-        return "Observation: Error -> Action aborted. The mouse was forcefully moved to the corner of the screen triggering the FailSafe."
+        return "Observation: Error -> Action aborted. Mouse pushed to corner triggering FailSafe."
     except Exception as e:
         logger.error(f"Failed to process GUI action: {e}")
         return f"Observation: Error executing GUI action -> {e}"
