@@ -1,0 +1,583 @@
+import sys
+import json
+import os
+import re
+import math
+import zmq
+
+os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false;default.warning=false"
+
+from PyQt5.QtCore import (Qt, QTimer, QPropertyAnimation, QEasingCurve, 
+                          QPoint, QRect, QParallelAnimationGroup, 
+                          pyqtProperty, QSize, qInstallMessageHandler,
+                          QThread, pyqtSignal)
+from PyQt5.QtWidgets import (QWidget, QLabel, QVBoxLayout, QHBoxLayout, QApplication, 
+                             QGraphicsOpacityEffect, QFrame, QSizePolicy,
+                             QScrollArea)
+from PyQt5.QtGui import QFont, QColor, QFontDatabase, QFontMetrics
+
+def qt_message_handler(mode, context, message):
+    if "Unable to set geometry" in message or "Resulting geometry" in message:
+        return
+
+class AgentZmqListener(QThread):
+    status_received = pyqtSignal(dict)
+    
+    def run(self):
+        context = zmq.Context()
+        socket = context.socket(zmq.SUB)
+        socket.connect("tcp://127.0.0.1:5555")
+        socket.setsockopt_string(zmq.SUBSCRIBE, "AGENT_UPDATE")
+        
+        while True:
+            try:
+                message = socket.recv_string()
+                topic, json_data = message.split(" ", 1)
+                data = json.loads(json_data)
+                self.status_received.emit(data)
+            except Exception:
+                pass
+
+class AgentPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.last_status = None
+        self.current_step = -1
+        self.last_tag_text = ""
+        self.custom_pos = None
+        self.is_dragging = False
+        
+        self.MIN_WIDTH = 580
+        self.MAX_WIDTH = 580
+        self.MAX_THOUGHT_CHARS = 800
+        
+        eng_id = QFontDatabase.addApplicationFont("Data/fonts/english.ttf")
+        eng_fams = QFontDatabase.applicationFontFamilies(eng_id)
+        self.font_eng = eng_fams[0] if eng_fams else "Segoe UI"
+
+        hin_id = QFontDatabase.addApplicationFont("Data/fonts/devangri.ttf")
+        hin_fams = QFontDatabase.applicationFontFamilies(hin_id)
+        self.font_hin = hin_fams[0] if hin_fams else "Nirmala UI"
+
+        self.gradient_phase = 0.0
+        self.current_action_type = "idle"
+
+        self.current_rgb = [191, 90, 242]
+        self.target_rgb = [191, 90, 242]
+        
+        self.rgb_timer = QTimer(self)
+        self.rgb_timer.timeout.connect(self.update_glow_effect)
+
+        self.scroll_timer = QTimer(self)
+        self.scroll_timer.setSingleShot(True)
+        self.scroll_timer.timeout.connect(self.snap_scroll_to_bottom)
+
+        self.target_geometry = None
+        self.resize_anim = QPropertyAnimation(self, b"anim_geometry")
+        self.resize_anim.setEasingCurve(QEasingCurve.OutCubic) 
+        self.resize_anim.setDuration(240)
+
+        self.initUI()
+        
+        self.zmq_listener = AgentZmqListener()
+        self.zmq_listener.status_received.connect(self.process_status_update)
+        self.zmq_listener.start()
+
+    def minimumSizeHint(self):
+        return QSize(0, 0)
+
+    @pyqtProperty(QRect)
+    def anim_geometry(self):
+        return self.geometry()
+        
+    @anim_geometry.setter
+    def anim_geometry(self, rect):
+        self.setGeometry(rect)
+
+    def initUI(self):
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent; border: none; outline: none;")
+        
+        self.outer_layout = QVBoxLayout(self)
+        self.outer_layout.setContentsMargins(25, 20, 25, 20)
+        self.outer_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint) 
+
+        self.container = QFrame(self)
+        self.container.setObjectName("IslandWrapper")
+        self.container.setMinimumSize(0, 0) 
+        self.container.setAttribute(Qt.WA_StyledBackground, True)
+        
+        self.default_wrapper_style = """
+            #IslandWrapper {
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(255, 255, 255, 0.32),
+                    stop:0.35 rgba(255, 255, 255, 0.06),
+                    stop:0.75 rgba(191, 90, 242, 0.25),
+                    stop:1 rgba(255, 255, 255, 0.18)
+                );
+                border-radius: 28px;
+                border: none;
+            }
+        """
+        self.container.setStyleSheet(self.default_wrapper_style)
+
+        self.wrapper_layout = QVBoxLayout(self.container)
+        self.wrapper_layout.setContentsMargins(1, 1, 1, 1)
+        self.wrapper_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
+
+        self.inner_island = QFrame(self.container)
+        self.inner_island.setObjectName("Island")
+        self.inner_island.setMinimumSize(0, 0) 
+        self.inner_island.setAttribute(Qt.WA_StyledBackground, True)
+        
+        self.inner_island.setStyleSheet("""
+            #Island {
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(28, 28, 34, 0.98), 
+                    stop:0.45 rgba(18, 18, 22, 0.99),
+                    stop:1 rgba(10, 10, 13, 1.0)
+                );
+                border-radius: 27px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+        """)
+        self.wrapper_layout.addWidget(self.inner_island)
+
+        self.layout = QVBoxLayout(self.inner_island)
+        self.layout.setContentsMargins(24, 18, 24, 18)
+        self.layout.setSpacing(10) 
+        self.layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
+
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+        
+        self.pulse_dot = QFrame()
+        self.pulse_dot.setFixedSize(10, 10)
+        self.pulse_dot.setStyleSheet("background-color: #BF5AF2; border-radius: 5px;") 
+        self.pulse_opacity = QGraphicsOpacityEffect(self.pulse_dot)
+        self.pulse_dot.setGraphicsEffect(self.pulse_opacity)
+        self.start_pulse_animation()
+        
+        self.status_tag = QLabel("AGENT IDLE")
+        self.status_tag.setFont(QFont(self.font_eng, 9, QFont.Bold))
+        self.status_tag.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 0.92);
+                background: transparent;
+                border: none;
+                letter-spacing: 1.2px;
+            }
+        """)
+        self.status_tag.setMaximumWidth(310)
+        self.status_tag.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        header_layout.addWidget(self.pulse_dot)
+        header_layout.addWidget(self.status_tag)
+        header_layout.addStretch()
+        
+        self.token_label = QLabel("TOKENS: 0")
+        self.token_label.setFont(QFont(self.font_eng, 9, QFont.Bold))
+        self.token_label.setStyleSheet("color: rgba(255, 255, 255, 0.38); letter-spacing: 0.8px; border: none; background: transparent;")
+        self.token_label.setMinimumWidth(85)
+        self.token_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.token_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        header_layout.addWidget(self.token_label)
+
+        self.phase_label = QLabel("STEP: 00")
+        self.phase_label.setFont(QFont(self.font_eng, 9, QFont.Bold))
+        self.phase_label.setStyleSheet("color: rgba(255, 255, 255, 0.38); letter-spacing: 0.8px; border: none; background: transparent;")
+        self.phase_label.setMinimumWidth(65)
+        self.phase_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.phase_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        
+        header_layout.addWidget(self.phase_label)
+        self.layout.addLayout(header_layout)
+        
+        self.thought_scroll = QScrollArea()
+        self.thought_scroll.setWidgetResizable(True)
+        self.thought_scroll.setStyleSheet("background: transparent; border: none;")
+        self.thought_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.thought_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.thought_scroll.setMinimumHeight(55)
+        self.thought_scroll.setMaximumHeight(70)
+        
+        self.thought_label = QLabel("")
+        self.thought_label.setMinimumSize(0, 0) 
+        self.thought_label.setWordWrap(True)
+        self.thought_label.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
+        
+        thought_font = QFont(self.font_eng, 13, QFont.Medium)
+        thought_font.setLetterSpacing(QFont.PercentageSpacing, 102) 
+        self.thought_label.setFont(thought_font) 
+        self.thought_label.setStyleSheet("""
+            QLabel {
+                color: rgba(248, 248, 255, 0.95); 
+                line-height: 1.45; 
+                border: none;
+                background: transparent;
+                padding: 2px 4px;
+            }
+        """)
+
+        self.thought_scroll.setWidget(self.thought_label)
+        self.layout.addWidget(self.thought_scroll)
+
+        self.separator = QFrame()
+        self.separator.setFixedHeight(1)
+        self.separator.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255,255,255,0), stop:0.5 rgba(255,255,255,0.18), stop:1 rgba(255,255,255,0)); margin-top: 2px; margin-bottom: 2px; border: none;")
+        self.layout.addWidget(self.separator)
+        self.separator.hide() 
+
+        self.obs_label = QLabel("")
+        self.obs_label.setMinimumSize(0, 0) 
+        self.obs_label.setWordWrap(True)
+        self.obs_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.obs_label.setFont(QFont(self.font_eng, 10)) 
+        self.obs_label.setStyleSheet("""
+            QLabel {
+                color: rgba(235, 235, 245, 0.88); 
+                line-height: 1.4; 
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                padding: 10px 14px;
+                background-color: rgba(255, 255, 255, 0.045);
+                border-radius: 12px;
+            }
+        """)
+        self.layout.addWidget(self.obs_label)
+        self.obs_label.hide() 
+
+        self.outer_layout.addWidget(self.container)
+
+        self.hide_timer = QTimer(self)
+        self.hide_timer.setSingleShot(True)
+        self.hide_timer.timeout.connect(self.hide_panel)
+        
+        self.setWindowOpacity(0.0)
+        self.setCursor(Qt.OpenHandCursor)
+        self.hide()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.is_dragging = True
+            self.setCursor(Qt.ClosedHandCursor)
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+            if self.resize_anim.state() == QPropertyAnimation.Running:
+                self.resize_anim.stop()
+            if hasattr(self, 'show_anim_group') and self.show_anim_group.state() == QPropertyAnimation.Running:
+                self.show_anim_group.stop()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and hasattr(self, 'drag_position'):
+            new_pos = event.globalPos() - self.drag_position
+            self.custom_pos = new_pos 
+            if self.resize_anim.state() == QPropertyAnimation.Running:
+                self.resize_anim.stop()
+            self.move(new_pos)
+            self.target_geometry = self.geometry()
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.setCursor(Qt.OpenHandCursor)
+        self.is_dragging = False
+        if hasattr(self, 'drag_position'):
+            del self.drag_position
+        event.accept()
+
+    def is_hindi(self, text):
+        return bool(re.search(r'[\u0900-\u097F]', text))
+
+    def format_tokens(self, n):
+        if n >= 1000:
+            val = n / 1000.0
+            formatted = f"{val:.1f}".rstrip('0').rstrip('.')
+            return f"{formatted}k"
+        return str(n)
+
+    def set_label_font(self, label, text, base_size):
+        if self.is_hindi(text):
+            font = QFont(self.font_hin, base_size + 1, QFont.Medium)
+            label.setFont(font)
+        else:
+            font = QFont(self.font_eng, base_size, QFont.Medium)
+            font.setLetterSpacing(QFont.PercentageSpacing, 102)
+            label.setFont(font)
+
+    def update_glow_effect(self):
+        self.gradient_phase += 0.05
+        if self.gradient_phase >= math.pi * 2:
+            self.gradient_phase -= math.pi * 2 
+        
+        color_map = {
+            "search": [0, 199, 255],
+            "deep_task": [255, 20, 147],
+            "thinking": [191, 90, 242],
+            "workspace": [255, 159, 10],
+            "communication": [50, 215, 75],
+            "vision": [0, 255, 200],
+            "file_ops": [255, 200, 0],
+            "terminal": [0, 255, 100],
+            "memory": [200, 100, 255],
+            "calendar": [100, 200, 255],
+            "clipboard": [255, 150, 200],
+            "image_gen": [255, 100, 200],
+            "idle": [85, 85, 85]
+        }
+        self.target_rgb = color_map.get(self.current_action_type, [255, 255, 255])
+
+        for i in range(3):
+            self.current_rgb[i] += (self.target_rgb[i] - self.current_rgb[i]) * 0.15
+
+        r, g, b = [int(c) for c in self.current_rgb]
+        
+        self.pulse_dot.setStyleSheet(f"background-color: rgb({r}, {g}, {b}); border-radius: 5px;")
+
+        self.container.setStyleSheet(f"""
+            #IslandWrapper {{
+                background-color: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(255, 255, 255, 0.32),
+                    stop:0.35 rgba(255, 255, 255, 0.06),
+                    stop:0.75 rgba({r}, {g}, {b}, 0.25),
+                    stop:1 rgba(255, 255, 255, 0.18)
+                );
+                border-radius: 28px;
+                border: none;
+            }}
+        """)
+
+    def reset_island_style(self):
+        self.current_action_type = "idle"
+        self.target_rgb = [85, 85, 85]
+
+    def start_pulse_animation(self):
+        self.p_anim = QPropertyAnimation(self.pulse_opacity, b"opacity")
+        self.p_anim.setDuration(1200)
+        self.p_anim.setStartValue(0.2)
+        self.p_anim.setEndValue(1.0)
+        self.p_anim.setLoopCount(-1)
+        self.p_anim.setEasingCurve(QEasingCurve.InOutSine) 
+        self.p_anim.start()
+
+    def snap_scroll_to_bottom(self):
+        vbar = self.thought_scroll.verticalScrollBar()
+        vbar.setValue(vbar.maximum())
+
+    def calculate_target_geometry(self):
+        fixed_width = 580 
+        
+        if self.obs_label.isVisible() and self.obs_label.text().strip():
+            fixed_height = 190 + self.obs_label.sizeHint().height() + 20
+        else:
+            fixed_height = 190
+
+        if getattr(self, 'custom_pos', None) is not None:
+            return QRect(self.custom_pos.x(), self.custom_pos.y(), fixed_width, fixed_height)
+
+        screen = QApplication.primaryScreen().availableGeometry()
+        x = (screen.width() - fixed_width) // 2
+        y = screen.top() + 20
+        return QRect(x, y, fixed_width, fixed_height)
+
+    def show_panel(self):
+        self.hide_timer.stop()
+        
+        if hasattr(self, 'hide_anim_group') and self.hide_anim_group.state() == QPropertyAnimation.Running:
+            self.hide_anim_group.stop()
+                
+        new_geometry = self.calculate_target_geometry()
+        is_fading_in = hasattr(self, 'show_anim_group') and self.show_anim_group.state() == QPropertyAnimation.Running
+            
+        if not self.isVisible() or (self.windowOpacity() < 1.0 and not is_fading_in):
+            if self.resize_anim.state() == QPropertyAnimation.Running:
+                self.resize_anim.stop()
+            
+            self.target_geometry = new_geometry
+            
+            if not self.isVisible():
+                start_y = self.target_geometry.y() - 35 
+                self.setGeometry(self.target_geometry.x(), start_y, self.target_geometry.width(), self.target_geometry.height())
+                self.setWindowOpacity(0.0)
+            
+            self.show()
+            self.raise_()
+
+            self.show_anim_group = QParallelAnimationGroup(self)
+            
+            fade_in = QPropertyAnimation(self, b"windowOpacity")
+            fade_in.setDuration(280)
+            fade_in.setStartValue(self.windowOpacity())
+            fade_in.setEndValue(1.0)
+            fade_in.setEasingCurve(QEasingCurve.InOutQuad)
+            
+            self.show_anim_group.addAnimation(fade_in)
+
+            if not getattr(self, 'is_dragging', False):
+                slide_down = QPropertyAnimation(self, b"pos")
+                slide_down.setDuration(360)
+                slide_down.setStartValue(self.pos())
+                slide_down.setEndValue(QPoint(self.target_geometry.x(), self.target_geometry.y()))
+                slide_down.setEasingCurve(QEasingCurve.OutCubic) 
+                self.show_anim_group.addAnimation(slide_down)
+            
+            self.show_anim_group.start()
+            
+        else:
+            if self.target_geometry != new_geometry and not is_fading_in:
+                self.target_geometry = new_geometry
+                if self.resize_anim.state() == QPropertyAnimation.Running:
+                    self.resize_anim.stop()
+                
+                if getattr(self, 'is_dragging', False):
+                    self.setGeometry(new_geometry)
+                else:
+                    self.resize_anim.setStartValue(self.geometry())
+                    self.resize_anim.setEndValue(new_geometry)
+                    self.resize_anim.start()
+
+    def hide_panel(self):
+        if not self.isVisible():
+            return
+        
+        if hasattr(self, 'show_anim_group') and self.show_anim_group.state() == QPropertyAnimation.Running:
+            self.show_anim_group.stop()
+        if self.resize_anim.state() == QPropertyAnimation.Running:
+            self.resize_anim.stop()
+
+        self.hide_anim_group = QParallelAnimationGroup(self)
+        
+        fade_out = QPropertyAnimation(self, b"windowOpacity")
+        fade_out.setDuration(240)
+        fade_out.setStartValue(self.windowOpacity())
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.OutQuad)
+        
+        slide_up = QPropertyAnimation(self, b"pos")
+        slide_up.setDuration(300)
+        slide_up.setStartValue(self.pos())
+        slide_up.setEndValue(QPoint(self.x(), self.y() - 25))
+        slide_up.setEasingCurve(QEasingCurve.OutCubic)
+
+        self.hide_anim_group.addAnimation(fade_out)
+        self.hide_anim_group.addAnimation(slide_up)
+        self.hide_anim_group.finished.connect(self.hide)
+        self.hide_anim_group.start()
+
+    def process_status_update(self, status):
+        step = status.get("step", 0)
+        action = status.get("action", "")
+        thought = status.get("thought", "")
+
+        if step == 0 and action in ["idle", ""] and "Initialized" in thought:
+            self.reset_island_style()
+            return
+
+        if status == self.last_status:
+            if self.isVisible() and step == 0:
+                self.hide_timer.start(4000)
+            return
+        
+        self.last_status = status
+        tokens = status.get("tokens", 0)
+        action_detail = status.get("action_detail", "")
+        observation = status.get("observation", "")
+
+        is_task_complete = False
+        formatted_tokens = self.format_tokens(tokens)
+        self.token_label.setText(f"TOKENS: {formatted_tokens}")
+
+        if step == 0:
+            self.current_step = -1
+            self.last_tag_text = ""
+            self.reset_island_style()
+            is_task_complete = True
+        else:
+            if not self.rgb_timer.isActive():
+                self.rgb_timer.start(40)
+
+        action_map = {
+            "THINKING": ("THINKING...", "thinking"),
+            "search_actions": ("SEARCHING WEB", "search"),
+            "deep_research": ("DEEP RESEARCH", "deep_task"),
+            "email_action": ("SENDING EMAIL", "communication"),
+            "whatsapp_action": ("WHATSAPP", "communication"),
+            "image_command": ("GENERATING IMAGE", "image_gen"),
+            "clipboard_action": ("CLIPBOARD", "clipboard"),
+            "vision": ("ANALYZING MEDIA", "vision"),
+            "file_operations": ("FILE OPERATION", "file_ops"),
+            "memory_actions": ("RECALLING MEMORY", "memory"),
+            "calendar_action": ("CALENDAR", "calendar"),
+            "execute_terminal_command": ("TERMINAL", "terminal"),
+            "run_python_code": ("RUNNING PYTHON", "deep_task"),
+            "apps_to_open": ("OPENING APP", "workspace"),
+            "urls_to_open": ("OPENING URL", "workspace"),
+        }
+        
+        if is_task_complete:
+            self.phase_label.setText("DONE")
+            self.status_tag.setText("TASK COMPLETED")
+        else:
+            base_text, self.current_action_type = action_map.get(action, ("EXECUTING", "default"))
+            full_tag_text = f"{base_text} -> {str(action_detail).upper()}" if (action_detail and action != "THINKING") else base_text
+            if full_tag_text != self.last_tag_text:
+                self.last_tag_text = full_tag_text
+                fm = QFontMetrics(self.status_tag.font())
+                elided_tag = fm.elidedText(full_tag_text, Qt.ElideRight, 280)
+                self.status_tag.setText(elided_tag)
+
+            if self.current_step != step:
+                self.phase_label.setText(f"STEP: {step:02}")
+                self.current_step = step
+        
+        if thought:
+            clean_thought = thought.strip()
+            
+            if len(clean_thought) > self.MAX_THOUGHT_CHARS:
+                cutoff_idx = len(clean_thought) - self.MAX_THOUGHT_CHARS
+                space_pos = clean_thought.find(' ', cutoff_idx)
+                if space_pos != -1:
+                    clean_thought = "... " + clean_thought[space_pos:].strip()
+                else:
+                    clean_thought = "... " + clean_thought[-self.MAX_THOUGHT_CHARS:]
+
+            self.set_label_font(self.thought_label, clean_thought, 13)
+            self.thought_label.setText(clean_thought)
+            self.scroll_timer.start(15) 
+        else:
+            self.thought_label.setText("")
+
+        if observation and not is_task_complete:
+            clean_obs = observation.replace("Observation:", "").strip()
+            if len(clean_obs) > 140:
+                clean_obs = clean_obs[:137] + "..."
+                
+            if self.obs_label.text() != f"Data: {clean_obs}":
+                self.set_label_font(self.obs_label, clean_obs, 10)
+                self.obs_label.setText(f"Data: {clean_obs}")
+                self.separator.show()
+                self.obs_label.show()
+        else:
+            if self.obs_label.isVisible():
+                self.obs_label.setText("")
+                self.separator.hide()
+                self.obs_label.hide()
+
+        self.show_panel()
+
+        if is_task_complete:
+            self.hide_timer.start(4000)
+        else:
+            self.hide_timer.stop()
+
+def run_panel():
+    qInstallMessageHandler(qt_message_handler)
+    app = QApplication(sys.argv)
+    panel = AgentPanel()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    run_panel()

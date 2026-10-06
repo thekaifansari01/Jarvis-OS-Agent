@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>Data/fonts/devangri.ttf</file>
+        <file>Data/fonts/english.ttf</file>
+    </qresource>
+</RCC>

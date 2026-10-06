@@ -1,0 +1,44 @@
+name: "✨ Feature Request"
+description: "Suggest a new idea or enhancement for Jarvis-OS-Agent"
+title: "[FEATURE]: "
+labels: ["enhancement", "needs-triage"]
+assignees:
+  - thekaifansari01
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 💡 New Feature / Enhancement
+        Have an idea to make Jarvis better? Let us know!
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: "🎯 What is the problem / use case?"
+      description: "Describe the problem you're facing or the workflow you want to improve."
+      placeholder: "I want Jarvis to control my smart lights..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "🚀 Proposed Solution"
+      description: "How do you envision this working in Jarvis? Be specific."
+      placeholder: "Add a new tool called 'smart_home_control' which calls the Hue API..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "🔄 Alternatives Considered"
+      description: "Any alternative solutions or features you've thought of."
+      placeholder: "Could also use IFTTT webhooks..."
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: "📝 Additional Context"
+      description: "Screenshots, mockups, or related links."
+      placeholder: "Link to API documentation..."

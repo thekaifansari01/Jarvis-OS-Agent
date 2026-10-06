@@ -1,0 +1,44 @@
+# Python environments and bytecode
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Secrets and local credentials
+.env
+.env.
+Data/SessionCookies/
+
+# Runtime state, logs, and generated user data
+Data/agent_status.json
+Data/app_cache.json
+Data/stt_status.json
+Data/island_response.json
+Data/typing_status.json
+Data/processed_events.json
+Data/tavily_search.log
+Data/jarvis.log
+Data/jarvis_memory/
+Data/Jarvis_Workspace/
+Data/MediaVault/
+Data/RAG/
+Data/model/vosk-model-small/
+
+# Dependency installs and compiled application binaries
+node_modules/
+Bin/
+
+# Qt Creator / qmake build artifacts
+core/UiSrc/**/debug/
+core/UiSrc/**/release/
+core/UiSrc/**/.qtcreator/
+core/UiSrc/**/.qmake.stash
+core/UiSrc/**/Makefile*
+.jarvis.lock
+
+# OS metadata
+.DS_Store
+jarvis_cli.egg-info
+Thumbs.db
+
+signatures/

@@ -1,0 +1,23 @@
+title: "[IDEA]: "
+labels: ["enhancement", "discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🌟 Share Your Big Idea
+        Have a wild idea for Jarvis that doesn't fit a simple feature request? Let's discuss it!
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: "💡 Your Idea"
+      description: "What's the next big feature you'd like to see?"
+      placeholder: "Jarvis should be able to run a small language model entirely offline without APIs..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: community_benefit
+    attributes:
+      label: "👥 Why is this valuable?"
+      description: "How does this help the community or project?"

@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>Data/fonts/english.ttf</file>
+        <file>Data/icons/jarvis_icon.png</file>
+    </qresource>
+</RCC>
