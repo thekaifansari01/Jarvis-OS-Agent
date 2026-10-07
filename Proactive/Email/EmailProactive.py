@@ -5,77 +5,66 @@ import re
 import html
 import time
 import threading
-from google.cloud import pubsub_v1
 
-import tools.Messanger.email_manager as email_manager
 from tools.Messanger.email_manager import authenticate_gmail
 from Proactive.event_queue import push_proactive_event
 from core.logger.logger import logger
-
-PUBSUB_SCOPE = 'https://www.googleapis.com/auth/pubsub'
-if PUBSUB_SCOPE not in email_manager.SCOPES:
-    email_manager.SCOPES.append(PUBSUB_SCOPE)
-
-from core.security import load_decrypted_token
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 project_root = base_path
 while os.path.basename(project_root) in ["tools", "Messanger", "core", "brain", "Proactive", "Email"]:
     project_root = os.path.dirname(project_root)
-token_path = os.path.join(project_root, 'Data', 'SessionCookies', 'token.enc')
 
-if os.path.exists(token_path):
-    try:
-        token_data = load_decrypted_token(token_path)
-        if token_data and PUBSUB_SCOPE not in token_data.get('scopes', []):
-            os.remove(token_path)
-    except Exception:
-        pass
-
-PROJECT_ID = "jarvisemailmanager"
-TOPIC_NAME = f"projects/{PROJECT_ID}/topics/jarvis-email-topic"
-SUBSCRIPTION_NAME = f"projects/{PROJECT_ID}/subscriptions/jarvis-email-sub"
+session_dir = os.path.join(project_root, 'Data', 'SessionCookies')
+os.makedirs(session_dir, exist_ok=True)
+history_file = os.path.join(session_dir, 'gmail_history.json')
 
 _stop_event = threading.Event()
-_subscriber = None
-_streaming_future = None
-_watch_timer = None
-_email_service = None
-_email_lock = threading.Lock()
 _processed_ids = set()
 _processed_ids_lock = threading.Lock()
-_START_TIME_MS = int(time.time() * 1000)
+_MAX_PROCESSED_IDS = 5000
+_POLL_INTERVAL = 10
+_INITIAL_BACKOFF = 10
+_MAX_BACKOFF = 300
+
 
 def stop_email_listener():
-    global _streaming_future, _subscriber, _watch_timer
     _stop_event.set()
-    if _watch_timer:
-        _watch_timer.cancel()
-        _watch_timer = None
-    if _streaming_future:
-        _streaming_future.cancel()
-    if _subscriber:
-        try:
-            _subscriber.close()
-        except:
-            pass
 
-def _renew_watch():
-    global _email_service, _watch_timer
-    if _stop_event.is_set():
-        return
+
+def _interruptible_sleep(seconds):
+    for _ in range(int(seconds)):
+        if _stop_event.is_set():
+            return
+        time.sleep(1)
+
+
+def _load_history_id():
     try:
-        if _email_service:
-            body = {'topicName': TOPIC_NAME, 'labelIds': ['INBOX'], 'labelFilterAction': 'include'}
-            _email_service.users().watch(userId='me', body=body).execute()
-            logger.info("Gmail Watch renewed.")
+        if os.path.exists(history_file):
+            with open(history_file, 'r') as f:
+                return json.load(f).get('history_id')
+    except Exception:
+        return None
+    return None
+
+
+def _save_history_id(history_id):
+    try:
+        with open(history_file, 'w') as f:
+            json.dump({'history_id': str(history_id)}, f)
     except Exception as e:
-        logger.warning(f"Watch renewal failed: {e}")
-    finally:
-        if not _stop_event.is_set():
-            _watch_timer = threading.Timer(6 * 24 * 3600, _renew_watch)
-            _watch_timer.daemon = True
-            _watch_timer.start()
+        logger.warning(f"Failed to save Gmail history ID: {e}")
+
+
+def _get_current_history_id(service):
+    try:
+        profile = service.users().getProfile(userId='me').execute()
+        return profile.get('historyId')
+    except Exception as e:
+        logger.warning(f"Failed to fetch current history ID: {e}")
+        return None
+
 
 def decode_base64(data_str):
     try:
@@ -84,10 +73,12 @@ def decode_base64(data_str):
     except Exception:
         return ""
 
+
 def extract_email_content(service, msg_id, msg):
     payload = msg.get('payload', {})
     headers = payload.get('headers', [])
     sender_name, sender_email, subject = "Unknown", "Unknown", "No Subject"
+
     for header in headers:
         if header['name'] == 'From':
             from_val = header['value']
@@ -155,8 +146,8 @@ def extract_email_content(service, msg_id, msg):
 
     final_body = plain_text.strip()
     if not final_body and html_text:
-        clean = re.sub(r'<style.*?>.*?</style>', '', html_text, flags=re.IGNORECASE|re.DOTALL)
-        clean = re.sub(r'<script.*?>.*?</script>', '', clean, flags=re.IGNORECASE|re.DOTALL)
+        clean = re.sub(r'<style.*?>.*?</style>', '', html_text, flags=re.IGNORECASE | re.DOTALL)
+        clean = re.sub(r'<script.*?>.*?</script>', '', clean, flags=re.IGNORECASE | re.DOTALL)
         clean = re.sub(r'<[^>]+>', ' ', clean)
         clean = html.unescape(clean)
         clean = re.sub(r' {2,}', ' ', clean)
@@ -167,9 +158,12 @@ def extract_email_content(service, msg_id, msg):
 
     return sender_name, sender_email, subject, final_body, saved_attachments, msg_id
 
-def get_all_unread_emails(service, start_time_ms, max_results=10):
+
+def get_all_unread_emails(service, start_time_ms, max_results=25):
     try:
-        results = service.users().messages().list(userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=max_results).execute()
+        results = service.users().messages().list(
+            userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=max_results
+        ).execute()
         messages = results.get('messages', [])
         emails = []
         for msg in messages:
@@ -185,91 +179,153 @@ def get_all_unread_emails(service, start_time_ms, max_results=10):
         logger.warning(f"Error fetching unread emails: {e}")
         return []
 
+
 def mark_as_read(service, msg_id):
     try:
-        service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
+        service.users().messages().modify(
+            userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+        ).execute()
     except Exception as e:
         logger.warning(f"Failed to mark email {msg_id} as read: {e}")
 
-def start_gmail_watch():
-    global _email_service, _watch_timer
+
+def _cleanup_processed_ids():
+    global _processed_ids
+    with _processed_ids_lock:
+        if len(_processed_ids) > _MAX_PROCESSED_IDS:
+            _processed_ids = set(list(_processed_ids)[-_MAX_PROCESSED_IDS // 2:])
+
+
+def _process_message(service, msg_id, start_time_ms):
+    with _processed_ids_lock:
+        if msg_id in _processed_ids:
+            return
+        _processed_ids.add(msg_id)
+
     try:
-        service = authenticate_gmail(interactive=False)
-        if not service:
-            return None
-        body = {'topicName': TOPIC_NAME, 'labelIds': ['INBOX'], 'labelFilterAction': 'include'}
-        response = service.users().watch(userId='me', body=body).execute()
-        logger.info(f"Gmail Watch Active! History ID: {response.get('historyId')}")
-        _email_service = service
-        if _watch_timer:
-            _watch_timer.cancel()
-        _watch_timer = threading.Timer(6 * 24 * 3600, _renew_watch)
-        _watch_timer.daemon = True
-        _watch_timer.start()
-        return service
+        full_msg = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
     except Exception as e:
-        logger.warning(f"Watch setup failed: {e}")
-        return None
+        logger.warning(f"Failed to fetch message {msg_id}: {e}")
+        return
+
+    labels = full_msg.get('labelIds', [])
+    if 'INBOX' not in labels or 'UNREAD' not in labels:
+        return
+
+    internal_date = int(full_msg.get('internalDate', 0))
+    if internal_date < start_time_ms:
+        return
+
+    try:
+        name, email, sub, body, saved_attachments, _ = extract_email_content(service, msg_id, full_msg)
+    except Exception as e:
+        logger.warning(f"Failed to extract email content for {msg_id}: {e}")
+        return
+
+    logger.info(f"Email from: {name} ({email}) | Subject: {sub}")
+    if saved_attachments:
+        logger.info(f"Attachments: {', '.join(saved_attachments)}")
+
+    event_data = f"Email from: {name} ({email})\nSubject: {sub}\nBody: {body}"
+    if saved_attachments:
+        att_str = ", ".join(saved_attachments)
+        event_data += f"\n[Attachments Saved]: {att_str}"
+
+    push_proactive_event("Gmail", event_data)
+    mark_as_read(service, msg_id)
+
+
+def _poll_history(service, state):
+    current_history_id = state.get('history_id')
+
+    if not current_history_id:
+        new_id = _get_current_history_id(service)
+        if new_id:
+            state['history_id'] = str(new_id)
+            _save_history_id(new_id)
+        return
+
+    try:
+        response = service.users().history().list(
+            userId='me',
+            startHistoryId=str(current_history_id),
+            historyTypes=['messageAdded']
+        ).execute()
+    except Exception as e:
+        err_str = str(e).lower()
+        if '404' in err_str or 'not found' in err_str or 'starthistoryid' in err_str:
+            logger.warning("Gmail history ID expired. Resetting baseline.")
+            new_id = _get_current_history_id(service)
+            if new_id:
+                state['history_id'] = str(new_id)
+                _save_history_id(new_id)
+            return
+        raise
+
+    message_ids = []
+    for record in response.get('history', []):
+        for added in record.get('messagesAdded', []):
+            msg = added.get('message', {})
+            mid = msg.get('id')
+            labels = msg.get('labelIds', [])
+            if not mid:
+                continue
+            if 'INBOX' not in labels:
+                continue
+            if 'UNREAD' not in labels:
+                continue
+            if mid not in message_ids:
+                message_ids.append(mid)
+
+    for mid in message_ids:
+        if _stop_event.is_set():
+            return
+        try:
+            _process_message(service, mid, state['start_time_ms'])
+        except Exception as e:
+            logger.warning(f"Failed to process message {mid}: {e}")
+
+    new_history_id = response.get('historyId')
+    if new_history_id and str(new_history_id) != str(current_history_id):
+        state['history_id'] = str(new_history_id)
+        _save_history_id(new_history_id)
+
+    _cleanup_processed_ids()
+
 
 def listen_for_emails():
-    global _subscriber, _streaming_future
-    service = start_gmail_watch()
+    _stop_event.clear()
+
+    service = authenticate_gmail(interactive=False)
     if not service:
+        logger.warning("Email listener: Gmail authentication failed. Listener not started.")
         return
+
+    state = {
+        'history_id': _load_history_id(),
+        'start_time_ms': int(time.time() * 1000)
+    }
+
+    if not state['history_id']:
+        initial_id = _get_current_history_id(service)
+        if initial_id:
+            state['history_id'] = str(initial_id)
+            _save_history_id(initial_id)
 
     logger.info("Jarvis Universal Email Listener connected to Proactive Queue...")
 
-    def process_notification(message):
+    backoff = _INITIAL_BACKOFF
+
+    while not _stop_event.is_set():
         try:
-            message.ack()
-            with _email_lock:
-                emails = get_all_unread_emails(service, _START_TIME_MS)
-            for name, email, sub, body, saved_attachments, msg_id in emails:
-                if _stop_event.is_set():
-                    break
-                with _processed_ids_lock:
-                    if msg_id in _processed_ids:
-                        continue
-                    _processed_ids.add(msg_id)
-                mark_as_read(service, msg_id)
-                logger.info(f"Email from: {name} ({email}) | Subject: {sub}")
-                if saved_attachments:
-                    logger.info(f"Attachments: {', '.join(saved_attachments)}")
-                event_data = f"Email from: {name} ({email})\nSubject: {sub}\nBody: {body}"
-                if saved_attachments:
-                    att_str = ", ".join(saved_attachments)
-                    event_data += f"\n[Attachments Saved]: {att_str}"
-                push_proactive_event("Gmail", event_data)
+            _poll_history(service, state)
+            backoff = _INITIAL_BACKOFF
         except Exception as e:
-            logger.error(f"Error processing notification: {e}")
+            logger.warning(f"Email polling error: {e}")
+            _interruptible_sleep(backoff)
+            backoff = min(backoff * 2, _MAX_BACKOFF)
+            continue
 
-    try:
-        subscriber = pubsub_v1.SubscriberClient(credentials=service._http.credentials)
-        _subscriber = subscriber
-        streaming_pull_future = subscriber.subscribe(SUBSCRIPTION_NAME, callback=process_notification)
-        _streaming_future = streaming_pull_future
+        _interruptible_sleep(_POLL_INTERVAL)
 
-        while not _stop_event.is_set():
-            try:
-                streaming_pull_future.result(timeout=1)
-            except TimeoutError:
-                continue
-            except Exception as e:
-                if not _stop_event.is_set():
-                    logger.warning(f"Streaming error: {e}")
-                break
-
-    except KeyboardInterrupt:
-        logger.info("Listener stopped.")
-    except Exception as e:
-        logger.error(f"Critical error: {e}")
-    finally:
-        if _streaming_future:
-            _streaming_future.cancel()
-        if _subscriber:
-            try:
-                _subscriber.close()
-            except:
-                pass
-        if _watch_timer:
-            _watch_timer.cancel()
+    logger.info("Email listener stopped.")

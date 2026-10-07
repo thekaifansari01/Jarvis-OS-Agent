@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List
 
+
 @dataclass
 class ProactiveEvent:
     source: str
@@ -11,12 +12,17 @@ class ProactiveEvent:
     priority: str = "normal"
     timestamp: datetime = field(default_factory=datetime.now)
 
+
 _proactive_queue = queue.Queue()
 _agent_task_queue = queue.Queue()
 
+
 def push_proactive_event(source: str, data: str, priority: str = "normal"):
+    if not source or not data:
+        return
     event = ProactiveEvent(source=source, data=data, priority=priority)
     _proactive_queue.put(event)
+
 
 def get_proactive_event() -> ProactiveEvent:
     try:
@@ -24,32 +30,30 @@ def get_proactive_event() -> ProactiveEvent:
     except queue.Empty:
         return None
 
+
 def get_batched_events(window_seconds: int = 4) -> List[ProactiveEvent]:
     try:
         first_event = _proactive_queue.get(timeout=1.0)
     except queue.Empty:
         return []
-        
+
     events = [first_event]
-    
-    if first_event.priority == "high":
-        return events
-        
+    is_high_priority = first_event.priority == "high"
+    effective_window = 1.0 if is_high_priority else window_seconds
+
     start_time = time.time()
-    
+
     while True:
         elapsed = time.time() - start_time
-        remaining = window_seconds - elapsed
-        
+        remaining = effective_window - elapsed
+
         if remaining <= 0:
             break
-            
+
         try:
             next_event = _proactive_queue.get(timeout=remaining)
             events.append(next_event)
-            if next_event.priority == "high":
-                break
         except queue.Empty:
             break
-            
+
     return events
