@@ -124,7 +124,7 @@ class UnifiedVoiceAssistant:
             self.WAKE_WORDS = ["jarvis", "hey jarvis"]
             self.DECOY_WORDS = [
                 "hello", "computer", "hi", "okay", "yes", "no", "stop",
-                "kya", "hai", "theek", "test", "mike", "testing", "one",
+                "test", "mike", "testing", "one",
                 "two", "three", "alpha", "beta", "noise", "background", "something"
             ]
 
