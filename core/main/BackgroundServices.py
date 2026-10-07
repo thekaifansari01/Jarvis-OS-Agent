@@ -51,7 +51,7 @@ def stop_agent_panel():
 
 def start_stt_popup():
     global _stt_popup_process
-    
+
     try:
         from core.voice import stt
         if not getattr(stt.engine, 'mic_available', False):
@@ -64,16 +64,20 @@ def start_stt_popup():
     stop_stt_popup()
     try:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        popup_exe = os.path.join(base_dir, "Bin", "SttPopup.exe")
-        if os.path.exists(popup_exe):
+        popup_script = os.path.join(base_dir, "core", "ui", "SttPopup", "SttPopup.py")
+        
+        if os.path.exists(popup_script):
             creation_flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
+
             _stt_popup_process = proc_manager.spawn(
-                [popup_exe],
+                [sys.executable, popup_script],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=creation_flags
             )
             logging.info("STT popup started successfully.")
+        else:
+            logging.warning("SttPopup.py not found. Skipping STT popup.")
     except Exception as e:
         logging.error(f"STT popup start failed: {e}")
 

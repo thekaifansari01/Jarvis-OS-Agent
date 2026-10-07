@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 import threading
 import platform
@@ -26,16 +27,16 @@ def run_popup_task(executor: ThreadPoolExecutor, memory: ContextMemory):
         _is_popup_open = True
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        popup_exe = os.path.join(base_dir, "Bin", "InputPopup.exe")
+        popup_script = os.path.join(base_dir, "core", "ui", "InputPopup", "InputPopup.py")
 
-        if not os.path.exists(popup_exe):
-            logging.warning("InputPopup.exe not found. Hotkey disabled.")
+        if not os.path.exists(popup_script):
+            logging.warning("InputPopup.py not found. Hotkey disabled.")
             return
 
         creation_flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
 
         popup_proc = subprocess.Popen(
-            [popup_exe],
+            [sys.executable, popup_script],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
