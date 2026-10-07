@@ -6,13 +6,13 @@ console.log = function (...args) {
     originalLog.apply(console, args);
 };
 
-const { 
-    makeWASocket, 
-    useMultiFileAuthState, 
+const {
+    makeWASocket,
+    useMultiFileAuthState,
     DisconnectReason,
-    fetchLatestBaileysVersion, 
+    fetchLatestBaileysVersion,
     Browsers,
-    downloadMediaMessage                     
+    downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 const express = require('express');
 const qrcode = require('qrcode');
@@ -38,12 +38,14 @@ const PORT = 3000;
 
 let sock;
 let unreadAlerts = [];
-let popupProcess = null;
+let sseClients = [];
+let lastQrDataUrl = null;
+let lastStatus = null;
+let browserOpenedOnce = false;
 const SCRIPT_START_TIME = Math.floor(Date.now() / 1000);
 const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 
 const sessionDir = path.join(__dirname, '..', '..', '..', '..', 'Data', 'SessionCookies');
-const binDir = path.join(__dirname, '..', '..', '..', '..', 'Bin');
 const os = require('os');
 const mediaVaultDir = path.join(os.homedir(), 'Documents', 'Jarvis', 'MediaVault', 'WhatsApp_Media');
 
@@ -94,6 +96,28 @@ function cleanupOldMessages() {
 cleanupOldMessages();
 setInterval(cleanupOldMessages, 6 * 60 * 60 * 1000);
 
+function broadcast(payload) {
+    lastStatus = payload;
+    if (payload.type === 'waiting_scan' && payload.qr) {
+        lastQrDataUrl = payload.qr;
+    }
+    const data = `data: ${JSON.stringify(payload)}\n\n`;
+    sseClients.forEach((client) => {
+        try {
+            client.res.write(data);
+        } catch (e) {}
+    });
+}
+
+function openBrowser(url) {
+    const platform = process.platform;
+    let cmd;
+    if (platform === 'win32') cmd = `start "" "${url}"`;
+    else if (platform === 'darwin') cmd = `open "${url}"`;
+    else cmd = `xdg-open "${url}"`;
+    exec(cmd, () => {});
+}
+
 const store = {
     bind: (ev) => {
         const processMessages = (messages, isBulkSync = false) => {
@@ -116,12 +140,12 @@ const store = {
                         const id = msg.key.id;
                         const timestamp = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
                         const fromMe = msg.key.fromMe ? 1 : 0;
-                        
-                        let text = msg.message?.conversation || 
-                                   msg.message?.extendedTextMessage?.text || 
-                                   msg.message?.imageMessage?.caption || 
-                                   msg.message?.videoMessage?.caption || 
-                                   msg.message?.documentMessage?.caption || 
+
+                        let text = msg.message?.conversation ||
+                                   msg.message?.extendedTextMessage?.text ||
+                                   msg.message?.imageMessage?.caption ||
+                                   msg.message?.videoMessage?.caption ||
+                                   msg.message?.documentMessage?.caption ||
                                    "[Media Message]";
 
                         let mediaTag = "";
@@ -178,9 +202,14 @@ const store = {
 
         ev.on('messages.upsert', ({ messages }) => processMessages(messages, false));
 
-        ev.on('messaging-history.set', ({ messages }) => {
+        ev.on('messaging-history.set', ({ messages, progress, isLatest }) => {
             console.log(`\n⏳ [SYSTEM WAKING UP] Fetching pending history from WhatsApp servers...`);
+            broadcast({ type: 'syncing_history', progress: typeof progress === 'number' ? progress : 0 });
             processMessages(messages, true);
+            if (isLatest) {
+                broadcast({ type: 'history_loaded', count: Array.isArray(messages) ? messages.length : 0 });
+                setTimeout(() => broadcast({ type: 'ready' }), 600);
+            }
         });
     }
 };
@@ -203,21 +232,23 @@ async function connectToWhatsApp() {
                 const { connection, lastDisconnect, qr } = update;
 
                 if (qr) {
-                    const qrImagePath = path.join(__dirname, 'qr_code.png');
-                    qrcode.toFile(qrImagePath, qr, {
-                        color: { dark: '#000000', light: '#FFFFFF' }
-                    }, (err) => {
-                        if (err) return;
-                        
-                        if (!popupProcess) {
-                            const exePath = path.join(binDir, 'JarvisPhotoPopupViewer.exe');
-                            const command = `"${exePath}" --image "${qrImagePath}" --title "JARVIS WhatsApp Bridge" --description "Scan to Authenticate"`;
-                            
-                            popupProcess = exec(command, (error) => {
-                                popupProcess = null;
-                            });
-                        }
-                    });
+                    qrcode.toDataURL(qr, {
+                        margin: 1,
+                        width: 340,
+                        color: { dark: '#0a0a0f', light: '#ffffff' }
+                    })
+                        .then((dataUrl) => {
+                            broadcast({ type: 'waiting_scan', qr: dataUrl });
+                            if (!browserOpenedOnce) {
+                                browserOpenedOnce = true;
+                                setTimeout(() => openBrowser(`http://localhost:${PORT}/qr`), 300);
+                            }
+                        })
+                        .catch(() => {});
+                }
+
+                if (connection === 'connecting') {
+                    broadcast({ type: 'scanned' });
                 }
 
                 if (connection === 'close') {
@@ -226,16 +257,20 @@ async function connectToWhatsApp() {
 
                     if (statusCode === DisconnectReason.loggedOut) {
                         console.log('❌ [LOGGED OUT] Device has been logged out from WhatsApp Web. Please delete session folder and rescan.');
+                        broadcast({ type: 'logged_out' });
                     } else if (statusCode === 440) {
                         console.log('⚠️ [CONFLICT - 440] WhatsApp Web is open elsewhere. Jarvis is waiting 10s to avoid spam...');
+                        broadcast({ type: 'disconnected', reason: 'Session conflict — WhatsApp Web open elsewhere. Reconnecting in 10s...' });
                         setTimeout(connectToWhatsApp, 10000);
                         return;
                     } else if (statusCode === DisconnectReason.timedOut) {
                         console.log('⚠️ [TIMEOUT] Connection is slow, attempting to reconnect in 5s...');
+                        broadcast({ type: 'disconnected', reason: 'Connection timed out. Reconnecting in 5s...' });
                         setTimeout(connectToWhatsApp, 5000);
                         return;
                     } else {
                         console.log(`⚠️ [DISCONNECTED] Reason Code: ${statusCode || 'Unknown'}. Reconnecting...`);
+                        broadcast({ type: 'disconnected', reason: `Disconnected (code ${statusCode || 'unknown'}). Reconnecting...` });
                     }
 
                     if (shouldReconnect) {
@@ -243,11 +278,7 @@ async function connectToWhatsApp() {
                     }
                 } else if (connection === 'open') {
                     console.log('\n✅ JARVIS WHATSAPP ENGINE IS ONLINE (MODULAR & SQLITE MODE)!\n');
-                    
-                    if (popupProcess) {
-                        exec(`taskkill /PID ${popupProcess.pid} /F /T`, () => {});
-                        popupProcess = null;
-                    }
+                    broadcast({ type: 'connected' });
                 }
             } catch (connErr) {
                 console.error("🚨 [CONNECTION EVENT ERROR]:", connErr.message);
@@ -261,6 +292,39 @@ async function connectToWhatsApp() {
         setTimeout(connectToWhatsApp, 10000);
     }
 }
+
+app.get('/qr', (req, res) => {
+    res.sendFile(path.join(__dirname, 'qr_page.html'));
+});
+
+app.get('/qr-events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const client = { res };
+    sseClients.push(client);
+
+    if (lastQrDataUrl) {
+        res.write(`data: ${JSON.stringify({ type: 'waiting_scan', qr: lastQrDataUrl })}\n\n`);
+    }
+    if (lastStatus && lastStatus.type !== 'waiting_scan') {
+        res.write(`data: ${JSON.stringify(lastStatus)}\n\n`);
+    }
+
+    const keepAlive = setInterval(() => {
+        try {
+            res.write(`: ping\n\n`);
+        } catch (e) {}
+    }, 25000);
+
+    req.on('close', () => {
+        clearInterval(keepAlive);
+        sseClients = sseClients.filter((c) => c !== client);
+    });
+});
 
 app.post('/send', (req, res) => {
     try {

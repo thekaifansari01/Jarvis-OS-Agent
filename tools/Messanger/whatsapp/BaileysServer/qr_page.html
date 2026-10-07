@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JARVIS · WhatsApp Bridge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  :root {
+    --bg-1: #05060a;
+    --bg-2: #0a0d18;
+    --bg-3: #0f1424;
+    --card: rgba(18, 22, 38, 0.55);
+    --card-border: rgba(120, 140, 200, 0.14);
+    --text: #e8ecf6;
+    --text-muted: #8a92a8;
+    --text-dim: #5a637a;
+    --accent: #5b8dff;
+    --accent-2: #8b5bff;
+    --accent-glow: rgba(91, 141, 255, 0.35);
+    --success: #22d38a;
+    --warn: #ffb84d;
+    --danger: #ff5470;
+    --radius: 20px;
+    --radius-sm: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-1);
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .bg-wrap {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(91, 141, 255, 0.14), transparent 45%),
+      radial-gradient(circle at 80% 80%, rgba(139, 91, 255, 0.14), transparent 45%),
+      linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-3) 100%);
+  }
+
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.5;
+    animation: float 18s ease-in-out infinite;
+  }
+  .orb.o1 { width: 420px; height: 420px; background: radial-gradient(circle, #5b8dff, transparent 70%); top: -120px; left: -80px; animation-delay: 0s; }
+  .orb.o2 { width: 480px; height: 480px; background: radial-gradient(circle, #8b5bff, transparent 70%); bottom: -140px; right: -100px; animation-delay: -6s; }
+  .orb.o3 { width: 320px; height: 320px; background: radial-gradient(circle, #22d38a, transparent 70%); top: 40%; right: 15%; opacity: 0.25; animation-delay: -12s; }
+
+  @keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(40px, -30px) scale(1.08); }
+    66% { transform: translate(-30px, 40px) scale(0.95); }
+  }
+
+  .grid-overlay {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(120, 140, 200, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120, 140, 200, 0.03) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+  }
+
+  .stage {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 460px;
+    background: var(--card);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 32px 28px 28px;
+    box-shadow:
+      0 30px 80px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    animation: cardIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(91, 141, 255, 0.6), transparent);
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(24px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .brand-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px var(--accent-glow);
+    color: #fff;
+  }
+
+  .brand-icon svg { width: 22px; height: 22px; }
+
+  .brand-text h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    background: linear-gradient(135deg, #ffffff, #b9c5e8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .brand-text p {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+
+  .qr-shell {
+    margin: 26px auto 20px;
+    width: 260px;
+    height: 260px;
+    position: relative;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+    padding: 14px;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 20px 50px rgba(0, 0, 0, 0.5),
+      0 0 60px rgba(91, 141, 255, 0.15);
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .qr-shell:hover { transform: translateY(-3px); }
+
+  .qr-shell .qr-img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 6px;
+    image-rendering: pixelated;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .qr-shell.ready .qr-img { opacity: 1; }
+
+  .qr-placeholder {
+    position: absolute;
+    inset: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #94a0b8;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .qr-placeholder svg {
+    width: 32px;
+    height: 32px;
+    animation: spin 1.4s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .qr-shell.ready .qr-placeholder { display: none; }
+
+  .scan-line {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    box-shadow: 0 0 14px var(--accent);
+    border-radius: 2px;
+    top: 14px;
+    animation: scan 2.4s ease-in-out infinite;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .qr-shell.scanning .scan-line { opacity: 1; }
+
+  @keyframes scan {
+    0%, 100% { top: 14px; }
+    50% { top: calc(100% - 16px); }
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin: 0 auto 22px;
+    width: fit-content;
+    max-width: 100%;
+    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .status-dot::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: inherit;
+    opacity: 0.4;
+    animation: pulse 1.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.7); opacity: 0.7; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+
+  .status-pill[data-state="success"] { border-color: rgba(34, 211, 138, 0.35); background: rgba(34, 211, 138, 0.08); color: #7ff0bc; }
+  .status-pill[data-state="success"] .status-dot { background: var(--success); }
+  .status-pill[data-state="warn"] { border-color: rgba(255, 184, 77, 0.35); background: rgba(255, 184, 77, 0.08); color: #ffd394; }
+  .status-pill[data-state="warn"] .status-dot { background: var(--warn); }
+  .status-pill[data-state="error"] { border-color: rgba(255, 84, 112, 0.35); background: rgba(255, 84, 112, 0.08); color: #ff9dae; }
+  .status-pill[data-state="error"] .status-dot { background: var(--danger); }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .steps-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    transition: background 0.3s ease;
+  }
+
+  .step:hover { background: rgba(255, 255, 255, 0.025); }
+
+  .step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: rgba(91, 141, 255, 0.12);
+    border: 1px solid rgba(91, 141, 255, 0.25);
+    color: #a7bcff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+  }
+
+  .step-text {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .step-text b { font-weight: 600; color: #ffffff; }
+  .step-text .muted { color: var(--text-muted); font-weight: 400; }
+
+  .progress-wrap {
+    margin-top: 16px;
+    opacity: 0;
+    height: 0;
+    overflow: hidden;
+    transition: opacity 0.4s ease, height 0.4s ease, margin 0.4s ease;
+  }
+
+  .progress-wrap.active {
+    opacity: 1;
+    height: auto;
+    margin-top: 18px;
+  }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .progress-label .val {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .progress-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 999px;
+    transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    position: relative;
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+
+  .progress-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shimmer 1.6s linear infinite;
+    border-radius: 999px;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .footer-note {
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    letter-spacing: 0.2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .footer-note svg { width: 12px; height: 12px; }
+
+  .success-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(10, 14, 24, 0.96), rgba(15, 20, 36, 0.96));
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    border-radius: var(--radius);
+    z-index: 10;
+  }
+
+  .success-overlay.show { opacity: 1; pointer-events: auto; }
+
+  .success-circle {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    background: rgba(34, 211, 138, 0.12);
+    border: 1.5px solid rgba(34, 211, 138, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 40px rgba(34, 211, 138, 0.3);
+    animation: successPop 0.6s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  }
+
+  @keyframes successPop {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .success-circle svg { width: 44px; height: 44px; color: var(--success); }
+
+  .success-circle svg path {
+    stroke-dasharray: 40;
+    stroke-dashoffset: 40;
+    animation: drawCheck 0.6s 0.25s cubic-bezier(0.6, 0, 0.4, 1) forwards;
+  }
+
+  @keyframes drawCheck {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .success-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+  }
+
+  .success-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 300px;
+    line-height: 1.5;
+  }
+
+  .success-badge {
+    padding: 6px 12px;
+    background: rgba(34, 211, 138, 0.1);
+    border: 1px solid rgba(34, 211, 138, 0.3);
+    border-radius: 999px;
+    font-size: 11px;
+    color: #7ff0bc;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .success-badge svg { width: 12px; height: 12px; }
+
+  ::-webkit-scrollbar { width: 0; height: 0; }
+
+  @media (max-height: 720px) {
+    .card { padding: 24px 22px 22px; }
+    .qr-shell { width: 220px; height: 220px; margin: 18px auto 16px; }
+    .steps { gap: 6px; padding-top: 14px; }
+    .step { padding: 8px 10px; }
+    .brand-icon { width: 36px; height: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-wrap">
+  <div class="orb o1"></div>
+  <div class="orb o2"></div>
+  <div class="orb o3"></div>
+  <div class="grid-overlay"></div>
+</div>
+
+<main class="stage">
+  <div class="card">
+    <div class="brand">
+      <div class="brand-icon">
+        <i data-lucide="shield-check"></i>
+      </div>
+      <div class="brand-text">
+        <h1>JARVIS Bridge</h1>
+        <p>Secure WhatsApp Link</p>
+      </div>
+    </div>
+
+    <div class="qr-shell" id="qrShell">
+      <div class="scan-line"></div>
+      <img class="qr-img" id="qrImg" alt="QR Code" />
+      <div class="qr-placeholder">
+        <i data-lucide="loader-2"></i>
+        <span>Generating secure QR...</span>
+      </div>
+    </div>
+
+    <div class="status-pill" id="statusPill" data-state="info">
+      <span class="status-dot"></span>
+      <span id="statusText">Initializing connection...</span>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span>Syncing chat history</span>
+        <span class="val" id="progressVal">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="steps-title">How to connect</div>
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Open <b>WhatsApp</b> on your phone <span class="muted">— keep it unlocked</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Tap <b>Menu ⋮</b> → <b>Linked Devices</b></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Select <b>Link a Device</b></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Point your phone at this <b>QR code</b></div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      <i data-lucide="lock"></i>
+      <span>End-to-end encrypted · Local bridge only</span>
+    </div>
+
+    <div class="success-overlay" id="successOverlay">
+      <div class="success-circle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12.5 L9.5 18 L20 6.5" />
+        </svg>
+      </div>
+      <div class="success-title">Login Successful</div>
+      <div class="success-sub">Your WhatsApp is now securely linked to JARVIS. You may close this tab.</div>
+      <div class="success-badge">
+        <i data-lucide="wifi"></i>
+        <span>Connection active</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  lucide.createIcons();
+
+  const qrShell = document.getElementById('qrShell');
+  const qrImg = document.getElementById('qrImg');
+  const statusPill = document.getElementById('statusPill');
+  const statusText = document.getElementById('statusText');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+  const progressVal = document.getElementById('progressVal');
+  const successOverlay = document.getElementById('successOverlay');
+
+  let successShown = false;
+
+  function setStatus(text, state) {
+    statusText.textContent = text;
+    statusPill.setAttribute('data-state', state || 'info');
+  }
+
+  function showQr(dataUrl) {
+    qrImg.src = dataUrl;
+    qrShell.classList.add('ready');
+    qrShell.classList.add('scanning');
+  }
+
+  function hideQr() {
+    qrShell.classList.remove('scanning');
+  }
+
+  function updateProgress(percent) {
+    const p = Math.max(0, Math.min(100, Number(percent) || 0));
+    progressWrap.classList.add('active');
+    progressBar.style.width = p + '%';
+    progressVal.textContent = p + '%';
+  }
+
+  function hideProgress() {
+    progressWrap.classList.remove('active');
+    progressBar.style.width = '0%';
+    progressVal.textContent = '0%';
+  }
+
+  function showSuccess() {
+    if (successShown) return;
+    successShown = true;
+    hideQr();
+    hideProgress();
+    setStatus('Connected successfully', 'success');
+    setTimeout(() => successOverlay.classList.add('show'), 200);
+  }
+
+  const es = new EventSource('/qr-events');
+
+  es.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'waiting_scan') {
+        showQr(data.qr);
+        setStatus('Waiting for scan...', 'info');
+      } else if (data.type === 'scanned') {
+        hideQr();
+        setStatus('QR scanned — authenticating...', 'info');
+      } else if (data.type === 'connected') {
+        setStatus('Login complete — syncing chats...', 'success');
+        hideQr();
+        progressWrap.classList.add('active');
+        progressBar.style.width = '10%';
+        progressVal.textContent = '10%';
+      } else if (data.type === 'syncing_history') {
+        updateProgress(data.progress || 0);
+        setStatus('Syncing chat history...', 'info');
+      } else if (data.type === 'history_loaded') {
+        updateProgress(100);
+        setStatus('History loaded — finalizing...', 'success');
+      } else if (data.type === 'ready') {
+        showSuccess();
+      } else if (data.type === 'disconnected') {
+        setStatus(data.reason || 'Disconnected — reconnecting...', 'warn');
+      } else if (data.type === 'logged_out') {
+        setStatus('Logged out — please delete session and rescan', 'error');
+        hideQr();
+        hideProgress();
+      }
+    } catch (e) {}
+  };
+
+  es.onerror = () => {
+    setStatus('Reconnecting to bridge...', 'warn');
+  };
+
+  window.addEventListener('beforeunload', () => {
+    try { es.close(); } catch (e) {}
+  });
+</script>
+
+</body>
+</html>
