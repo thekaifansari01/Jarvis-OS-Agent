@@ -40,7 +40,7 @@ pyperclip==1.11.0
 screen-brightness-control==0.27.2
 pycaw==20251023; sys_platform == 'win32'
 pywin32; sys_platform == 'win32'
-ppygetwindow; sys_platform == 'win32'
+pygetwindow; sys_platform == 'win32'
 
 # ===== WEB & APIs =====
 flask==3.1.0
