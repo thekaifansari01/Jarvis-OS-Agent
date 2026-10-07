@@ -51,6 +51,16 @@ def stop_agent_panel():
 
 def start_stt_popup():
     global _stt_popup_process
+    
+    try:
+        from core.voice import stt
+        if not getattr(stt.engine, 'mic_available', False):
+            logging.info("Mic not available — skipping STT popup.")
+            return
+    except Exception as e:
+        logging.warning(f"Could not verify mic status, skipping STT popup: {e}")
+        return
+
     stop_stt_popup()
     try:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

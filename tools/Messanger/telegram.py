@@ -6,7 +6,7 @@ from telethon import TelegramClient
 
 load_dotenv()
 
-API_ID = int(os.getenv("TELEGRAM_API_ID", 0))
+API_ID = int(os.getenv("TELEGRAM_API_ID") or 0)
 API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

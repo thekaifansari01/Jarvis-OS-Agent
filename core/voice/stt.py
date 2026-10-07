@@ -26,30 +26,39 @@ else:
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
 
+
 class UnifiedVoiceAssistant:
     def __init__(self):
+        self.mic_available = False
+        self.running = True
+        self.command_queue = queue.Queue()
+        self.vosk_recognizer = None
+        self.audio = None
+        self.stream = None
+        self.dg_connection = None
+        self.is_awake = False
+        self.connection_established = False
+        self.RATE = 16000
+        self.CHUNK = 480
+
         try:
-            self.RATE = 16000
-            self.CHUNK = 480
-            
             self.vad = webrtcvad.Vad(2)
-            
             self.MAX_SILENCE_TIMEOUT = 1.0
             self.MAX_WAIT_TIMEOUT = 4.0
-            
+
             self.WAKE_WORDS = ["jarvis", "hey jarvis"]
             self.DECOY_WORDS = [
-                "hello", "computer", "hi", "okay", "yes", "no", "stop", 
-                "kya", "hai", "theek", "test", "mike", "testing", "one", 
+                "hello", "computer", "hi", "okay", "yes", "no", "stop",
+                "kya", "hai", "theek", "test", "mike", "testing", "one",
                 "two", "three", "alpha", "beta", "noise", "background", "something"
             ]
 
             model_path = "Data/model/vosk-model-small"
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Vosk model not found at '{model_path}'.")
-            
+
             self.vosk_model = VoskModel(model_path)
-            
+
             grammar = json.dumps(self.WAKE_WORDS + self.DECOY_WORDS + ["[unk]"])
             self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
 
@@ -62,24 +71,24 @@ class UnifiedVoiceAssistant:
                 frames_per_buffer=self.CHUNK
             )
 
-            self.is_awake = False
-            self.running = True
-            self.command_queue = queue.Queue()
-
-            self.dg_connection = None
             self.current_transcript = ""
             self.live_text = ""
             self.command_done = threading.Event()
-            self.connection_established = False
-            
             self.last_speech_time = 0
             self.wake_time = 0
             self.has_spoken = False
+
+            self.mic_available = True
+            logger.info("Microphone initialized successfully. Voice input ENABLED.")
+
         except Exception as e:
-            logger.error(f"Initialization Error: {e}", exc_info=True)
-            raise
+            self.mic_available = False
+            logger.warning(f"Microphone not available — voice input DISABLED. Reason: {e}")
 
     def start(self):
+        if not self.mic_available:
+            logger.warning("Mic not available. Skipping audio loop start.")
+            return
         self.listen_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.listen_thread.start()
 
@@ -91,6 +100,8 @@ class UnifiedVoiceAssistant:
             logger.error(f"Wake sound error: {e}")
 
     def _flush_audio_buffer(self):
+        if not self.stream:
+            return
         try:
             available = self.stream.get_read_available()
             if available > 0:
@@ -149,7 +160,7 @@ class UnifiedVoiceAssistant:
             if not self.dg_connection.start(options):
                 logger.error("Failed to start Deepgram websocket connection.")
                 return False
-            
+
             return True
 
         except Exception as e:
@@ -166,6 +177,9 @@ class UnifiedVoiceAssistant:
         return False
 
     def _audio_loop(self):
+        if not self.mic_available:
+            return
+
         while self.running:
             try:
                 pcm_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
@@ -190,14 +204,14 @@ class UnifiedVoiceAssistant:
                             from core.voice import tts
                             tts.stop_speaking()
                         except Exception:
-                            pass 
-                            
+                            pass
+
                         interrupt.set_interrupt()
                         self._flush_audio_buffer()
                         self.vosk_recognizer.Reset()
                         self.play_wake_sound()
                         update_stt_status("connecting", "Listening...")
-                        
+
                         if not self.connection_established or self.dg_connection is None:
                             if self._setup_deepgram():
                                 self.connection_established = True
@@ -211,7 +225,7 @@ class UnifiedVoiceAssistant:
                         self.has_spoken = False
                         self.is_awake = True
                         update_stt_status("listening", "Listening...")
-                        
+
                 else:
                     is_speech = self.vad.is_speech(pcm_data, self.RATE)
                     current_time = time.time()
@@ -246,15 +260,17 @@ class UnifiedVoiceAssistant:
         self.connection_established = False
         self.is_awake = False
         self._flush_audio_buffer()
-        self.vosk_recognizer.Reset()
+        if self.vosk_recognizer:
+            self.vosk_recognizer.Reset()
         update_stt_status("idle", "")
 
     def process_final_command(self):
         full_command = self.live_text.lower().strip()
-        ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you", "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
+        ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you",
+                        "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
 
         self.is_awake = False
-        
+
         try:
             if self.dg_connection:
                 self.dg_connection.finish()
@@ -265,7 +281,8 @@ class UnifiedVoiceAssistant:
             self.connection_established = False
 
         self._flush_audio_buffer()
-        self.vosk_recognizer.Reset()
+        if self.vosk_recognizer:
+            self.vosk_recognizer.Reset()
         interrupt.clear_interrupt()
 
         if full_command and full_command not in ignore_words and len(full_command) > 3:
@@ -274,7 +291,7 @@ class UnifiedVoiceAssistant:
         else:
             update_stt_status("idle", "")
             self.command_queue.put("")
-        
+
         time.sleep(0.2)
 
     def get_command(self, is_retry=False):
@@ -299,19 +316,51 @@ class UnifiedVoiceAssistant:
         except Exception:
             pass
         try:
-            self.stream.stop_stream()
-            self.stream.close()
-            self.audio.terminate()
+            if self.stream:
+                self.stream.stop_stream()
+                self.stream.close()
+        except Exception:
+            pass
+        try:
+            if self.audio:
+                self.audio.terminate()
         except Exception:
             pass
 
-engine = UnifiedVoiceAssistant()
+
+try:
+    engine = UnifiedVoiceAssistant()
+except Exception as e:
+    logger.critical(f"Failed to initialize voice engine: {e}. Falling back to dummy engine.")
+
+    class _DummyEngine:
+        mic_available = False
+
+        def __init__(self):
+            self.mic_available = False
+            self.running = False
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def get_command(self, is_retry=False):
+            return ""
+
+    engine = _DummyEngine()
+
 
 def start_background_wake_word_listener():
     engine.start()
 
+
 def listen():
+    if not getattr(engine, 'mic_available', False):
+        return ""
     return engine.get_command()
+
 
 if __name__ == "__main__":
     try:

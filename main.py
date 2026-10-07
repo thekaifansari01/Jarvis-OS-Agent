@@ -25,6 +25,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(write_through=True)
 
+
 def disable_quickedit():
     if platform.system() == "Windows":
         try:
@@ -37,6 +38,7 @@ def disable_quickedit():
             kernel32.SetConsoleMode(handle, mode)
         except Exception:
             pass
+
 
 disable_quickedit()
 
@@ -60,6 +62,7 @@ SW_HIDE = 0
 SW_SHOW = 5
 SW_RESTORE = 9
 
+
 def restore_console():
     if platform.system() == "Windows":
         try:
@@ -68,6 +71,7 @@ def restore_console():
                 ctypes.windll.user32.ShowWindow(hwnd, SW_SHOW)
         except Exception:
             pass
+
 
 def signal_handler(signum, frame):
     global _is_running
@@ -96,6 +100,7 @@ def signal_handler(signum, frame):
     finally:
         os._exit(0)
 
+
 def set_terminal_title(title="Jarvis"):
     try:
         if platform.system() == "Windows":
@@ -105,6 +110,7 @@ def set_terminal_title(title="Jarvis"):
             sys.stdout.flush()
     except Exception:
         pass
+
 
 def start_tray_icon():
     try:
@@ -146,6 +152,7 @@ def start_tray_icon():
     threading.Thread(target=monitor, daemon=True).start()
     icon.run()
 
+
 def run_jarvis():
     global _is_running
 
@@ -182,6 +189,12 @@ def run_jarvis():
     is_dev_mode = "test_jarvis" in args
     no_wake = "no_wake" in args
 
+    mic_available = getattr(stt.engine, 'mic_available', False)
+    if mic_available:
+        logger.info("🎤 Microphone detected — voice input ENABLED.")
+    else:
+        logger.warning("🎤 Microphone NOT detected — voice input DISABLED. Jarvis running in text-only mode.")
+
     try:
         from core.ui.agent_status import reset_agent_status
         reset_agent_status()
@@ -204,11 +217,11 @@ def run_jarvis():
     threading.Thread(target=start_gui_warmup_background, daemon=True).start()
 
     try:
-        logger.info("ūüß† Preloading Lifetime Memory Engine & Semantic Model safely...")
+        logger.info("⏳ Preloading Lifetime Memory Engine & Semantic Model safely...")
         from core.brain.Memory.LifetimeMemory import ltm_engine
-        logger.info("‚úÖ Lifetime Memory Engine & Semantic Model loaded successfully!")
+        logger.info("✅ Lifetime Memory Engine & Semantic Model loaded successfully!")
     except Exception as e:
-        logger.error(f"‚ĚĆ Failed to preload LTM Engine: {e}")
+        logger.error(f"❌ Failed to preload LTM Engine: {e}")
 
     def start_rag_background():
         try:
@@ -222,6 +235,7 @@ def run_jarvis():
         memory = ContextMemory()
     except Exception as e:
         logger.warning(f"Failed to initialize ContextMemory, using fallback: {e}")
+
         class FakeMemory:
             def get_relevant_context(self, text): return ""
             def add_message(self, role, text, metadata=None): pass
@@ -229,6 +243,7 @@ def run_jarvis():
             ephemeral = {}
             def get_and_clear_feedback(self): return None
             def add_live_feedback(self, cmd): pass
+
         memory = FakeMemory()
 
     def start_proactive_background():
@@ -239,11 +254,13 @@ def run_jarvis():
 
     threading.Thread(target=start_proactive_background, daemon=True).start()
 
-    if not no_wake:
+    if not no_wake and mic_available:
         try:
             stt.start_background_wake_word_listener()
         except Exception as e:
             logger.error(f"Failed to start wake word listener: {e}")
+    elif not mic_available:
+        logger.warning("Skipping wake word listener — microphone not available.")
 
     try:
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -252,7 +269,9 @@ def run_jarvis():
             from core.main.BackgroundServices import start_telegram_remote_service
             set_telegram_remote_context(executor, memory)
             start_telegram_remote_service()
-            if no_wake:
+
+            if no_wake or not mic_available:
+                logger.info("Jarvis running in background/text-only mode. Waiting for shutdown signal...")
                 while _is_running:
                     time.sleep(1)
             else:
@@ -301,9 +320,12 @@ def run_jarvis():
             logger.error(f"Error saving LTM graph during exit: {e}")
         try:
             tts.cleanup_temp()
+        except Exception as e:
+            logger.error(f"Error cleaning up TTS: {e}")
+        try:
             pygame.quit()
         except Exception as e:
-            logger.error(f"Error cleaning up TTS/Pygame: {e}")
+            logger.error(f"Error cleaning up Pygame: {e}")
         remove_lock_file()
         stop_watchdog()
         stop_all_services()
@@ -313,6 +335,7 @@ def run_jarvis():
             logger.error(f"Error cleaning up process manager: {e}")
         logger.info("Shutdown sequence complete.")
         os._exit(0)
+
 
 def main() -> None:
     global _is_running
@@ -341,7 +364,7 @@ def main() -> None:
             tray_ready = True
         except ImportError:
             pass
-        
+
         if tray_ready:
             threading.Thread(target=start_tray_icon, daemon=True).start()
             run_jarvis()
@@ -349,6 +372,7 @@ def main() -> None:
             run_jarvis()
     else:
         run_jarvis()
+
 
 if __name__ == "__main__":
     main()

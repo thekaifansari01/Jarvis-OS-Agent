@@ -8,7 +8,6 @@ import queue
 import requests
 import base64
 from io import BytesIO
-from pathlib import Path
 from dotenv import load_dotenv
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -18,10 +17,13 @@ load_dotenv()
 
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
+_audio_output_available = False
 try:
     pygame.mixer.init(frequency=24000, buffer=2048)
+    _audio_output_available = True
 except Exception as e:
     logging.critical(f"CRITICAL: Failed to initialize Pygame Mixer: {e}")
+    logging.warning("Audio output device not available — TTS will run in text-only mode.")
 
 TTS_API_KEY = os.getenv("TTS_API_KEY")
 TTS_ENDPOINT = os.getenv("TTS_ENDPOINT")
@@ -40,6 +42,7 @@ _tts_limit_reached = False
 _audio_queue = queue.Queue()
 _start_time = 0
 
+
 def clean_text_for_speech(text: str) -> str:
     if not text:
         return ""
@@ -51,6 +54,7 @@ def clean_text_for_speech(text: str) -> str:
     except Exception as e:
         logging.error(f"Error during text cleaning: {e}")
         return text.strip()
+
 
 def smart_split_into_sentences(text: str) -> list:
     try:
@@ -75,10 +79,15 @@ def smart_split_into_sentences(text: str) -> list:
         logging.error(f"Error splitting sentences: {e}")
         return [text[:180]]
 
+
 def stop_speaking():
     global _stop_playback, is_speaking, _audio_queue
     _stop_playback = True
     is_speaking = False
+
+    if not _audio_output_available:
+        return
+
     try:
         pygame.mixer.stop()
     except Exception as exc:
@@ -90,6 +99,7 @@ def stop_speaking():
             _audio_queue.task_done()
         except queue.Empty:
             break
+
 
 async def _fetch_edge_tts_fallback(sentence: str) -> bytes:
     try:
@@ -110,6 +120,7 @@ async def _fetch_edge_tts_fallback(sentence: str) -> bytes:
     except Exception as e:
         logging.error(f"Edge TTS fallback generation failed: {e}")
         return b""
+
 
 def _producer_thread(sentences: list):
     global _stop_playback, _audio_queue, _tts_limit_reached
@@ -159,6 +170,7 @@ def _producer_thread(sentences: list):
     except queue.Full:
         pass
 
+
 def _consumer_thread():
     global _stop_playback, _audio_queue, _start_time
     first_chunk = True
@@ -204,13 +216,13 @@ def _consumer_thread():
                         break
 
                     offset += 8 + chunk_size
-        except Exception as e:
+        except Exception:
             pass
 
         try:
             audio_file = BytesIO(chunk_array)
             sound = pygame.mixer.Sound(audio_file)
-        except Exception as primary_e:
+        except Exception:
             try:
                 sound = pygame.mixer.Sound(BytesIO(chunk))
             except Exception as fallback_e:
@@ -232,10 +244,17 @@ def _consumer_thread():
 
         _audio_queue.task_done()
 
+
 def speak(text: str):
     global _stop_playback, is_speaking, _audio_queue, _start_time
 
     if not text:
+        return
+
+    if not _audio_output_available:
+        cleaned = clean_text_for_speech(text)
+        if cleaned:
+            print(f"🤖 JARVIS (text-only): {cleaned}")
         return
 
     cleaned = clean_text_for_speech(text)
@@ -268,8 +287,10 @@ def speak(text: str):
 
     is_speaking = False
 
+
 def cleanup_temp():
     stop_speaking()
+
 
 if __name__ == "__main__":
     print("System Online. Testing Unified Audio Engine...")
