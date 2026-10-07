@@ -1,8 +1,9 @@
 import sys
 import os
 from PyQt5.QtWidgets import (QApplication, QDialog, QFrame, QTextEdit, QLabel, 
-                             QVBoxLayout, QHBoxLayout, QGraphicsOpacityEffect, QSizePolicy)
-from PyQt5.QtCore import (Qt, QPropertyAnimation, QParallelAnimationGroup, 
+                             QVBoxLayout, QHBoxLayout, QGraphicsOpacityEffect, 
+                             QGraphicsDropShadowEffect, QSizePolicy)
+from PyQt5.QtCore import (Qt, QPropertyAnimation, QParallelAnimationGroup, QSequentialAnimationGroup,
                           QEasingCurve, QPoint, QRect, QRectF, pyqtProperty, QTimer, QAbstractAnimation)
 from PyQt5.QtGui import (QColor, QPainter, QLinearGradient, QPainterPath, 
                          QPen, QFontDatabase, QFont, QPixmap)
@@ -10,8 +11,8 @@ from PyQt5.QtGui import (QColor, QPainter, QLinearGradient, QPainterPath,
 class GlassContainer(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._bgColor = QColor(14, 14, 18, int(255 * 0.78))
-        self._borderColor = QColor(255, 255, 255, int(255 * 0.15))
+        self._bgColor = QColor(15, 15, 20, 230)
+        self._borderColor = QColor(255, 255, 255, 35)
 
     @pyqtProperty(QColor)
     def bgColor(self):
@@ -38,7 +39,7 @@ class GlassContainer(QFrame):
         bgGradient = QLinearGradient(0, 0, self.width(), self.height())
         r, g, b, a = self._bgColor.red(), self._bgColor.green(), self._bgColor.blue(), self._bgColor.alpha()
 
-        bgGradient.setColorAt(0.0, QColor(min(255, r + 20), min(255, g + 20), min(255, b + 25), a))
+        bgGradient.setColorAt(0.0, QColor(min(255, r + 15), min(255, g + 15), min(255, b + 25), a))
         bgGradient.setColorAt(0.5, self._bgColor)
         bgGradient.setColorAt(1.0, QColor(max(0, r - 8), max(0, g - 8), max(0, b - 10), min(255, a + 15)))
 
@@ -62,6 +63,10 @@ class SmartInput(QTextEdit):
         self.m_parentPopup = parentPopup
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setAcceptRichText(False)
+
+    def insertFromMimeData(self, source):
+        if source.hasText():
+            self.insertPlainText(source.text())
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -96,49 +101,61 @@ class InputPopup(QDialog):
         QTimer.singleShot(50, self.forceFocus)
 
     def initUI(self, base_dir):
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setFixedWidth(700)
+        self.setFixedWidth(720)
 
         outerLayout = QVBoxLayout(self)
-        outerLayout.setContentsMargins(25, 25, 25, 30)
+        outerLayout.setContentsMargins(30, 30, 30, 35)
 
         self.container = GlassContainer(self)
         
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setBlurRadius(50)
+        self.shadow.setColor(QColor(0, 0, 0, 160))
+        self.shadow.setOffset(0, 10)
+        self.container.setGraphicsEffect(self.shadow)
+        
         containerLayout = QHBoxLayout(self.container)
-        containerLayout.setContentsMargins(26, 18, 24, 18)
-        containerLayout.setSpacing(18)
+        containerLayout.setContentsMargins(28, 20, 26, 20)
+        containerLayout.setSpacing(20)
         containerLayout.setAlignment(Qt.AlignTop)
 
         self.iconLabel = QLabel(self.container)
         icon_path = os.path.join(base_dir, "Data", "icons", "jarvis_icon.png")
         pixmap = QPixmap(icon_path)
         if not pixmap.isNull():
-            self.iconLabel.setPixmap(pixmap.scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.iconLabel.setPixmap(pixmap.scaled(28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
             self.iconLabel.setText("⚡")
-            self.iconLabel.setFont(QFont("Segoe UI Emoji", 16))
-            self.iconLabel.setStyleSheet("color: rgba(255,255,255,0.75);")
+            self.iconLabel.setFont(QFont("Segoe UI Emoji", 18))
+            self.iconLabel.setStyleSheet("color: rgba(255,255,255,0.85);")
         self.iconLabel.setStyleSheet("background: transparent; margin-top: 0px;")
         containerLayout.addWidget(self.iconLabel, 0, Qt.AlignTop)
 
         self.inputField = SmartInput(self, self.container)
+        self.inputField.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.inputField.setPlaceholderText("What do you need?")
         self.inputField.setStyleSheet(f"""
             QTextEdit {{ background: transparent; color: rgba(255, 255, 255, 0.98); border: none; 
-            font-family: "{self.customFontFamily}"; font-size: 17px; letter-spacing: 0.4px; 
-            selection-background-color: rgba(0, 240, 255, 0.35); selection-color: #FFFFFF; line-height: 1.6; }}
-            QTextEdit::placeholder {{ color: rgba(255, 255, 255, 0.22); font-weight: 300; }}
+            font-family: "{self.customFontFamily}"; font-size: 18px; letter-spacing: 0.5px; 
+            selection-background-color: rgba(0, 240, 255, 0.4); selection-color: #FFFFFF; line-height: 1.6; }}
+            QTextEdit::placeholder {{ color: rgba(255, 255, 255, 0.25); font-weight: 300; }}
+            QScrollBar:vertical {{ border: none; background: transparent; width: 6px; margin: 0px; }}
+            QScrollBar::handle:vertical {{ background: rgba(255, 255, 255, 0.2); border-radius: 3px; min-height: 20px; }}
+            QScrollBar::handle:vertical:hover {{ background: rgba(0, 240, 255, 0.6); }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ border: none; background: none; height: 0px; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
         """)
         containerLayout.addWidget(self.inputField)
 
         self.enterIndicator = QLabel("↵", self.container)
-        self.enterIndicator.setFont(QFont("Segoe UI", 20, QFont.Bold))
+        self.enterIndicator.setFont(QFont("Segoe UI", 22, QFont.Bold))
         self.enterIndicator.setStyleSheet("color: #00F0FF; background: transparent;")
         self.enterIndicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self.indicatorOpacity = QGraphicsOpacityEffect(self.enterIndicator)
-        self.indicatorOpacity.setOpacity(0.04)
+        self.indicatorOpacity.setOpacity(0.0)
         self.enterIndicator.setGraphicsEffect(self.indicatorOpacity)
         containerLayout.addWidget(self.enterIndicator, 0, Qt.AlignTop)
 
@@ -154,16 +171,15 @@ class InputPopup(QDialog):
         self.adjustHeight(False)
 
         self.entryAnim = QParallelAnimationGroup(self)
-
         self.fadeIn = QPropertyAnimation(self, b"windowOpacity")
-        self.fadeIn.setDuration(320)
+        self.fadeIn.setDuration(350)
         self.fadeIn.setStartValue(0.0)
         self.fadeIn.setEndValue(1.0)
-        self.fadeIn.setEasingCurve(QEasingCurve.OutQuad)
+        self.fadeIn.setEasingCurve(QEasingCurve.OutCubic)
 
         self.slideUp = QPropertyAnimation(self, b"pos")
-        self.slideUp.setDuration(600)
-        self.slideUp.setStartValue(QPoint(self.targetX, self.y() + 40))
+        self.slideUp.setDuration(650)
+        self.slideUp.setStartValue(QPoint(self.targetX, self.y() + 50))
         self.slideUp.setEndValue(QPoint(self.targetX, self.y()))
         self.slideUp.setEasingCurve(QEasingCurve.OutBack)
 
@@ -176,21 +192,37 @@ class InputPopup(QDialog):
         self.borderAnim = QPropertyAnimation(self.container, b"borderColor", self)
         self.indAnim = QPropertyAnimation(self.indicatorOpacity, b"opacity", self)
 
-        self.bgAnim.setDuration(280)
+        self.bgAnim.setDuration(400)
         self.bgAnim.setEasingCurve(QEasingCurve.InOutSine)
-        self.borderAnim.setDuration(280)
+        self.borderAnim.setDuration(400)
         self.borderAnim.setEasingCurve(QEasingCurve.InOutSine)
-        self.indAnim.setDuration(280)
+        self.indAnim.setDuration(400)
         self.indAnim.setEasingCurve(QEasingCurve.InOutSine)
 
         self.containerAnim.addAnimation(self.bgAnim)
         self.containerAnim.addAnimation(self.borderAnim)
         self.containerAnim.addAnimation(self.indAnim)
 
+        self.typingPulseAnim = QSequentialAnimationGroup(self)
+        anim1 = QPropertyAnimation(self.container, b"borderColor")
+        anim1.setDuration(1200)
+        anim1.setStartValue(QColor(0, 240, 255, 120))
+        anim1.setEndValue(QColor(0, 240, 255, 255))
+        anim1.setEasingCurve(QEasingCurve.InOutSine)
+        
+        anim2 = QPropertyAnimation(self.container, b"borderColor")
+        anim2.setDuration(1200)
+        anim2.setStartValue(QColor(0, 240, 255, 255))
+        anim2.setEndValue(QColor(0, 240, 255, 120))
+        anim2.setEasingCurve(QEasingCurve.InOutSine)
+        
+        self.typingPulseAnim.addAnimation(anim1)
+        self.typingPulseAnim.addAnimation(anim2)
+        self.typingPulseAnim.setLoopCount(-1)
+
     def forceFocus(self):
         self.activateWindow()
         self.raise_()
-        self.setFocus()
         self.inputField.setFocus()
 
     def onTextChanged(self):
@@ -201,27 +233,33 @@ class InputPopup(QDialog):
             self.isTypingMode = hasText
 
             self.containerAnim.stop()
+            if self.typingPulseAnim.state() == QAbstractAnimation.Running:
+                self.typingPulseAnim.stop()
 
             if self.isTypingMode:
-                self.bgAnim.setEndValue(QColor(8, 8, 10, int(255 * 0.96)))
-                self.borderAnim.setEndValue(QColor(0, 240, 255, int(255 * 0.55)))
+                self.bgAnim.setEndValue(QColor(8, 8, 12, 240))
+                self.borderAnim.setEndValue(QColor(0, 240, 255, 120)) 
                 self.indAnim.setEndValue(0.95)
+                self.containerAnim.start()
+                self.typingPulseAnim.start()
             else:
-                self.bgAnim.setEndValue(QColor(14, 14, 18, int(255 * 0.78)))
-                self.borderAnim.setEndValue(QColor(255, 255, 255, int(255 * 0.15)))
-                self.indAnim.setEndValue(0.04)
-
-            self.containerAnim.start()
+                self.bgAnim.setEndValue(QColor(15, 15, 20, 230))
+                self.borderAnim.setEndValue(QColor(255, 255, 255, 35))
+                self.indAnim.setEndValue(0.0)
+                self.containerAnim.start()
 
         self.adjustHeight(True)
 
     def adjustHeight(self, animate):
         docHeight = int(self.inputField.document().size().height())
-        newTextHeight = max(28, min(docHeight, 160))
+        newTextHeight = max(30, min(docHeight, 180))
 
-        self.inputField.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded if docHeight > 160 else Qt.ScrollBarAlwaysOff)
+        if docHeight > 180:
+            self.inputField.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        else:
+            self.inputField.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        newWindowHeight = newTextHeight + 76
+        newWindowHeight = newTextHeight + 85
 
         if self.height() != newWindowHeight:
             newY = self.baseBottomY - newWindowHeight
@@ -235,19 +273,19 @@ class InputPopup(QDialog):
                 self.resizeAnimGroup = QParallelAnimationGroup(self)
 
                 winAnim = QPropertyAnimation(self, b"geometry", self)
-                winAnim.setDuration(220)
+                winAnim.setDuration(400)
                 winAnim.setStartValue(self.geometry())
                 winAnim.setEndValue(QRect(self.targetX, newY, self.width(), newWindowHeight))
                 winAnim.setEasingCurve(QEasingCurve.OutQuart)
 
                 txtMinAnim = QPropertyAnimation(self.inputField, b"minimumHeight", self)
-                txtMinAnim.setDuration(220)
+                txtMinAnim.setDuration(400)
                 txtMinAnim.setStartValue(self.inputField.height())
                 txtMinAnim.setEndValue(newTextHeight)
                 txtMinAnim.setEasingCurve(QEasingCurve.OutQuart)
 
                 txtMaxAnim = QPropertyAnimation(self.inputField, b"maximumHeight", self)
-                txtMaxAnim.setDuration(220)
+                txtMaxAnim.setDuration(400)
                 txtMaxAnim.setStartValue(self.inputField.height())
                 txtMaxAnim.setEndValue(newTextHeight)
                 txtMaxAnim.setEasingCurve(QEasingCurve.OutQuart)
@@ -277,16 +315,16 @@ class InputPopup(QDialog):
         self.outAnimGroup = QParallelAnimationGroup(self)
 
         fadeOut = QPropertyAnimation(self, b"windowOpacity")
-        fadeOut.setDuration(220)
+        fadeOut.setDuration(250)
         fadeOut.setStartValue(self.windowOpacity())
         fadeOut.setEndValue(0.0)
-        fadeOut.setEasingCurve(QEasingCurve.OutQuad)
+        fadeOut.setEasingCurve(QEasingCurve.InCubic)
 
         slideDown = QPropertyAnimation(self, b"pos")
-        slideDown.setDuration(300)
+        slideDown.setDuration(400)
         slideDown.setStartValue(self.pos())
-        slideDown.setEndValue(QPoint(self.x(), self.y() + 25))
-        slideDown.setEasingCurve(QEasingCurve.InBack)
+        slideDown.setEndValue(QPoint(self.x(), self.y() + 30))
+        slideDown.setEasingCurve(QEasingCurve.InQuart)
 
         self.outAnimGroup.addAnimation(fadeOut)
         self.outAnimGroup.addAnimation(slideDown)
