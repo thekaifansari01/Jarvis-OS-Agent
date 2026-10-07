@@ -1,7 +1,11 @@
 import os
+import sys
 import time
+import shutil
+import zipfile
 import threading
 import queue
+import urllib.request
 import pyaudio
 import json
 import webrtcvad
@@ -25,6 +29,77 @@ else:
 
 deepgram = DeepgramClient(DEEPGRAM_API_KEY) if DEEPGRAM_API_KEY else None
 update_stt_status("idle", "")
+
+VOSK_MODEL_NAME = "vosk-model-small-en-in-0.4"
+VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
+VOSK_MODEL_PATH = "Data/model/vosk-model-small"
+VOSK_DOWNLOAD_DIR = "Data/model/_download"
+
+
+def download_vosk_model():
+    os.makedirs(VOSK_DOWNLOAD_DIR, exist_ok=True)
+    zip_path = os.path.join(VOSK_DOWNLOAD_DIR, f"{VOSK_MODEL_NAME}.zip")
+
+    logger.info(f"Downloading Vosk model from {VOSK_MODEL_URL} ...")
+
+    last_percent = [-1]
+
+    def _reporthook(block_num, block_size, total_size):
+        if total_size > 0:
+            downloaded = block_num * block_size
+            percent = min(100, downloaded * 100 // total_size)
+            if percent != last_percent[0]:
+                last_percent[0] = percent
+                bar_length = 30
+                filled = int(bar_length * percent // 100)
+                bar = "█" * filled + "░" * (bar_length - filled)
+                sys.stdout.write(f"\r  Vosk model download: [{bar}] {percent}%")
+                sys.stdout.flush()
+
+    try:
+        urllib.request.urlretrieve(VOSK_MODEL_URL, zip_path, reporthook=_reporthook)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        logger.info("Vosk model download complete. Extracting...")
+
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(VOSK_DOWNLOAD_DIR)
+
+        extracted_path = os.path.join(VOSK_DOWNLOAD_DIR, VOSK_MODEL_NAME)
+
+        if not os.path.exists(extracted_path):
+            for item in os.listdir(VOSK_DOWNLOAD_DIR):
+                full = os.path.join(VOSK_DOWNLOAD_DIR, item)
+                if os.path.isdir(full) and item.startswith("vosk-model"):
+                    extracted_path = full
+                    break
+
+        if not os.path.exists(extracted_path):
+            raise RuntimeError("Extracted Vosk model folder not found.")
+
+        if os.path.exists(VOSK_MODEL_PATH):
+            shutil.rmtree(VOSK_MODEL_PATH)
+
+        os.makedirs(os.path.dirname(VOSK_MODEL_PATH), exist_ok=True)
+        shutil.move(extracted_path, VOSK_MODEL_PATH)
+        logger.info(f"Vosk model ready at: {VOSK_MODEL_PATH}")
+
+    except Exception as e:
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        logger.error(f"Failed to download Vosk model: {e}", exc_info=True)
+        raise
+    finally:
+        if os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+        if os.path.exists(VOSK_DOWNLOAD_DIR):
+            try:
+                shutil.rmtree(VOSK_DOWNLOAD_DIR)
+            except Exception:
+                pass
 
 
 class UnifiedVoiceAssistant:
@@ -53,9 +128,10 @@ class UnifiedVoiceAssistant:
                 "two", "three", "alpha", "beta", "noise", "background", "something"
             ]
 
-            model_path = "Data/model/vosk-model-small"
+            model_path = VOSK_MODEL_PATH
             if not os.path.exists(model_path):
-                raise FileNotFoundError(f"Vosk model not found at '{model_path}'.")
+                logger.warning(f"Vosk model not found at '{model_path}'. Auto-downloading...")
+                download_vosk_model()
 
             self.vosk_model = VoskModel(model_path)
 
