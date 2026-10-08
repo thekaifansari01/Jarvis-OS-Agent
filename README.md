@@ -26,23 +26,231 @@
 
 ---
 
-## 🎬 Demo
+## 🎬 Demo & Proof of Work
 
-> **📹 Demo video coming soon.**  
-> *In the meantime, here is what a real 5-step multi-tool command looks like end-to-end:*
+> **📹 Full HD demo video coming soon.**  
+> In the meantime, here is **raw, unedited proof** from a real 5-step multi-tool mission —  
+> run end-to-end on an **Intel i5-3210M / 4 GB RAM (2012 laptop)** with zero failures.
+
+---
+
+### 📸 Live UI Screenshots
+
+Real screenshots from the running system — **not mockups, not renders**.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/agent_panel.png" alt="ZMQ Agent Panel streaming live thoughts" width="100%"/>
+      <br/>
+      <sub><b>🧠 Agent Panel</b> — Real-time thought stream via ZMQ</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/typing_popup.png" alt="Markdown typing popup with async image preview" width="100%"/>
+      <br/>
+      <sub><b>📝 Typing Popup</b> — Markdown output with async rendering</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/stt_popup.png" alt="STT status popup for voice input" width="100%"/>
+      <br/>
+      <sub><b>🗣️ STT Status Popup</b> — Live voice input feedback</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/input_popup.png" alt="Text input popup triggered by Ctrl+Shift+J" width="100%"/>
+      <br/>
+      <sub><b>⌨️ Input Popup</b> — Summoned with <code>Ctrl+Shift+J</code></sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+### 🎯 The Mission
 
 **Input (voice):**
 > *"Create a new project called 'AI-powered habit tracker'. Set up a complete project structure on my Desktop, write a README.md, and generate a basic Flask app skeleton. Then send an email to Rahul that I am starting a new project, and schedule a meeting for tomorrow at 5 PM to discuss the project."*
 
-**What Jarvis did autonomously (in one continuous agent loop):**
-1. Recalled "Rahul" from the long-term memory graph
-2. Created the project folder, README.md, and Flask skeleton on the Desktop
-3. **Adapted mid-execution when the user injected a live correction** (`"Oh sorry, I need to email Rahul, not WhatsApp him — his email is kaif13018@gmail.com"`) — no restart, no hallucination, no apology loop
-4. Sent a real Gmail to the corrected address
-5. Created a real Google Calendar event for tomorrow at 5 PM
-6. Voiced a summary — **1.99s reaction time** from text to speech
+---
 
-**Total agent steps:** 6 &nbsp;·&nbsp; **Total time:** ~83 seconds &nbsp;·&nbsp; **Failures:** 0
+### 📊 What Jarvis Did Autonomously
+
+| Step | Time | Action | Result |
+|:---:|:---:|:---|:---|
+| **1** | `21:18:03` | 🧠 LTM recall for `"Rahul"` | Memory graph query executed |
+| **2** | `21:18:42` | 📁 Created project folder + files | `Desktop\ai_habit_tracker` |
+| **3** | `21:18:44` | 🔴 **Live user correction absorbed mid-loop** | Plan revised — WhatsApp → Gmail |
+| **4** | `21:19:09` | 📧 Sent Gmail to `kaif13018@gmail.com` | ✅ `Email sent successfully` |
+| **5** | `21:19:15` | 📅 Created Calendar event | ✅ Event ID returned |
+| **6** | `21:19:21` | 🗣️ Voiced final summary | **1.99s reaction time** |
+
+> **Total agent steps:** 6 &nbsp;·&nbsp; **Total time:** ~83 seconds &nbsp;·&nbsp; **Failures:** 0
+
+---
+
+### 🧾 Full Console Log (Unedited, Raw)
+
+<details>
+<summary><b>▶️ Click to expand the complete 6-step agentic loop log</b></summary>
+
+<br/>
+
+```log
+[21:17:08] INFO     Deepgram API Key found.
+[21:17:09] INFO     Microphone initialized successfully. Voice input ENABLED.
+[21:17:23] INFO     ⏳ Loading Semantic Embedding Model (BAAI/bge-small-en-v1.5) for LTM...
+           INFO     Use pytorch device_name: cpu
+           INFO     Load pretrained SentenceTransformer: BAAI/bge-small-en-v1.5
+[21:17:29] INFO     Failed to load SSL library: <class 'OSError'> (no library called "ssl" found)
+           INFO     cryptg detected, it will be used for encryption
+[21:17:37] INFO     🎤 Microphone detected — voice input ENABLED.
+           INFO     Agent panel started successfully.
+           INFO     STT popup started successfully.
+           INFO     WhatsApp not logged in. Skipping server start.
+           INFO     Service Watchdog started.
+           INFO     Mobile Bridge server started successfully.
+           INFO     Loading GUI Grounding System (RapidOCR + UIA)...
+           INFO     ⏳ Preloading Lifetime Memory Engine & Semantic Model safely...
+[21:17:38] INFO     ✅ Lifetime Memory Engine & Semantic Model loaded successfully!
+           INFO     Proactive Scout Agent initialized and listening...
+           INFO     🔐 Authenticating Gmail...
+           INFO     Started Proactive Listener: Email
+[21:17:43] INFO     RapidOCR initialized.
+           INFO     Skipping WhatsApp listener (not logged in)
+           INFO     Jarvis Universal Email Listener connected to Proactive Queue...
+           INFO     Skipping Telegram listener (not logged in)
+           INFO     Jarvis Universal Reminder Listener connected to Proactive Queue...
+           INFO     Started Proactive Listener: Calendar Reminder
+           INFO     🔐 Authenticating Google Calendar...
+           INFO     file_cache is only supported with oauth2client<4.0.0
+[21:17:45] INFO     RapidOCR warmup complete.
+[21:17:46] INFO     Imported existing <module 'comtypes.gen' from
+                    'F:\\jarvis\\.venv\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+           INFO     Using writeable comtypes cache directory: 'F:\jarvis\.venv\Lib\site-packages\comtypes\gen'
+           INFO     UIA warmup complete.
+           INFO     GUI Grounding System ready.
+           INFO     ✅ Hotkey Ctrl+Shift+J registered for text input.
+[21:17:49] INFO     RAG Engine initialized successfully.
+[21:18:01] INFO     Semantic Router [810.1ms] | Decision -> AGENTIC
+           INFO     Smart Router: AGENTIC (Deep Tasks, Memory, Comms & Visual Analysis)
+           INFO     Fetching Initial Profile, Mood & Workspace Context...
+           INFO     🤖 AGENTIC LOOP INITIATED (Provider: regolo | Fallback: gemini)...
+           INFO     🔧 Initializing provider: regolo
+           INFO     ✅ RegoloProvider initialized with model: qwen3.5-122b
+           INFO     🔧 Initializing provider: gemini
+           INFO     ✅ GeminiProvider initialized with model: gemma-4-31b-it
+           INFO     ✅ Primary provider loaded: regolo
+           INFO     🔄 Agent Loop Step 1/50 (Provider: RegoloProvider)
+[21:18:03] INFO     🧠 Agent Thought: I need to break down this multi-part mission into sequential steps: create
+                    project structure, write README, create Flask skeleton, send WhatsApp to Rahul, and schedule
+                    meeting. First, I should check memory for Rahul's contact info before proceeding with any actions.
+           INFO     🧠 Agent requesting LTM Recall for: ['Rahul']
+Batches: 100%|███████████████████████████████████████████████████████████████████████████| 1/1 [00:07<00:00,  7.57s/it]
+[21:18:11] INFO     🔄 Agent Loop Step 2/50 (Provider: RegoloProvider)
+[21:18:42] INFO     🧠 Agent Thought: I need to create the project structure first since I don't have Rahul's contact
+                    info yet - I'll proceed with creating the habit tracker project on Desktop and ask for Rahul's
+                    number when needed.
+           INFO     🤖 Agent executing Python Script.
+           INFO     [PYTHON EXECUTION]: Running Python script...
+[21:18:44] INFO     🔄 Agent Loop Step 3/50 (Provider: RegoloProvider)
+           WARNING  🚨 User injected live feedback: oh sorry rahul ko mail krna hai whstapp nhi uski mail hai
+                    "kaif13018@gmail.com"
+           INFO     🔐 Authenticating Google Calendar...
+[21:18:45] INFO     file_cache is only supported with oauth2client<4.0.0
+[21:19:03] INFO     🧠 Agent Thought: The user has provided a live override correcting that Rahul's contact is an email
+                    (kaif13018@gmail.com), not WhatsApp. I need to: 1) Create the README.md with project overview, 2)
+                    Create the Flask app skeleton files, 3) Send email to Rahul about the new project, 4) Schedule a
+                    meeting for tomorrow at 5 PM. The project structure was already created in Step 2, so now I need to
+                    write the actual content to the files. Let me create all the necessary files with proper content in
+                    one Python script for efficiency.
+           INFO     🤖 Agent executing Python Script.
+           INFO     [PYTHON EXECUTION]: Running Python script...
+[21:19:05] INFO     🔄 Agent Loop Step 4/50 (Provider: RegoloProvider)
+[21:19:08] INFO     🧠 Agent Thought: The user's mission has multiple parts:
+                    1. Create project structure - DONE (Step 2)
+                    2. Write README.md - DONE (Step 3)
+                    3. Create Flask app skeleton - DONE (Step 3)
+                    4. Send email to Rahul (kaif13018@gmail.com) about new project - NOT DONE
+                    5. Schedule meeting for tomorrow at 5 PM - NOT DONE
+
+                    I need to:
+                    1. Send email to Rahul at kaif13018@gmail.com
+                    2. Schedule a calendar meeting for tomorrow (October 8, 2026) at 5 PM
+
+                    Let me proceed with these remaining tasks.
+[21:19:09] INFO     🤖 Agent Sending Email to: kaif13018@gmail.com
+           INFO     📧 Sending email to kaif13018@gmail.com | Subject: New Project: AI-Powered Habit Tracker
+           INFO     🔐 Authenticating Gmail...
+[21:19:10] INFO     ✅ Email sent successfully to kaif13018@gmail.com
+           INFO     ✅ Email successfully sent to kaif13018@gmail.com
+[21:19:11] INFO     🔄 Agent Loop Step 5/50 (Provider: RegoloProvider)
+[21:19:15] INFO     🧠 Agent Thought: The user's mission has these components:
+                    1. Create project structure - DONE (Step 2)
+                    2. Write README.md - DONE (Step 3)
+                    3. Create Flask app skeleton - DONE (Step 3)
+                    4. Send email to Rahul (kaif13018@gmail.com) about new project - DONE (Step 4)
+                    5. Schedule meeting for tomorrow at 5 PM - NOT DONE
+
+                    I need to schedule a calendar meeting for tomorrow (October 8, 2026) at 5 PM for project
+                    discussion. Let me do that now.
+           INFO     🤖 Agent executing Calendar Action: create
+           INFO     📅 Creating calendar event: AI Habit Tracker Project Discussion
+           INFO     🔐 Authenticating Google Calendar...
+           INFO     file_cache is only supported with oauth2client<4.0.0
+[21:19:16] INFO     ✅ Event created: AI Habit Tracker Project Discussion (ID: tfngf7gaq57tt4ou3b2mvli10o)
+[21:19:17] INFO     🔄 Agent Loop Step 6/50 (Provider: RegoloProvider)
+[21:19:21] INFO     🧠 Agent Thought: Let me review the mission completion status:
+
+                    1. Create project structure on Desktop - DONE (Step 2)
+                    2. Write README.md with project overview - DONE (Step 3)
+                    3. Create basic Flask app skeleton - DONE (Step 3)
+                    4. Send email to Rahul (kaif13018@gmail.com) about new project - DONE (Step 4)
+                    5. Schedule meeting for tomorrow at 5 PM - DONE (Step 5)
+
+                    All tasks are complete! The user's mission has been fully accomplished:
+                    - Project structure created at C:\Users\Kaif Ansari\Desktop\ai_habit_tracker
+                    - README.md written with project overview
+                    - Flask app skeleton created (app.py, templates, static files)
+                    - Email sent to Rahul at kaif13018@gmail.com
+                    - Calendar meeting scheduled for October 8, 2026 at 5 PM
+
+                    I should now call complete_task with a summary of what was accomplished.
+           INFO     ✅ Agent declared task complete!
+           INFO     🖥️ Streaming Popup UI launched.
+           INFO     🤖 JARVIS:  Bhai, sab kaam ho gaya!
+
+                    **Project Setup Complete:**
+                    - 📁 Project structure ban gaya: `C:\Users\Kaif Ansari\Desktop\ai_habit_tracker`
+                    - 📝 README.md likh diya with full project overview
+                    - 🐍 Flask app skeleton ready (app.py, templates, static CSS/JS)
+
+                    **Communication Done:**
+                    - 📧 Email bhej diya Rahul ko (kaif13018@gmail.com) naye project ke baare mein
+                    - 📅 Meeting schedule kar diya kal (Oct 8) 5 PM ke liye "AI Habit Tracker Project Discussion" naam
+                    se
+
+                    Project chalane ke liye bas `pip install -r requirements.txt` aur `python app.py` run karna hai.
+                    Kuch aur chahiye toh batao!
+⚡ Asli Reaction Time (Text se Aawaz tak): 1.99 seconds!
+[21:19:24] INFO     HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+Batches: 100%|███████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  6.76it/s]
+Batches: 100%|███████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 12.51it/s]
+Batches: 100%|███████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  7.58it/s]
+Batches: 100%|███████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  2.88it/s]
+Batches: 100%|███████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  4.34it/s]
+[21:19:25] INFO     LTM Final DB Entry: [User] --(KNOWS)--> [Rahul]
+[21:19:46] INFO     🔐 Authenticating Google Calendar...
+           INFO     file_cache is only supported with oauth2client<4.0.0
+```
+
+</details>
+
+<br/>
+
+> 💡 **Why logs instead of a video?**  
+> Real timestamps. Real HTTP calls. Real Gmail/Calendar API responses. Real event IDs. Live mid-loop corrections.  
+> Logs are **forge-resistant** — video can be edited, continuous console output cannot. You can verify every step above.
 
 ---
 
@@ -52,13 +260,21 @@
 
 Most AI agents are **fire-and-forget**: once a multi-step plan starts, you either wait for it to finish or kill the whole run. Jarvis is different — it listens while it works.
 
-**Real proof from a live run:**
+**Real proof from the log above (Step 3):**
 
+```log
+[21:18:44] WARNING  🚨 User injected live feedback: oh sorry rahul ko mail krna hai whstapp nhi uski mail hai
+                    "kaif13018@gmail.com"
 ```
-Step 2 → Agent starts creating project files (planned to send WhatsApp to Rahul later)
-Step 3 → 🚨 User injected live feedback: "oh sorry rahul ko mail krna hai whstapp nhi uski mail hai kaif13018@gmail.com"
-Step 4 → Agent silently revises plan, skips WhatsApp path, sends Gmail to the corrected address
-Step 5 → Continues seamlessly to the calendar step — no restart, no lost work
+
+**What happened next (Step 4):**
+
+```log
+[21:19:03] 🧠 Agent Thought: The user has provided a live override correcting that Rahul's contact is an email
+                             (kaif13018@gmail.com), not WhatsApp. The project structure was already created in
+                             Step 2, so now I need to write the actual content to the files...
+[21:19:09] 🤖 Agent Sending Email to: kaif13018@gmail.com
+[21:19:10] ✅ Email successfully sent to kaif13018@gmail.com
 ```
 
 **Why this matters:**
@@ -75,6 +291,7 @@ This is the same reason enterprise copilots (Lovable, Devin, Cursor Agents) figh
 
 - [Why Jarvis?](#-why-jarvis)
 - [Core Features](#-core-features)
+- [Demo & Proof of Work](#-demo--proof-of-work)
 - [Live Mid-Execution Correction](#-live-mid-execution-correction-signature-feature)
 - [Performance Metrics](#-performance-metrics)
 - [Runs on a 2012 Laptop](#-runs-on-a-2012-laptop)
