@@ -334,6 +334,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | 💻 | **Autonomous Software Engineering** | Explores codebases (`repo_map`), reads files (`view`), edits with exact block diffs (`replace_block`), runs Python scripts (`run_python_code`), and executes terminal commands. Iterates on failures using a two-strike debug loop. |
 | 🛡️ | **Line-Drift-Free Code Editing** | Uses exact `replace_block` search-and-replace instead of line numbers. Syntax errors are caught via AST lint and auto-corrected without human intervention. |
 | 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-backed property graph with bidirectional edges, confidence scores, and temporal decay. Workspace documents are indexed with smart chunk overlap and retrieved via **Hybrid search (BM25 + Vector + RRF)** with recency boost. |
+| 🗜️ | **Compressed 15-Day Memory** | Two-tier short-term memory: recent 2 days verbatim raw messages + older days compressed into LLM-generated daily summaries. Keyword-filterable retrieval avoids truncation loss and token bloat. |
 | 🔄 | **Hybrid Semantic AI Routing** | Semantic router decides FastBrain vs AgenticBrain per command. Falls back to a local rule-based router if the semantic router is unavailable. |
 | 📱 | **Android Termux SSH Control** | Remote control of an Android phone over a Tailscale SSH tunnel using the Termux API — calls, SMS, sensors, battery, torch, notifications — with clean JSON output. |
 | 🌍 | **Telegram Remote PC Control** | Trigger silent background PC commands from anywhere via a secure Telegram bot, without disturbing your active desktop session. |
@@ -438,7 +439,7 @@ flowchart TD
     subgraph Memory["🧠 Memory Ecosystem"]
         LTM[("🗄️ Vector Semantic Graph LTM<br/>Weighted Graph + Subgraph + Decay")]
         RAG[("📚 ChromaDB RAG<br/>Hybrid Vector + BM25 + RRF")]
-        JSONL["📜 JSONL Rolling History<br/>15-Day Context"]
+        JSONL["📜 Rolling History<br/>2-Day Raw + 13-Day Summaries"]
         Profile["👤 User Profile & Mood"]
     end
 
@@ -526,7 +527,7 @@ Jarvis uses two brains to optimize for both speed and depth.
 
 Jarvis implements a **four-tier** memory system:
 
-1. **📜 Rolling JSONL History (Short-Term):** 15-day rolling conversation context, auto-pruned and archived.
+1. **📜 Rolling JSONL History (Short-Term):** Two-tier 15-day rolling context — recent 2 days kept as verbatim raw messages, older days compressed into per-day LLM summaries. Auto-pruned with zero data loss, keyword-filterable retrieval.
 2. **🗄️ Bidirectional Property Graph Memory (Long-Term):**
    - **Graph Structure:** Built on `NetworkX`. Every fact stores deep context (`metadata`), source messages, and confidence scores.
    - **Bidirectional Awareness:** Auto-generates inverse edges — for example, `[User] -> (FATHER) -> [FatherName]` also creates `[FatherName] -> (CHILD) -> [User]`.

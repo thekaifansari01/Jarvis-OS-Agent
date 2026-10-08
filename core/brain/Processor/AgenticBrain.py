@@ -74,6 +74,34 @@ def optimize_observation(text: str, max_chars: int = 10000) -> str:
 
         return metadata_str + "\n" + content_truncated
 
+    if "=== DAILY SUMMARIES" in text_str:
+        idx = text_str.index("=== DAILY SUMMARIES")
+        raw_part = text_str[:idx].rstrip()
+        summary_part = text_str[idx:]
+
+        summary_budget = min(len(summary_part), max_chars // 2)
+        if len(summary_part) > summary_budget:
+            summary_part = summary_part[:summary_budget] + "\n...[SUMMARIES TRUNCATED]..."
+
+        raw_budget = max_chars - len(summary_part) - 50
+        if raw_budget < 500:
+            raw_budget = 500
+
+        if len(raw_part) > raw_budget:
+            head = raw_budget // 2
+            tail = raw_budget - head - 40
+            raw_part = (
+                raw_part[:head]
+                + f"\n...[TRUNCATED {len(raw_part) - raw_budget} CHARS]...\n"
+                + raw_part[-tail:]
+            )
+
+        return raw_part + "\n\n" + summary_part
+
+    if "=== RECENT MESSAGES" in text_str:
+        half = max_chars // 2
+        return text_str[:half] + "\n...[TRUNCATED]...\n" + text_str[-half:]
+
     half = max_chars // 2
     return (
         f"{text_str[:half]}\n...[TRUNCATED {len(text_str) - max_chars} CHARS]...\n{text_str[-half:]}"
@@ -611,13 +639,16 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
 
                         if mem_data.get("recent_logs"):
                             if memory_instance:
+                                query_value = mem_data.get("recent_logs")
                                 logger.info(
-                                    "🧠 Agent requested full 15-day Chat History log natively."
+                                    f"🧠 Agent requested Conversation Memory (query='{query_value}')."
                                 )
-                                history_data = (
-                                    memory_instance.get_chat_history_for_tool()
+                                history_data = memory_instance.get_chat_history_for_tool(
+                                    query=query_value
                                 )
-                                observation = f"Observation: Successfully retrieved full 15-day history logs:\n\n{history_data}"
+                                observation = (
+                                    f"Observation: Retrieved conversation memory:\n\n{history_data}"
+                                )
                             else:
                                 observation = "Observation: Error -> Memory system instance is offline."
 

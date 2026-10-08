@@ -104,6 +104,19 @@ RAG_TOP_K = 15
 RAG_RECENCY_BOOST = 0.2
 
 # ================================================================
+# 15-DAY MEMORY SUMMARIZATION
+# ================================================================
+MEMORY_SUMMARY_API_KEY = os.getenv("MEMORY_SUMMARY_API_KEY") or LTM_EXTRACTION_API_KEY
+MEMORY_SUMMARY_MODEL = os.getenv("MEMORY_SUMMARY_MODEL") or LTM_EXTRACTION_MODEL
+MEMORY_SUMMARY_ENDPOINT = os.getenv("MEMORY_SUMMARY_ENDPOINT") or LTM_EXTRACTION_ENDPOINT
+
+MEMORY_RAW_RETENTION_DAYS = 2
+MEMORY_SUMMARY_RETENTION_DAYS = 15
+MEMORY_SUMMARY_MIN_MESSAGES = 5
+MEMORY_SUMMARY_CATCHUP_ON_STARTUP = True
+MEMORY_SUMMARY_MAX_CATCHUP_DAYS = 15
+
+# ================================================================
 # AGENT LOOP CONFIG
 # ================================================================
 CONFIG = {

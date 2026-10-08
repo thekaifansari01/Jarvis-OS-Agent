@@ -243,8 +243,18 @@ def run_jarvis():
             ephemeral = {}
             def get_and_clear_feedback(self): return None
             def add_live_feedback(self, cmd): pass
+            def catchup_summaries(self): pass
 
         memory = FakeMemory()
+
+    def start_memory_catchup():
+        try:
+            if hasattr(memory, "catchup_summaries"):
+                memory.catchup_summaries()
+        except Exception as e:
+            logger.error(f"Memory catch-up failed at startup: {e}")
+
+    threading.Thread(target=start_memory_catchup, daemon=True).start()
 
     def start_proactive_background():
         try:

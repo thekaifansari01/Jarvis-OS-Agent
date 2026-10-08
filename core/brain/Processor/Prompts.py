@@ -236,8 +236,11 @@ def get_native_tools():
                             "recent_logs": types.Schema(
                                 type=types.Type.STRING,
                                 description=(
-                                    "[TARGET: Short-term 15-Day Raw History]: Fetches chronological chat transcripts. "
-                                    "Value = exact short keyword or date (e.g., 'project discussion', 'kal ki meeting'). DO NOT translate."
+                                    "[TARGET: Short-term Conversation Memory]\n"
+                                    "Returns last 2 days of raw messages PLUS daily summaries for older days (up to 15 days).\n"
+                                    "[CRITICAL]: Value MUST be a SHORT keyword or entity name for filtering (e.g., 'project', 'Rahul', 'kal ki meeting'). DO NOT translate to English.\n"
+                                    "Passing a keyword filters BOTH raw messages and daily summaries. Use this for questions about recent ongoing events, past discussions, or yesterday's/last week's topics.\n"
+                                    "If NO keyword is needed, still pass a 1-2 word topic hint rather than a full sentence."
                                 )
                             ),
                             "lifetime_recall": types.Schema(
