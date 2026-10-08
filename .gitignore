@@ -18,6 +18,7 @@ Data/typing_status.json
 Data/processed_events.json
 Data/tavily_search.log
 Data/jarvis.log
+Data/Staging/
 Data/jarvis_memory/
 Data/Jarvis_Workspace/
 Data/MediaVault/
