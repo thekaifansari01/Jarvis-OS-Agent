@@ -41,7 +41,7 @@ Real screenshots from the running system — **not mockups, not renders**.
 <table>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/screenshots/agent_panel.png" alt="ZMQ Agent Panel streaming live thoughts" width="100%"/>
+      <img src="docs/screenshots/agent_panel.PNG" alt="ZMQ Agent Panel streaming live thoughts" width="100%"/>
       <br/>
       <sub><b>🧠 Agent Panel</b> — Real-time thought stream via ZMQ</sub>
     </td>
@@ -53,7 +53,7 @@ Real screenshots from the running system — **not mockups, not renders**.
   </tr>
   <tr>
     <td align="center" width="50%">
-      <img src="docs/screenshots/stt_popup.png" alt="STT status popup for voice input" width="100%"/>
+      <img src="docs/screenshots/stt_popup.PNG" alt="STT status popup for voice input" width="100%"/>
       <br/>
       <sub><b>🗣️ STT Status Popup</b> — Live voice input feedback</sub>
     </td>
