@@ -5,10 +5,11 @@ import asyncio
 import uuid
 import json
 import socket
+import shutil
 import uvicorn
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, UploadFile, File
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
@@ -20,6 +21,12 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "qrcode[pil]"])
     import qrcode
     from qrcode.image.pil import PilImage
+
+try:
+    import multipart
+except ImportError:
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-multipart"])
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if PROJECT_ROOT not in sys.path:
@@ -34,6 +41,12 @@ ui_clients = []
 pending_requests = {}
 STATE_FILE = os.path.join(PROJECT_ROOT, "Data", "SessionCookies", "connected_devices.json")
 
+USER_HOME = os.path.expanduser("~")
+PC_SHARE_DIR = os.path.join(USER_HOME, "Documents", "Jarvis", "JarvisShare")
+os.makedirs(PC_SHARE_DIR, exist_ok=True)
+
+STAGING_DIR = os.path.join(PROJECT_ROOT, "Data", "Staging")
+os.makedirs(STAGING_DIR, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,18 +54,15 @@ async def lifespan(app: FastAPI):
     logger.info(f"Mobile Bridge Service Started. Devices: {list(devices.keys())}")
     yield
 
-
 app = FastAPI(title="Jarvis Mobile Bridge", lifespan=lifespan)
 
 templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 os.makedirs(templates_dir, exist_ok=True)
 templates = Jinja2Templates(directory=templates_dir)
 
-
 class CommandRequest(BaseModel):
     target_device: str
     command: str
-
 
 def get_local_ip():
     try:
@@ -64,7 +74,6 @@ def get_local_ip():
     except Exception:
         return "127.0.0.1"
 
-
 def update_state_file():
     try:
         os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
@@ -73,14 +82,12 @@ def update_state_file():
     except Exception as e:
         logger.error(f"Mobile Bridge: Failed to update state file -> {e}")
 
-
 def serialize_devices():
     out = []
     for did in devices.keys():
         meta = device_meta.get(did, {})
         out.append({"id": did, "battery": meta.get("battery")})
     return out
-
 
 async def broadcast_ui(message: dict):
     dead = []
@@ -93,6 +100,19 @@ async def broadcast_ui(message: dict):
         if c in ui_clients:
             ui_clients.remove(c)
 
+@app.get("/api/download/{filename}")
+async def download_file(filename: str):
+    file_path = os.path.join(STAGING_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(path=file_path, filename=filename)
+    raise HTTPException(status_code=404)
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    save_path = os.path.join(PC_SHARE_DIR, file.filename)
+    with open(save_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"status": "success", "path": save_path}
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def render_dashboard(request: Request):
@@ -102,7 +122,6 @@ async def render_dashboard(request: Request):
         "dashboard.html",
         {"ip_address": ip_address, "port": PORT},
     )
-
 
 @app.get("/api/qr")
 async def get_qr():
@@ -125,22 +144,21 @@ async def get_qr():
         headers={"Cache-Control": "no-store"},
     )
 
-
 @app.get("/api/setup", response_class=PlainTextResponse)
-async def get_setup_script():
-    ip_address = get_local_ip()
+async def get_setup_script(request: Request):
+    ip_address = request.url.hostname or get_local_ip()
+    
     script = f'''import asyncio
 import json
 import subprocess
 import socket
-
+import sys
 
 try:
     import websockets
 except ImportError:
-    subprocess.run(["pip", "install", "websockets"])
+    subprocess.run([sys.executable, "-m", "pip", "install", "websockets"])
     import websockets
-
 
 def _run(cmd, timeout=3):
     try:
@@ -149,7 +167,6 @@ def _run(cmd, timeout=3):
         ).decode().strip()
     except Exception:
         return ""
-
 
 def get_device_name():
     model = _run(["getprop", "ro.product.model"])
@@ -186,7 +203,6 @@ def get_device_name():
 
     return base
 
-
 def get_battery():
     try:
         out = subprocess.check_output(["termux-battery-status"], timeout=3)
@@ -202,7 +218,6 @@ def get_battery():
     except Exception:
         return None
 
-
 async def battery_loop(ws):
     while True:
         await asyncio.sleep(30)
@@ -213,19 +228,19 @@ async def battery_loop(ws):
             except Exception:
                 return
 
-
 async def connect_jarvis():
     uri = "ws://{ip_address}:{PORT}/ws"
     device_id = get_device_name()
-    print(f"Connecting as: {{device_id}}")
-    try:
-        async with websockets.connect(uri) as websocket:
-            await websocket.send(json.dumps({{
-                "type": "handshake",
-                "device_id": device_id,
-                "battery": get_battery(),
-            }}))
-            asyncio.create_task(battery_loop(websocket))
+    print(f"Connecting to Jarvis at {{uri}}...")
+    async with websockets.connect(uri) as websocket:
+        print(f"Successfully Connected as: {{device_id}}")
+        await websocket.send(json.dumps({{
+            "type": "handshake",
+            "device_id": device_id,
+            "battery": get_battery(),
+        }}))
+        b_task = asyncio.create_task(battery_loop(websocket))
+        try:
             while True:
                 msg = await websocket.recv()
                 data = json.loads(msg)
@@ -237,16 +252,25 @@ async def connect_jarvis():
                     result = out.decode() if out else err.decode()
                     await websocket.send(json.dumps({{"type": "response", "req_id": req_id, "result": result}}))
                 elif data.get("type") == "system" and data.get("command") == "shutdown_bridge":
-                    break
-    except Exception as e:
-        print(f"Connection Error: {{e}}")
+                    return False
+        finally:
+            b_task.cancel()
+    return True
 
+async def main_loop():
+    while True:
+        try:
+            should_reconnect = await connect_jarvis()
+            if should_reconnect is False:
+                print("Bridge explicitly shut down by server.")
+                break
+        except Exception as e:
+            print(f"Disconnected or Jarvis offline. Retrying in 3 seconds...")
+        await asyncio.sleep(3)
 
-asyncio.run(connect_jarvis())
+asyncio.run(main_loop())
 '''
     return script
-
-
 @app.websocket("/ws/ui")
 async def ui_websocket(websocket: WebSocket):
     await websocket.accept()
@@ -260,7 +284,6 @@ async def ui_websocket(websocket: WebSocket):
             ui_clients.remove(websocket)
     except Exception as e:
         logger.error(f"UI WebSocket Error -> {e}")
-
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -318,7 +341,6 @@ async def websocket_endpoint(websocket: WebSocket):
             update_state_file()
             await broadcast_ui({"type": "device_disconnected", "device_id": device_id})
 
-
 @app.post("/api/disconnect/{device_id}")
 async def disconnect_device(device_id: str):
     if device_id in devices:
@@ -331,7 +353,6 @@ async def disconnect_device(device_id: str):
             logger.error(f"Mobile Bridge: Failed to disconnect {device_id} -> {e}")
             raise HTTPException(status_code=500, detail="Failed to send disconnect signal")
     raise HTTPException(status_code=404, detail="Device not found")
-
 
 @app.post("/api/execute")
 async def execute_command(req: CommandRequest):
@@ -364,7 +385,6 @@ async def execute_command(req: CommandRequest):
     finally:
         if req_id in pending_requests:
             del pending_requests[req_id]
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

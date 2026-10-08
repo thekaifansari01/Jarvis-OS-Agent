@@ -27,6 +27,8 @@ import pywhatkit
 import traceback
 import tempfile
 import time
+import shutil
+import socket
 
 file_editor = JarvisFileEditor()
 
@@ -246,6 +248,78 @@ def handle_mobile_action(mobile_cmd: dict) -> str:
         return f"Observation: [ERROR] Bridge returned status {response.status_code} - {response.text}"
     except Exception as e:
          return f"Observation: [ERROR] Mobile Bridge Connection Failed -> {e}"
+
+@with_observation
+def handle_file_transfer(transfer_cmd: dict) -> str:
+    direction = transfer_cmd.get('direction')
+    device_id = transfer_cmd.get('device_id')
+    file_path = transfer_cmd.get('file_path', '')
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    state_file = os.path.join(base_dir, "Data", "SessionCookies", "connected_devices.json")
+    
+    active_devices = []
+    try:
+        if os.path.exists(state_file):
+            with open(state_file, "r", encoding="utf-8") as f:
+                active_devices = json.load(f)
+    except Exception:
+        pass
+
+    if not active_devices:
+        return "Observation: [ERROR] No mobile device is currently connected."
+
+    if not device_id or device_id not in active_devices:
+        device_id = active_devices[0]
+
+    def get_local_ip():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
+
+    pc_ip = get_local_ip()
+
+    if direction == 'pc_to_mobile':
+        if not os.path.exists(file_path):
+            return f"Observation: [ERROR] File not found on PC: {file_path}"
+        
+        filename = os.path.basename(file_path)
+        staging_dir = os.path.join(base_dir, "Data", "Staging")
+        os.makedirs(staging_dir, exist_ok=True)
+        staging_path = os.path.join(staging_dir, filename)
+        shutil.copy2(file_path, staging_path)
+
+        cmd = f"mkdir -p /sdcard/JarvisShare && curl -s -o '/sdcard/JarvisShare/{filename}' 'http://{pc_ip}:8090/api/download/{filename}' && termux-toast 'File Received: {filename}'"
+        url = "http://127.0.0.1:8090/api/execute"
+        
+        try:
+            response = requests.post(url, json={"target_device": device_id, "command": cmd}, timeout=15)
+            if response.status_code == 200:
+                return f"Observation: File '{filename}' successfully sent to {device_id} in /sdcard/JarvisShare/"
+            return f"Observation: [ERROR] Transfer failed -> {response.text}"
+        except Exception as e:
+            return f"Observation: [ERROR] Connection Failed -> {e}"
+
+    elif direction == 'mobile_to_pc':
+        filename = os.path.basename(file_path)
+        cmd = f"curl -s -F \"file=@{file_path}\" \"http://{pc_ip}:8090/api/upload\" && termux-toast \"File Sent to PC\""
+        url = "http://127.0.0.1:8090/api/execute"
+        
+        try:
+            response = requests.post(url, json={"target_device": device_id, "command": cmd}, timeout=25)
+            if response.status_code == 200:
+                pc_save_path = os.path.join(os.path.expanduser("~"), "Documents", "Jarvis", "JarvisShare", filename)
+                return f"Observation: File requested from {device_id}. Saved on PC at {pc_save_path}"
+            return f"Observation: [ERROR] Transfer failed -> {response.text}"
+        except Exception as e:
+            return f"Observation: [ERROR] Connection Failed -> {e}"
+
+    return "Observation: Unknown direction."
 
 @with_observation
 def handle_email_action(email_action: dict) -> str:
@@ -537,7 +611,8 @@ TOOL_REGISTRY = {
     'file_operations': handle_file_operations,
     'clipboard_action': handle_clipboard_action,
     'gui_controller': handle_gui_controller,
-    'mobile_action': handle_mobile_action
+    'mobile_action': handle_mobile_action,
+    'file_transfer_action': handle_file_transfer
 }
 
 def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:

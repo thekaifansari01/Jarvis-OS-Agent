@@ -434,8 +434,15 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="mobile_action",
                     description=(
-                        "[WHEN TO USE]: Control the user's connected Android devices (e.g. read/send SMS, make calls, check battery, ring, vibrate, or fetch hardware sensor data via Termux:API).\n"
-                        "[RULE]: Choose the appropriate connected device_id (defaults to 'vivo_t2_pro' if not specified) and pass the exact native Termux API command (e.g., 'termux-battery-status', 'termux-sms-list -l 5', 'termux-telephony-call +91XXXXXXXXXX')."
+                        "[WHEN TO USE]: Control the user's connected Android devices. You have UNLIMITED power via Termux API and Android Intents.\n"
+                        "[FUN & ADVANCED COMMANDS]:\n"
+                        "1. HARDWARE: 'termux-torch on/off' (Flashlight), 'termux-vibrate -d 2000' (Vibrate), 'termux-volume music 15' (Max Volume), 'termux-tts-speak \"Hello sir\"'.\n"
+                        "2. SENSORS: 'termux-location' (GPS), 'termux-camera-photo -c 0 /sdcard/JarvisShare/pic.jpg' (Silent photo).\n"
+                        "3. OPEN APPS (INTENTS): Use 'am start' to launch apps visually on the phone screen!\n"
+                        "   - Open YouTube: am start -a android.intent.action.VIEW -d \"https://youtube.com\"\n"
+                        "   - Open WhatsApp: am start -n com.whatsapp/.Main\n"
+                        "   - Dial a number: am start -a android.intent.action.DIAL -d \"tel:+91XXXXXXXXXX\"\n"
+                        "[RULE]: Pass the exact command in 'termux_command'."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
@@ -446,10 +453,35 @@ def get_native_tools():
                             ),
                             "termux_command": types.Schema(
                                 type=types.Type.STRING, 
-                                description="The exact Termux API command to execute on the phone (e.g., 'termux-battery-status', 'termux-sms-send -n <number> <text>', 'termux-vibrate -d 1000')."
+                                description="The exact Termux API command to execute on the phone."
                             )
                         },
                         required=["termux_command"]
+                    )
+                ),
+                types.FunctionDeclaration(
+                    name="file_transfer_action",
+                    description=(
+                        "[WHEN TO USE]: Transfer files between the PC and connected Mobile devices over Local WiFi.\n"
+                        "[RULE]: Files sent from PC go to the phone's '/sdcard/JarvisShare/' folder. Files sent from phone go to the PC's 'Documents/Jarvis/JarvisShare/' folder."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "direction": types.Schema(
+                                type=types.Type.STRING, 
+                                description="Must be exactly 'pc_to_mobile' or 'mobile_to_pc'."
+                            ),
+                            "device_id": types.Schema(
+                                type=types.Type.STRING, 
+                                description="Target mobile device ID from the connected devices list."
+                            ),
+                            "file_path": types.Schema(
+                                type=types.Type.STRING, 
+                                description="The absolute file path of the file on the source device."
+                            )
+                        },
+                        required=["direction", "file_path"]
                     )
                 ),
                 types.FunctionDeclaration(
