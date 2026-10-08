@@ -2,11 +2,12 @@
 
 > **An AI Operating System that autonomously controls your PC, Android phone, local files, and lifelong memory — not just your code.**
 
-> **Open-Source · Line-Drift-Free Editing · Lifelong Episodic Memory · Voice-First Multimodal · Proactive HITL · Android Termux SSH · Telegram Remote Control · Hybrid RAG · PC System Monitoring**
+> **Open-Source · Live Mid-Execution Correction · Line-Drift-Free Editing · Lifelong Episodic Memory · Voice-First Multimodal · Proactive HITL · Android Termux SSH · Telegram Remote Control · Hybrid RAG · PC System Monitoring**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
+[![Low Spec](https://img.shields.io/badge/Runs%20On-4GB%20RAM%20%2F%20i5--3210M-critical?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![OpenAI Compatible](https://img.shields.io/badge/API-OpenAI%20Compatible-412991?style=for-the-badge&logo=openai&logoColor=white)](https://platform.openai.com)
 [![Multi-Provider](https://img.shields.io/badge/Providers-Regolo%20%7C%20Gemini%20%7C%20OpenRouter%20%7C%20Custom-FF6F00?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
@@ -36,7 +37,7 @@
 **What Jarvis did autonomously (in one continuous agent loop):**
 1. Recalled "Rahul" from the long-term memory graph
 2. Created the project folder, README.md, and Flask skeleton on the Desktop
-3. Adapted mid-execution when the user injected a live correction ("Send Rahul an email, not a WhatsApp message")
+3. **Adapted mid-execution when the user injected a live correction** (`"Oh sorry, I need to email Rahul, not WhatsApp him — his email is kaif13018@gmail.com"`) — no restart, no hallucination, no apology loop
 4. Sent a real Gmail to the corrected address
 5. Created a real Google Calendar event for tomorrow at 5 PM
 6. Voiced a summary — **1.99s reaction time** from text to speech
@@ -45,11 +46,38 @@
 
 ---
 
+## ✨ Live Mid-Execution Correction (Signature Feature)
+
+> **Interruptible agent loops. Change your mind mid-task — Jarvis adapts on the fly.**
+
+Most AI agents are **fire-and-forget**: once a multi-step plan starts, you either wait for it to finish or kill the whole run. Jarvis is different — it listens while it works.
+
+**Real proof from a live run:**
+
+```
+Step 2 → Agent starts creating project files (planned to send WhatsApp to Rahul later)
+Step 3 → 🚨 User injected live feedback: "oh sorry rahul ko mail krna hai whstapp nhi uski mail hai kaif13018@gmail.com"
+Step 4 → Agent silently revises plan, skips WhatsApp path, sends Gmail to the corrected address
+Step 5 → Continues seamlessly to the calendar step — no restart, no lost work
+```
+
+**Why this matters:**
+- **No full restart** — already-completed steps (project folder, README, Flask skeleton) stay intact
+- **No hallucinated apology loop** — the agent doesn't panic or re-ask the whole mission
+- **Plan graph is mutable** — the Agentic Loop re-reads live context every step and re-plans before each action
+- **Works mid-flight** — corrections land within the current agent loop, not the next session
+
+This is the same reason enterprise copilots (Lovable, Devin, Cursor Agents) fight tooth-and-nail to implement interruptibility. Jarvis ships it out of the box.
+
+---
+
 ## 📌 Table of Contents
 
 - [Why Jarvis?](#-why-jarvis)
 - [Core Features](#-core-features)
+- [Live Mid-Execution Correction](#-live-mid-execution-correction-signature-feature)
 - [Performance Metrics](#-performance-metrics)
+- [Runs on a 2012 Laptop](#-runs-on-a-2012-laptop)
 - [Jarvis vs. Other AI Agents](#-jarvis-vs-other-ai-agents)
 - [Technical Architecture](#️-technical-architecture)
 - [Dual-Engine AI: FastBrain vs AgenticBrain](#-dual-engine-ai-fastbrain-vs-agenticbrain)
@@ -69,13 +97,13 @@
 
 ## 🎯 Why Jarvis?
 
-Most AI coding assistants stop at generating code. Most desktop assistants stop at opening apps. Jarvis is built on a different premise: **an assistant should be able to see, act, remember, and reach out — across your PC, your phone, and your communication channels — with one continuous mind.**
+Most AI coding assistants stop at generating code. Most desktop assistants stop at opening apps. Jarvis is built on a different premise: **an assistant should be able to see, act, remember, correct itself mid-task, and reach out — across your PC, your phone, and your communication channels — with one continuous mind.**
 
 Three things make Jarvis different:
 
 1. **It acts in the real world, not just in chat.** Gmail, WhatsApp, Telegram, Google Calendar, Termux on your Android, file system, terminal, GUI mouse and keyboard — all native tools the agent chooses from autonomously.
 2. **It remembers for months, not minutes.** A weighted property-graph memory layer with temporal decay, plus hybrid BM25 and vector RAG for your workspace documents.
-3. **It reaches out first when something matters.** Background listeners for email, chat, calendar, and PC health feed a silent "Scout" agent that decides whether to interrupt you — with Human-in-the-Loop consent before any permanent action.
+3. **It listens while it works.** Live user corrections during a multi-step run are absorbed and re-planned without restarting — the agent loop is genuinely interruptible.
 
 If you want an AI that finishes what it starts, on the machine you actually work on — this is it.
 
@@ -85,6 +113,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 
 | Icon | Feature | What It Actually Does |
 |:---:|:---|:---|
+| 🔄 | **Live Mid-Execution Correction** | Agent loop is interruptible. User feedback injected mid-run is absorbed, plan is revised in-place, and completed steps stay intact. No full restart, no hallucination. |
 | 💻 | **Autonomous Software Engineering** | Explores codebases (`repo_map`), reads files (`view`), edits with exact block diffs (`replace_block`), runs Python scripts (`run_python_code`), and executes terminal commands. Iterates on failures using a two-strike debug loop. |
 | 🛡️ | **Line-Drift-Free Code Editing** | Uses exact `replace_block` search-and-replace instead of line numbers. Syntax errors are caught via AST lint and auto-corrected without human intervention. |
 | 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-backed property graph with bidirectional edges, confidence scores, and temporal decay. Workspace documents are indexed with smart chunk overlap and retrieved via **Hybrid search (BM25 + Vector + RRF)** with recency boost. |
@@ -99,24 +128,46 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | 🎨 | **Reactive UI Ecosystem** | ZMQ-powered PyQt5 Agent Panel streaming thought, action, and observation in real time. Markdown typing popup with async image preview and glass-morphism styling. |
 | 🔒 | **Command-Level Security Guardrails** | `shlex` tokenization blocks destructive terminal commands. Local AES-encrypted tokens (`.enc`) for Gmail, Calendar, and Telegram sessions. |
 | ⚙️ | **ServiceWatchdog Resilience** | Monitors STT, Baileys, and Telegram subprocesses. Auto-restarts crashed services and skips unauthenticated modules to prevent log spam. |
+| 🪶 | **Runs on 4GB RAM** | Verified on an Intel i5-3210M (2012) with 4 GB RAM. Cloud LLM APIs + ONNX-based RapidOCR + `bge-small` embeddings keep the footprint tiny. |
 
 ---
 
 ## 📊 Performance Metrics
 
-Numbers from a typical Windows 11 run on a mid-range machine (5-step multi-tool mission):
+Numbers from a typical Windows 11 run on a **4 GB RAM / Intel i5-3210M (2012)** machine (5-step multi-tool mission):
 
 | Metric | Value |
 |---|---|
-| Cold boot to ready | ~40 s |
+| Cold boot to ready | ~50 s |
 | Semantic router decision | ~810 ms |
 | Voice reaction time (text to audio) | **1.99 s** |
-| Multi-tool mission (project + email + calendar) | ~83 s across 6 agent steps |
+| Multi-tool mission (project + email + calendar) | ~80 s across 6 agent steps |
 | FastBrain typical response | sub-2 s |
 | Local embedding model load | ~14 s |
 | Memory graph recall | ~7 s |
+| Peak RAM footprint | Under 4 GB (shared with Windows 11) |
 
 *Your mileage will vary based on provider latency, model choice, and machine specifications.*
+
+---
+
+## 🪶 Runs on a 2012 Laptop
+
+> **Hardware used during development and testing:**
+> - **CPU:** Intel Core i5-3210M (3rd Gen, dual-core, 2012)
+> - **RAM:** 4.00 GB (3.88 GB usable — shared with Windows 11)
+> - **GPU:** None (CPU-only inference for local models)
+
+There are no cloud VMs, no beefy workstations, no 32 GB rigs behind this project. Jarvis was designed, debugged, and shipped on hardware most AI tools quietly assume you don't have.
+
+**How it stays this light:**
+- **Cloud LLMs by default** — no 7B/13B local model hogging RAM
+- **`BAAI/bge-small-en-v1.5`** — 33M param embedding model instead of 300M+ alternatives
+- **RapidOCR (ONNX)** — no PyTorch dependency for GUI grounding
+- **UIA-first detection** — OCR only fires when native accessibility APIs return too few elements
+- **Lazy service boot** — WhatsApp, Telegram, and mobile bridges skip startup entirely if not authenticated
+
+> If you have a modern machine, Jarvis will fly. If you have an old one, Jarvis will still run.
 
 ---
 
@@ -127,7 +178,9 @@ A fair look at where Jarvis fits alongside popular alternatives:
 | Capability | **Jarvis OS Agent** | **Claude Code** | **AutoGPT / CrewAI** |
 |---|:---:|:---:|:---:|
 | Cost model | Free, self-hosted | Paid subscription | Free / paid |
+| Runs on 4 GB RAM | ✅ Verified | ⚠️ Heavy | ⚠️ Varies |
 | Local LLM support | ✅ Ollama, LM Studio, vLLM | ❌ Cloud only | Partial |
+| Live mid-execution correction | ✅ Interruptible loop | ❌ Restart-based | ❌ Not supported |
 | Line-drift-free edits | ✅ Exact block diffs | ⚠️ Line-number based | ❌ Not focused on editing |
 | Lifelong memory | ✅ Weighted property graph | ❌ Session-only | ⚠️ Limited |
 | Native real-world tools (email, WhatsApp, calendar) | ✅ | ❌ | ⚠️ Via plugins |
@@ -137,7 +190,7 @@ A fair look at where Jarvis fits alongside popular alternatives:
 | Polished UX | ✅ Excellent | ✅ Excellent | ❌ |
 | Enterprise support | ❌ Solo project | ✅ Anthropic-backed | Varies |
 
-**Honest positioning:** Jarvis trades the polish and vendor support of commercial tools for **breadth, extensibility, and local-first autonomy**. If you need a production-grade IDE assistant, use Claude Code. If you want an open, hackable, cross-device autonomous agent, this is for you.
+**Honest positioning:** Jarvis trades the polish and vendor support of commercial tools for **breadth, extensibility, local-first autonomy, and interruptible execution**. If you need a production-grade IDE assistant, use Claude Code. If you want an open, hackable, cross-device autonomous agent that respects your hardware — this is for you.
 
 ---
 
@@ -218,11 +271,13 @@ flowchart TD
         Watchdog["🛡️ ServiceWatchdog"]
         Failover["🔄 Provider Failover"]
         Recovery["🔄 Two-Strike Rule"]
+        LiveFix["🔴 Live User Correction Feed"]
     end
 
     Watchdog -.->|Smart Skip| System
     Failover -.-> Providers
     Recovery -.-> AgenticBrain
+    LiveFix -.->|Re-plans mid-loop| AgenticBrain
 ```
 
 ---
@@ -241,6 +296,7 @@ Jarvis uses two brains to optimize for both speed and depth.
 | **Communication** | ❌ | ✅ Gmail, WhatsApp, Telegram, Calendar |
 | **Code Execution** | ❌ | ✅ `run_python_code`, `execute_terminal_command` |
 | **Memory Recall** | ❌ | ✅ Lifetime vector-graph recall |
+| **Live Mid-Execution Correction** | ❌ | ✅ Interruptible loop re-plans per step |
 | **Multimodal Vision** | ❌ | ✅ Image and video analysis, OCR |
 | **Web Research** | Quick web search | Deep research, ArXiv, YouTube transcripts |
 | **Mobile Control** | ❌ | ✅ Termux SSH |
@@ -383,6 +439,11 @@ The `jarvis` command is now registered system-wide — no need to reactivate the
 
 ## 📋 Real-World Use Cases
 
+### 🔴 Live Correction During a Multi-Step Mission
+> *"Create a habit tracker project, send WhatsApp to Rahul, and schedule a meeting at 5 PM."*  
+> *[Mid-run, user speaks:]* *"Sorry, Rahul ko mail karna hai, WhatsApp nahi — kaif13018@gmail.com."*  
+> Jarvis keeps the project work intact, silently swaps WhatsApp → Gmail, sends to the corrected address, and completes the calendar step without skipping a beat.
+
 ### 🐞 Automated Bug Fixing
 > *"Run the tests in my Python project and fix any failing ones."*
 
@@ -485,6 +546,7 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | Too many PC Monitor alerts | Adjust thresholds in `PCMonitorProactive.py` |
 | USB devices not detected | Run PowerShell as Administrator — PC Monitor reads Windows Event Logs |
 | FastBrain key invalid | Verify `FAST_BRAIN_API_KEY`, endpoint, and model in `.env` |
+| Live correction ignored | Make sure Jarvis is running in AgenticBrain mode (semantic router decision = AGENTIC). FastBrain is stateless and does not support mid-run re-planning. |
 
 ### FAQ
 
@@ -501,7 +563,10 @@ Credentials are AES-encrypted locally. Conversation history and memory graphs st
 No — Jarvis runs on your Windows PC. Your Android phone is *controlled by* Jarvis via Termux SSH.
 
 **How does it differ from ChatGPT or Claude?**  
-Those are chat interfaces. Jarvis is an *agent* — it takes actions on your actual system, remembers you across months, and reaches out proactively.
+Those are chat interfaces. Jarvis is an *agent* — it takes actions on your actual system, remembers you across months, corrects itself mid-task, and reaches out proactively.
+
+**What hardware do I need?**  
+Jarvis was developed on an Intel i5-3210M with 4 GB RAM. If your machine can run Windows 11 and a browser, it can run Jarvis. More RAM = snappier local embeddings and faster boot.
 
 ---
 
@@ -535,7 +600,7 @@ This project is distributed under the **GNU General Public License v3.0**. See [
 
 ## 👤 About the Author
 
-Built by **Kaif Ansari** ([@thekaifansari01](https://github.com/thekaifansari01)) — an 18-year-old solo developer from a commerce background, currently in the first year of BCA. No team. No funding. Just late nights, coffee, and a stubborn belief that one person can build something that matters.
+Built by **Kaif Ansari** ([@thekaifansari01](https://github.com/thekaifansari01)) — an 18-year-old solo developer from a commerce background, currently in the first year of BCA. No team. No funding. No high-end hardware — Jarvis was built and tested on an Intel i5-3210M with 4 GB RAM. Just late nights, coffee, and a stubborn belief that one person can build something that matters.
 
 **Connect:** &nbsp; [🐦 Twitter / X](https://twitter.com/thekaifansari01) &nbsp;·&nbsp; [💻 GitHub](https://github.com/thekaifansari01) &nbsp;·&nbsp; [📸 Instagram](https://instagram.com/thekaifansari01) &nbsp;·&nbsp; [💼 LinkedIn](https://linkedin.com/in/thekaifansari01) &nbsp;·&nbsp;[🟣 Reddit](https://reddit.com/user/thekaifansari01) &nbsp;·&nbsp; [🎮 Discord](https://discord.com/users/thekaifansari01) &nbsp;·&nbsp; [📧 Email](mailto:thekaifansari01@gmail.com)
 
@@ -543,7 +608,7 @@ Built by **Kaif Ansari** ([@thekaifansari01](https://github.com/thekaifansari01)
 
 ## 🌟 Show Your Support
 
-If the **Jarvis OS Agent** streamlined your workflow, autonomously fixed your bugs, or inspired your own AI projects:
+If the **Jarvis OS Agent** streamlined your workflow, autonomously fixed your bugs, adapted to your mid-task corrections, or inspired your own AI projects:
 
 - ⭐ **Star** this repository to help it rank and grow the community.
 - 🐦 **Follow and share** your use cases by tagging [@thekaifansari01](https://twitter.com/thekaifansari01).
