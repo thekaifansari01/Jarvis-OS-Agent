@@ -3,6 +3,7 @@ import time
 import datetime
 import webbrowser
 import json
+import threading
 from pathlib import Path
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -18,6 +19,9 @@ TOKEN_PATH = COOKIES_DIR / "calendar_token.enc"
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 DEFAULT_TIMEZONE = 'Asia/Kolkata'
 
+_service_cache = None
+_service_lock = threading.Lock()
+
 def helper_format_to_iso(time_str: str, default_time_suffix: str = "00:00:00") -> str:
     if not time_str:
         return ""
@@ -32,28 +36,27 @@ def helper_format_to_iso(time_str: str, default_time_suffix: str = "00:00:00") -
     except Exception:
         return ""
 
-def authenticate_calendar(interactive: bool = True):
-    logger.info("🔐 Authenticating Google Calendar...")
-    creds = None
-    if TOKEN_PATH.exists():
-        try:
-            token_info = load_decrypted_token(str(TOKEN_PATH))
-            if token_info:
-                creds = Credentials.from_authorized_user_info(token_info, SCOPES)
-                logger.debug("✅ Calendar token found.")
-        except Exception:
-            creds = None
-            try:
-                TOKEN_PATH.unlink()
-            except Exception:
-                pass
+def clear_calendar_cache():
+    global _service_cache
+    with _service_lock:
+        _service_cache = None
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+
+def authenticate_calendar(interactive: bool = True):
+    global _service_cache
+
+    with _service_lock:
+        if _service_cache is not None:
+            return _service_cache, "Success"
+
+        logger.info("🔐 Authenticating Google Calendar...")
+        creds = None
+        if TOKEN_PATH.exists():
             try:
-                creds.refresh(Request())
-                save_encrypted_token(json.loads(creds.to_json()), str(TOKEN_PATH))
-                logger.info("🔄 Calendar token refreshed.")
+                token_info = load_decrypted_token(str(TOKEN_PATH))
+                if token_info:
+                    creds = Credentials.from_authorized_user_info(token_info, SCOPES)
+                    logger.debug("✅ Calendar token found.")
             except Exception:
                 creds = None
                 try:
@@ -61,30 +64,51 @@ def authenticate_calendar(interactive: bool = True):
                 except Exception:
                     pass
 
-        if (not creds or not creds.valid) and interactive:
-            import uuid
-            secure_session = str(uuid.uuid4())
-            logger.info("🌐 Opening browser for Calendar OAuth...")
-            webbrowser.open(f"https://jarvis-os-agent.vercel.app/api/oauth/start?service=calendar&state={secure_session}")
-            timeout = 120
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                if TOKEN_PATH.exists():
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                    save_encrypted_token(json.loads(creds.to_json()), str(TOKEN_PATH))
+                    logger.info("🔄 Calendar token refreshed.")
+                except Exception:
+                    creds = None
                     try:
-                        token_info = load_decrypted_token(str(TOKEN_PATH))
-                        if token_info:
-                            creds = Credentials.from_authorized_user_info(token_info, SCOPES)
-                            if creds and creds.valid:
-                                logger.info("✅ Calendar OAuth completed.")
-                                break
+                        TOKEN_PATH.unlink()
                     except Exception:
                         pass
-                time.sleep(3)
 
-    if creds and creds.valid:
-        return build('calendar', 'v3', credentials=creds), "Success"
-    logger.error("❌ Calendar authentication failed.")
-    return None, "Observation: Error -> Authentication timed out or failed."
+            if (not creds or not creds.valid) and interactive:
+                import uuid
+                secure_session = str(uuid.uuid4())
+                logger.info("🌐 Opening browser for Calendar OAuth...")
+                webbrowser.open(f"https://jarvis-os-agent.vercel.app/api/oauth/start?service=calendar&state={secure_session}")
+                timeout = 120
+                start_time = time.time()
+                while time.time() - start_time < timeout:
+                    if TOKEN_PATH.exists():
+                        try:
+                            token_info = load_decrypted_token(str(TOKEN_PATH))
+                            if token_info:
+                                creds = Credentials.from_authorized_user_info(token_info, SCOPES)
+                                if creds and creds.valid:
+                                    logger.info("✅ Calendar OAuth completed.")
+                                    break
+                        except Exception:
+                            pass
+                    time.sleep(3)
+
+        if creds and creds.valid:
+            try:
+                _service_cache = build('calendar', 'v3', credentials=creds, cache_discovery=False)
+                logger.info("✅ Calendar service initialized and cached.")
+                return _service_cache, "Success"
+            except Exception as e:
+                logger.error(f"❌ Calendar service build failed: {e}")
+                _service_cache = None
+                return None, f"Observation: Error -> Build failed: {e}"
+
+        logger.error("❌ Calendar authentication failed.")
+        return None, "Observation: Error -> Authentication timed out or failed."
 
 def create_event(summary: str, start_time: str, end_time: str, description: str = "") -> str:
     logger.info(f"📅 Creating calendar event: {summary}")
