@@ -26,17 +26,18 @@ def listen_for_reminders():
     announced_events = set()
     ALERT_WINDOW_MINUTES = 15
     error_backoff = 60
+    service = None
 
     while not _stop_event.is_set():
         try:
-            service, auth_status = authenticate_calendar(interactive=False)
-            if not service:
-                logger.warning(f"Reminder Listener Error: {auth_status}")
-                _interruptible_sleep(error_backoff)
-                error_backoff = min(error_backoff * 2, 600)
-                continue
-
-            error_backoff = 60
+            if service is None:
+                service, auth_status = authenticate_calendar(interactive=False)
+                if not service:
+                    logger.warning(f"Reminder Listener Error: {auth_status}")
+                    _interruptible_sleep(error_backoff)
+                    error_backoff = min(error_backoff * 2, 600)
+                    continue
+                error_backoff = 60
 
             now = datetime.datetime.now(datetime.timezone.utc)
             time_min = now.isoformat()
@@ -72,6 +73,7 @@ def listen_for_reminders():
 
         except Exception as e:
             logger.error(f"Unexpected error in Reminder Proactive Listener: {e}")
+            service = None
             error_backoff = min(error_backoff * 2, 600)
 
         _interruptible_sleep(60)
