@@ -163,10 +163,12 @@ class UnifiedVoiceAssistant:
 
     def start(self):
         if not self.mic_available:
-            logger.warning("Mic not available. Skipping audio loop start.")
+            logger.warning("🎤 Mic not available. Skipping audio loop start.")
             return
+        logger.info("🎧 Wake word listener thread starting...")
         self.listen_thread = threading.Thread(target=self._audio_loop, daemon=True)
         self.listen_thread.start()
+        logger.info("✅ Wake word listener active. Listening for 'Jarvis' / 'Hey Jarvis'...")
 
     def play_wake_sound(self):
         try:
@@ -234,13 +236,14 @@ class UnifiedVoiceAssistant:
             )
 
             if not self.dg_connection.start(options):
-                logger.error("Failed to start Deepgram websocket connection.")
+                logger.error("❌ Failed to start Deepgram websocket connection.")
                 return False
 
+            logger.info("🔗 Deepgram websocket connected successfully.")
             return True
 
         except Exception as e:
-            logger.error(f"Deepgram setup exception: {e}", exc_info=True)
+            logger.error(f"❌ Deepgram setup exception: {e}", exc_info=True)
             return False
 
     def _check_wake_word(self, text):
@@ -276,6 +279,8 @@ class UnifiedVoiceAssistant:
                             triggered = True
 
                     if triggered:
+                        logger.info(f"🎯 Wake word detected | matched_text='{text}'")
+
                         try:
                             from core.voice import tts
                             tts.stop_speaking()
@@ -289,9 +294,12 @@ class UnifiedVoiceAssistant:
                         update_stt_status("connecting", "Listening...")
 
                         if not self.connection_established or self.dg_connection is None:
+                            logger.info("🔌 Establishing Deepgram connection...")
                             if self._setup_deepgram():
                                 self.connection_established = True
+                                logger.info("✅ Deepgram connection established.")
                             else:
+                                logger.warning("⚠️ Deepgram connection failed. Returning to wake word mode.")
                                 self.connection_established = False
                                 self.vosk_recognizer.Reset()
                                 continue
@@ -300,6 +308,7 @@ class UnifiedVoiceAssistant:
                         self.last_speech_time = time.time()
                         self.has_spoken = False
                         self.is_awake = True
+                        logger.info("👂 User command listening STARTED (max wait 4.0s, silence timeout 1.0s).")
                         update_stt_status("listening", "Listening...")
 
                 else:
@@ -311,16 +320,18 @@ class UnifiedVoiceAssistant:
                         self.has_spoken = True
 
                     if not self.has_spoken and (current_time - self.wake_time > self.MAX_WAIT_TIMEOUT):
+                        logger.info("⏱️ No speech detected within 4.0s after wake word. Ending command capture.")
                         self.command_done.set()
 
                     elif self.has_spoken and (current_time - self.last_speech_time > self.MAX_SILENCE_TIMEOUT):
+                        logger.info("⏱️ Silence timeout (1.0s) reached after speech. Finalizing command.")
                         self.command_done.set()
 
                     if self.dg_connection:
                         try:
                             self.dg_connection.send(pcm_data)
                         except Exception as e:
-                            logger.error(f"Lost Deepgram connection: {e}")
+                            logger.error(f"❌ Lost Deepgram connection while sending audio: {e}")
                             self._force_sleep_reset()
                             continue
 
@@ -332,6 +343,7 @@ class UnifiedVoiceAssistant:
                 time.sleep(0.01)
 
     def _force_sleep_reset(self):
+        logger.warning("🔄 Force sleep reset triggered. Returning to wake word mode.")
         self.dg_connection = None
         self.connection_established = False
         self.is_awake = False
@@ -339,11 +351,15 @@ class UnifiedVoiceAssistant:
         if self.vosk_recognizer:
             self.vosk_recognizer.Reset()
         update_stt_status("idle", "")
+        logger.info("💤 Back to idle. Listening for wake word...")
 
     def process_final_command(self):
         full_command = self.live_text.lower().strip()
         ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you",
                         "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
+
+        logger.info("🛑 User command listening STOPPED. Processing transcript...")
+        logger.info(f"📝 Raw transcript received: '{full_command}'")
 
         self.is_awake = False
 
@@ -351,7 +367,7 @@ class UnifiedVoiceAssistant:
             if self.dg_connection:
                 self.dg_connection.finish()
         except Exception as e:
-            logger.error(f"Error finishing Deepgram connection: {e}")
+            logger.error(f"❌ Error finishing Deepgram connection: {e}")
         finally:
             self.dg_connection = None
             self.connection_established = False
@@ -362,12 +378,15 @@ class UnifiedVoiceAssistant:
         interrupt.clear_interrupt()
 
         if full_command and full_command not in ignore_words and len(full_command) > 3:
+            logger.info(f"✅ Valid command accepted -> '{full_command}'")
             update_stt_status("understanding", full_command)
             self.command_queue.put(full_command)
         else:
+            logger.info(f"🚫 Command rejected (empty/ignore-list/too short) -> returning to wake mode.")
             update_stt_status("idle", "")
             self.command_queue.put("")
 
+        logger.info("💤 Idle. Waiting for next wake word 'Jarvis'...")
         time.sleep(0.2)
 
     def get_command(self, is_retry=False):
@@ -382,9 +401,13 @@ class UnifiedVoiceAssistant:
         if not self.running or command is None:
             return ""
 
+        if command:
+            logger.info(f"📤 Command delivered to processor: '{command}'")
+
         return command
 
     def stop(self):
+        logger.info("🛑 Stopping voice engine...")
         self.running = False
         try:
             if self.dg_connection:
@@ -402,6 +425,7 @@ class UnifiedVoiceAssistant:
                 self.audio.terminate()
         except Exception:
             pass
+        logger.info("✅ Voice engine stopped.")
 
 
 try:
