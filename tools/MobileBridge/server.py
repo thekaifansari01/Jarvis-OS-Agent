@@ -12,6 +12,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Requ
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from typing import List
 
 try:
     import qrcode
@@ -113,6 +114,25 @@ async def upload_file(file: UploadFile = File(...)):
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     return {"status": "success", "path": save_path}
+
+@app.post("/api/upload_batch")
+async def upload_batch(files: List[UploadFile] = File(...)):
+    saved = []
+    errors = []
+    for file in files:
+        try:
+            save_path = os.path.join(PC_SHARE_DIR, file.filename)
+            with open(save_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            saved.append(save_path)
+        except Exception as e:
+            errors.append({"file": file.filename, "error": str(e)})
+    return {
+        "status": "success" if not errors else "partial",
+        "count": len(saved),
+        "saved": saved,
+        "errors": errors
+    }
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def render_dashboard(request: Request):
@@ -271,6 +291,7 @@ async def main_loop():
 asyncio.run(main_loop())
 '''
     return script
+
 @app.websocket("/ws/ui")
 async def ui_websocket(websocket: WebSocket):
     await websocket.accept()
@@ -376,12 +397,12 @@ async def execute_command(req: CommandRequest):
         raise HTTPException(status_code=500, detail="Failed to transmit command.")
 
     try:
-        result = await asyncio.wait_for(future, timeout=12.0)
+        result = await asyncio.wait_for(future, timeout=90.0)
         logger.info(f"Mobile Bridge: Received response from {req.target_device}")
         return {"result": result}
     except asyncio.TimeoutError:
         logger.error(f"Mobile Bridge: Timeout waiting for {req.target_device}")
-        return {"error": "Timeout: Phone did not respond in 12 seconds."}
+        return {"error": "Timeout: Phone did not respond in 90 seconds."}
     finally:
         if req_id in pending_requests:
             del pending_requests[req_id]

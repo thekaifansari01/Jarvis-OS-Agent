@@ -253,11 +253,14 @@ def handle_mobile_action(mobile_cmd: dict) -> str:
 def handle_file_transfer(transfer_cmd: dict) -> str:
     direction = transfer_cmd.get('direction')
     device_id = transfer_cmd.get('device_id')
-    file_path = transfer_cmd.get('file_path', '')
+    file_paths = transfer_cmd.get('file_paths') or []
+
+    if not file_paths:
+        return "Observation: [ERROR] No 'file_paths' provided."
 
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     state_file = os.path.join(base_dir, "Data", "SessionCookies", "connected_devices.json")
-    
+
     active_devices = []
     try:
         if os.path.exists(state_file):
@@ -283,38 +286,48 @@ def handle_file_transfer(transfer_cmd: dict) -> str:
             return "127.0.0.1"
 
     pc_ip = get_local_ip()
+    url = "http://127.0.0.1:8090/api/execute"
+    pc_share = os.path.join(os.path.expanduser("~"), "Documents", "Jarvis", "JarvisShare")
 
     if direction == 'pc_to_mobile':
-        if not os.path.exists(file_path):
-            return f"Observation: [ERROR] File not found on PC: {file_path}"
-        
-        filename = os.path.basename(file_path)
+        missing = [p for p in file_paths if not os.path.exists(p)]
+        if missing:
+            return f"Observation: [ERROR] Files not found on PC: {missing}"
+
         staging_dir = os.path.join(base_dir, "Data", "Staging")
         os.makedirs(staging_dir, exist_ok=True)
-        staging_path = os.path.join(staging_dir, filename)
-        shutil.copy2(file_path, staging_path)
 
-        cmd = f"mkdir -p /sdcard/JarvisShare && curl -s -o '/sdcard/JarvisShare/{filename}' 'http://{pc_ip}:8090/api/download/{filename}' && termux-toast 'File Received: {filename}'"
-        url = "http://127.0.0.1:8090/api/execute"
-        
+        filenames = []
+        for p in file_paths:
+            name = os.path.basename(p)
+            shutil.copy2(p, os.path.join(staging_dir, name))
+            filenames.append(name)
+
+        download_chain = " && ".join(
+            f"curl -s -o '/sdcard/JarvisShare/{name}' 'http://{pc_ip}:8090/api/download/{name}'"
+            for name in filenames
+        )
+        cmd = f"mkdir -p /sdcard/JarvisShare && {download_chain} && termux-toast 'Received {len(filenames)} files'"
+
         try:
-            response = requests.post(url, json={"target_device": device_id, "command": cmd}, timeout=15)
+            http_timeout = max(30, 10 * len(filenames))
+            response = requests.post(url, json={"target_device": device_id, "command": cmd}, timeout=http_timeout)
             if response.status_code == 200:
-                return f"Observation: File '{filename}' successfully sent to {device_id} in /sdcard/JarvisShare/"
+                return f"Observation: All {len(filenames)} files sent to {device_id} in /sdcard/JarvisShare/ -> {', '.join(filenames)}"
             return f"Observation: [ERROR] Transfer failed -> {response.text}"
         except Exception as e:
             return f"Observation: [ERROR] Connection Failed -> {e}"
 
     elif direction == 'mobile_to_pc':
-        filename = os.path.basename(file_path)
-        cmd = f"curl -s -F \"file=@{file_path}\" \"http://{pc_ip}:8090/api/upload\" && termux-toast \"File Sent to PC\""
-        url = "http://127.0.0.1:8090/api/execute"
-        
+        upload_flags = " ".join(f"-F \"files=@{p}\"" for p in file_paths)
+        cmd = f"curl -s {upload_flags} \"http://{pc_ip}:8090/api/upload_batch\" && termux-toast \"Sent {len(file_paths)} files to PC\""
+
         try:
-            response = requests.post(url, json={"target_device": device_id, "command": cmd}, timeout=25)
+            http_timeout = max(30, 10 * len(file_paths))
+            response = requests.post(url, json={"target_device": device_id, "command": cmd}, timeout=http_timeout)
             if response.status_code == 200:
-                pc_save_path = os.path.join(os.path.expanduser("~"), "Documents", "Jarvis", "JarvisShare", filename)
-                return f"Observation: File requested from {device_id}. Saved on PC at {pc_save_path}"
+                names = [os.path.basename(p) for p in file_paths]
+                return f"Observation: All {len(names)} files transferred from {device_id} to PC at {pc_share} -> {', '.join(names)}"
             return f"Observation: [ERROR] Transfer failed -> {response.text}"
         except Exception as e:
             return f"Observation: [ERROR] Connection Failed -> {e}"

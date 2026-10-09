@@ -476,7 +476,8 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="file_transfer_action",
                     description=(
-                        "[WHEN TO USE]: Transfer files between the PC and connected Mobile devices over Local WiFi.\n"
+                        "[WHEN TO USE]: Transfer ONE OR MANY files between the PC and connected Mobile devices over Local WiFi in a SINGLE call.\n"
+                        "[CRITICAL RULE]: ALWAYS pass ALL file paths together in the 'file_paths' array. NEVER call this tool once per file. NEVER loop this tool.\n"
                         "[RULE]: Files sent from PC go to the phone's '/sdcard/JarvisShare/' folder. Files sent from phone go to the PC's 'Documents/Jarvis/JarvisShare/' folder."
                     ),
                     parameters=types.Schema(
@@ -490,12 +491,13 @@ def get_native_tools():
                                 type=types.Type.STRING, 
                                 description="Target mobile device ID from the connected devices list."
                             ),
-                            "file_path": types.Schema(
-                                type=types.Type.STRING, 
-                                description="The absolute file path of the file on the source device."
+                            "file_paths": types.Schema(
+                                type=types.Type.ARRAY,
+                                items=types.Schema(type=types.Type.STRING),
+                                description="Array of absolute file paths on the source device. Pass ALL files (1, 5, 10 - anything) in this single array in ONE call."
                             )
                         },
-                        required=["direction", "file_path"]
+                        required=["direction", "file_paths"]
                     )
                 ),
                 types.FunctionDeclaration(
