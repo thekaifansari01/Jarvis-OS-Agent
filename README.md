@@ -334,6 +334,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | 💻 | **Autonomous Software Engineering** | Explores codebases (`repo_map`), reads files (`view`), edits with exact block diffs (`replace_block`), runs Python scripts (`run_python_code`), and executes terminal commands. Iterates on failures using a two-strike debug loop. |
 | 🛡️ | **Line-Drift-Free Code Editing** | Uses exact `replace_block` search-and-replace instead of line numbers. Syntax errors are caught via AST lint and auto-corrected without human intervention. |
 | 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-backed property graph with bidirectional edges, confidence scores, and temporal decay. Workspace documents are indexed with smart chunk overlap and retrieved via **Hybrid search (BM25 + Vector + RRF)** with recency boost. |
+| 📊 | **Web Knowledge Indexer Dashboard** | Local Flask dashboard at `127.0.0.1:8080` for managing indexed folders and filters. Auto-indexes `Documents` by default, user can add any folder via UI, with smart filters (system paths blocked, sensitive paths warned, garbage excluded), live progress, pause/resume, and per-folder stats. |
 | 🗜️ | **Compressed 15-Day Memory** | Two-tier short-term memory: recent 2 days verbatim raw messages + older days compressed into LLM-generated daily summaries. Keyword-filterable retrieval avoids truncation loss and token bloat. |
 | 🔄 | **Hybrid Semantic AI Routing** | Semantic router decides FastBrain vs AgenticBrain per command. Falls back to a local rule-based router if the semantic router is unavailable. |
 | 📱 | **Android Termux SSH Control** | Remote control of an Android phone over a Tailscale SSH tunnel using the Termux API — calls, SMS, sensors, battery, torch, notifications — with clean JSON output. |
@@ -345,7 +346,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | 🔌 | **Multi-LLM Auto-Failover** | Regolo, Gemini, OpenRouter, or local providers (Ollama, LM Studio, vLLM). Primary provider failure routes to fallback automatically. |
 | 🎨 | **Reactive UI Ecosystem** | ZMQ-powered PyQt5 Agent Panel streaming thought, action, and observation in real time. Markdown typing popup with async image preview and glass-morphism styling. |
 | 🔒 | **Command-Level Security Guardrails** | `shlex` tokenization blocks destructive terminal commands. Local AES-encrypted tokens (`.enc`) for Gmail, Calendar, and Telegram sessions. |
-| ⚙️ | **ServiceWatchdog Resilience** | Monitors STT, Baileys, and Telegram subprocesses. Auto-restarts crashed services and skips unauthenticated modules to prevent log spam. |
+| ⚙️ | **ServiceWatchdog Resilience** | Monitors STT, Baileys, Telegram, and the Indexer Dashboard subprocesses. Auto-restarts crashed services and skips unauthenticated modules to prevent log spam. |
 | 🪶 | **Runs on 4GB RAM** | Verified on an Intel i5-3210M (2012) with 4 GB RAM. Cloud LLM APIs + ONNX-based RapidOCR + `bge-small` embeddings keep the footprint tiny. |
 
 ---
@@ -363,6 +364,9 @@ Numbers from a typical Windows 11 run on a **4 GB RAM / Intel i5-3210M (2012)** 
 | FastBrain typical response | sub-2 s |
 | Local embedding model load | ~14 s |
 | Memory graph recall | ~7 s |
+| RAG dashboard cold-start | ~3 s after main Jarvis boot |
+| Documents folder full index (1 file) | ~25 s (10 chunks) |
+| Documents folder incremental scan | ~2 s (hash check only) |
 | Peak RAM footprint | Under 4 GB (shared with Windows 11) |
 
 *Your mileage will vary based on provider latency, model choice, and machine specifications.*
@@ -383,7 +387,7 @@ There are no cloud VMs, no beefy workstations, no 32 GB rigs behind this project
 - **`BAAI/bge-small-en-v1.5`** — 33M param embedding model instead of 300M+ alternatives
 - **RapidOCR (ONNX)** — no PyTorch dependency for GUI grounding
 - **UIA-first detection** — OCR only fires when native accessibility APIs return too few elements
-- **Lazy service boot** — WhatsApp, Telegram, and mobile bridges skip startup entirely if not authenticated
+- **Lazy service boot** — WhatsApp, Telegram, mobile bridges, and the indexer skip startup entirely if not authenticated or not needed
 
 > If you have a modern machine, Jarvis will fly. If you have an old one, Jarvis will still run.
 
@@ -438,10 +442,13 @@ flowchart TD
 
     subgraph Memory["🧠 Memory Ecosystem"]
         LTM[("🗄️ Vector Semantic Graph LTM<br/>Weighted Graph + Subgraph + Decay")]
-        RAG[("📚 ChromaDB RAG<br/>Hybrid Vector + BM25 + RRF")]
+        RAG[("📚 ChromaDB Knowledge Index<br/>Documents + Custom Folders<br/>Hybrid Vector + BM25 + RRF")]
+        Indexer["📊 Web Indexer Dashboard<br/>Flask @ 127.0.0.1:8080<br/>Folder + Filter Management"]
         JSONL["📜 Rolling History<br/>2-Day Raw + 13-Day Summaries"]
         Profile["👤 User Profile & Mood"]
     end
+
+    Indexer -.->|Config + Filters| RAG
 
     AgenticBrain <--> Memory
     FastBrain <--> Memory
@@ -533,10 +540,14 @@ Jarvis implements a **four-tier** memory system:
    - **Bidirectional Awareness:** Auto-generates inverse edges — for example, `[User] -> (FATHER) -> [FatherName]` also creates `[FatherName] -> (CHILD) -> [User]`.
    - **Semantic Edge Routing:** Matches relational edge intent first, then falls back to deep semantic similarity against exact conversation context.
    - **Temporal Decay:** Relations older than 6 months lose half their weight. The embedding engine (`BAAI/bge-small-en-v1.5`) is preloaded at startup for zero-latency multi-entity traversal.
-3. **📚 Hybrid RAG (Workspace Documents):**
-   - **Smart Chunking:** 1500-character chunks with 200-character overlap.
+3. **📚 Hybrid RAG (Personal Knowledge Index):**
+   - **Default Scope:** Auto-indexes the user's `Documents` folder at startup. User can add any folder via the built-in web dashboard.
+   - **Smart Chunking:** 1500-character chunks with 200-character overlap, code-aware (line-based) chunking for `.py`, `.js`, `.ts`, `.java`, `.cpp`, and 15+ other source formats.
    - **Hybrid Retrieval:** BM25 keyword search plus vector similarity merged via **Reciprocal Rank Fusion (RRF)**.
    - **Recency Boost:** Recently modified files get a ~20% score lift.
+   - **Smart Filters:** Auto-excludes system paths (`C:\Windows`, `Program Files`), dev garbage (`node_modules`, `venv`, `.git`, `build`), binaries, media, and files > 5 MB. Detects and warns on sensitive paths (`.ssh`, `.aws`, `.env`, browser profiles).
+   - **Incremental Indexing:** Hash-based change detection — only modified files are re-embedded on each run.
+   - **Web Dashboard:** Local Flask UI at `127.0.0.1:8080` with live progress, folder management (add/remove/reindex), filter editor, and pause/resume controls.
 4. **👤 User Profile & Mood Tracker:** Auto-extracts user bio, preferences, and mood states into knowledge-graph triplets.
 
 ---
@@ -642,6 +653,23 @@ python SetupRegistry.py
 ```
 
 > ⚠️ **Important:** Run `python SetupRegistry.py` from the root `Jarvis-OS-Agent/` directory with the virtual environment activated.
+
+### Knowledge Indexer Dashboard
+
+Jarvis ships with a built-in web dashboard for managing the RAG knowledge index — no extra setup needed. Just start Jarvis and open:
+
+```
+http://127.0.0.1:8080
+```
+
+On first boot, the indexer automatically:
+- Indexes your `Documents` folder (default)
+- Creates `Data/jarvis_indexer/` config files (`folders.json`, `filters.json`, `settings.json`)
+- Starts the Flask dashboard + watchdog monitoring
+
+**Adding more folders:** Open the dashboard → Folders tab → paste any absolute path (e.g., `D:/Projects`) → click **Add & Index**. System paths are auto-blocked; sensitive paths are flagged.
+
+> 📌 **Requirements:** `pip install flask` (included in `requirements.txt`). Dashboard binds to `127.0.0.1` only — never exposed to LAN or internet.
 
 ### Global Launch
 
@@ -759,7 +787,11 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | Mobile SSH times out | Confirm Tailscale is connected on both devices and `sshd` is running in Termux |
 | Ollama provider fails | Ensure `CUSTOM_BASE_URL` ends with `/v1` and follows the OpenAI schema |
 | Knowledge graph feels stale | Delete `Data/jarvis_memory/lifetime_graph.json` and reboot — nodes, weights, and embeddings rebuild |
-| Hybrid RAG results poor | Delete `Data/jarvis_memory/rag_chroma_db` and reboot to force a fresh index |
+| Hybrid RAG results poor | Open the dashboard at `127.0.0.1:8080` → Folders tab → **Reindex** on the affected folder. For a full rebuild: delete `Data/jarvis_memory/rag_chroma_db` and reboot. |
+| Dashboard not opening | Ensure `flask` is installed (`pip install flask`). Check logs for `Indexer Dashboard running at http://127.0.0.1:8080`. If port is busy, Jarvis auto-shifts to 8081–8095 — check startup logs for the actual port. |
+| RAG indexing sensitive folders | Open the dashboard → Folders tab → **Remove**. Then edit `Data/jarvis_indexer/folders.json` to confirm removal. Sensitive paths like `.ssh`, `.aws`, `.env` are auto-warned but not hard-blocked. |
+| RAG indexer stuck / too slow | If indexing `Documents` hangs, check for permission-denied folders (e.g., `My Music`, `My Pictures` — legacy Windows junctions). These are auto-skipped with `legacy_junctions=N` in scan summary. Reduce scope via dashboard filters. |
+| Too many files getting indexed | Open dashboard → Filters tab → tighten `Max File Size (MB)`, `Max Depth`, or add `Custom Ignore Patterns` (e.g., `*.log`, `backup_*`). |
 | PC Monitor not starting | Run `pip install psutil pywin32 pygetwindow` |
 | Too many PC Monitor alerts | Adjust thresholds in `PCMonitorProactive.py` |
 | USB devices not detected | Run PowerShell as Administrator — PC Monitor reads Windows Event Logs |
@@ -838,4 +870,4 @@ Every star, fork, and share helps more developers discover the project.
 
 <p align="center">
   <i>"Any sufficiently advanced technology is indistinguishable from magic." — Arthur C. Clarke</i>
-</p>
+</p

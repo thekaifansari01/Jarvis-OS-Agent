@@ -19,6 +19,8 @@ _stt_popup_process = None
 _baileys_process = None
 _mobile_bridge_process = None
 _rag_engine_initialized = False
+_rag_dashboard_active = False
+_rag_engine_init_started = False
 
 def start_agent_panel():
     global _panel_process
@@ -181,14 +183,18 @@ def is_mobile_bridge_running() -> bool:
     return _mobile_bridge_process.poll() is None
 
 def start_rag_engine():
+    global _rag_engine_init_started
+    _rag_engine_init_started = True
     try:
         from core.brain.RagEngine import rag_engine
         logging.info("RAG Engine initialized successfully.")
+        start_indexer_dashboard()
     except Exception as e:
         logging.error(f"RAG Engine initialization failed: {e}")
 
 def stop_rag_engine():
     global _rag_engine_initialized
+    stop_indexer_dashboard()
     if _rag_engine_initialized:
         try:
             pass
@@ -197,6 +203,48 @@ def stop_rag_engine():
         finally:
             _rag_engine_initialized = False
             logging.info("RAG Engine stopped successfully.")
+
+def start_indexer_dashboard():
+    global _rag_dashboard_active
+    try:
+        from core.brain.Indexer.dashboard import start_dashboard, is_dashboard_running
+        if is_dashboard_running():
+            _rag_dashboard_active = True
+            logging.info("Indexer Dashboard already running.")
+            return
+        port = start_dashboard()
+        if port:
+            _rag_dashboard_active = True
+            logging.info(f"Indexer Dashboard started at http://127.0.0.1:{port}")
+        else:
+            logging.warning("Indexer Dashboard failed to start.")
+    except ImportError as e:
+        logging.warning(f"Indexer Dashboard not available (missing dependency): {e}")
+    except Exception as e:
+        logging.error(f"Indexer Dashboard start failed: {e}")
+
+def stop_indexer_dashboard():
+    global _rag_dashboard_active
+    if not _rag_dashboard_active:
+        return
+    try:
+        from core.brain.Indexer.dashboard import stop_dashboard
+        stop_dashboard()
+        logging.info("Indexer Dashboard stopped successfully.")
+    except Exception as e:
+        logging.error(f"Indexer Dashboard stop failed: {e}")
+    finally:
+        _rag_dashboard_active = False
+
+def is_indexer_dashboard_running() -> bool:
+    try:
+        from core.brain.Indexer.dashboard import is_dashboard_running
+        return is_dashboard_running()
+    except Exception:
+        return False
+
+def is_rag_engine_init_started() -> bool:
+    return _rag_engine_init_started
 
 def start_telegram_remote_service():
     try:
@@ -225,4 +273,5 @@ def stop_all_services():
     stop_baileys_server()
     stop_mobile_bridge()
     stop_telegram_remote_service()
+    stop_indexer_dashboard()
     stop_rag_engine()

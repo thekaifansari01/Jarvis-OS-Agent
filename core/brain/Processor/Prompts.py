@@ -326,13 +326,16 @@ def get_native_tools():
                             "vault": types.Schema(
                                 type=types.Type.STRING, 
                                 description=(
-                                    "[Target: Local Knowledge Base / Personal Vault] Use when the user asks about their own saved notes, internal project docs, or personal files.\n"
-                                    "[WHAT YOU GET]: Vault returns complete file chunks with rich metadata including file path, size, chunk count, and content.\n"
+                                    "[Target: Personal Knowledge Index] Use when the user asks about their own saved notes, files, projects, or personal documents.\n"
+                                    "[SCOPE]: Auto-includes the user's Documents folder. User may have added more folders via the Indexer Dashboard.\n"
+                                    "[WHAT YOU GET]: Returns complete file chunks with metadata including file name, absolute path, root folder, size, chunk count, and content.\n"
                                     "[IMPORTANT RULES]:\n"
                                     "  - If STATUS shows 'COMPLETE FILE', the content is the FULL file. Use it directly.\n"
                                     "  - DO NOT call file_operations or run_python_code to re-read a file that vault already returned completely.\n"
                                     "  - If STATUS shows 'PARTIAL FILE', only then consider reading the full file separately.\n"
-                                    "Format: Exact noun, entity name, or topic keyword (e.g., 'JarvisServer architecture')."
+                                    "  - If the query targets a folder that is NOT indexed, fall back to live file search via file_operations or run_python_code.\n"
+                                    "  - In results, note the 'root_folder' field to reference which folder the file belongs to.\n"
+                                    "Format: Exact noun, entity name, or topic keyword (e.g., 'project proposal', 'meeting notes')."
                                 )
                             )
                         }

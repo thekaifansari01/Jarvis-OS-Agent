@@ -7,9 +7,12 @@ from core.main.BackgroundServices import (
     start_baileys_server,
     start_stt_popup,
     start_telegram_remote_service,
+    start_indexer_dashboard,
     is_baileys_running,
     is_stt_popup_running,
-    is_telegram_remote_service_running
+    is_telegram_remote_service_running,
+    is_indexer_dashboard_running,
+    is_rag_engine_init_started
 )
 
 class ServiceWatchdog:
@@ -47,6 +50,15 @@ class ServiceWatchdog:
                 "last_restart": 0,
                 "next_retry_time": 0,
                 "has_creds": lambda: os.path.exists(self._telegram_token_path)
+            },
+            "indexer_dashboard": {
+                "is_running_check": is_indexer_dashboard_running,
+                "start_func": start_indexer_dashboard,
+                "retries": 0,
+                "last_restart": 0,
+                "next_retry_time": 0,
+                "has_creds": lambda: True,
+                "ready_check": is_rag_engine_init_started
             }
         }
 
@@ -74,6 +86,9 @@ class ServiceWatchdog:
                 if current_time < service_data["next_retry_time"]:
                     continue
                 if current_time - service_data["last_restart"] < self.cooldown:
+                    continue
+                ready_check = service_data.get("ready_check")
+                if ready_check and not ready_check():
                     continue
                 try:
                     if not service_data["has_creds"]():
