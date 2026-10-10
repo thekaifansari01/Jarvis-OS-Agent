@@ -559,7 +559,12 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                         elif key == "deep_research" and isinstance(value, dict):
                             current_detail = value.get("topic", "")
                         elif key == "email_action" and isinstance(value, dict):
-                            current_detail = f"To: {value.get('to', '')}"
+                            if value.get('action') == 'fetch':
+                                fetch_start = value.get('start_date', '')
+                                fetch_end = value.get('end_date') or fetch_start
+                                current_detail = f"Fetching Emails: {fetch_start} to {fetch_end}"
+                            else:
+                                current_detail = f"To: {value.get('to', '')}"
                         elif key == "whatsapp_action" and isinstance(value, dict):
                             current_detail = f"To: {value.get('to', '')}"
                         elif key == "image_command" and isinstance(value, dict):
@@ -572,8 +577,22 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             current_detail = value.get("query", "Inspecting media")
                         elif key == "file_operations" and isinstance(value, dict):
                             current_detail = value.get("action", "File operation")
-                        elif key == "system_controller" and isinstance(value, dict):
-                            current_detail = "Capturing Screen..." if value.get("system_action") == "screenshot" else "Controlling System"
+                        elif key == "gui_controller" and isinstance(value, dict):
+                            gui_action = value.get("action", "")
+                            if gui_action == "observe":
+                                current_detail = "Observing Screen"
+                            elif gui_action in ["click_by_id", "double_click_by_id", "right_click_by_id"]:
+                                current_detail = f"Clicking #{value.get('element_id', '?')}"
+                            elif gui_action == "type":
+                                current_detail = "Typing Text"
+                            elif gui_action == "drag_and_drop":
+                                current_detail = "Dragging"
+                            elif gui_action in ["press_key", "hotkey"]:
+                                current_detail = "Pressing Keys"
+                            elif gui_action in ["scroll_down", "scroll_up"]:
+                                current_detail = "Scrolling"
+                            else:
+                                current_detail = f"GUI: {gui_action}"
                         
                         action_details_list.append(current_detail)
 

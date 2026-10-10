@@ -94,7 +94,7 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
 
   <tool_selection_hierarchy>
     <rule level="1" type="native_tools">
-      <directive>STRICT PRIORITY: Always use built-in native tools first ('whatsapp_action', 'email_action', 'search_actions', 'calendar_action', 'memory_actions').</directive>
+      <directive>STRICT PRIORITY: Always use built-in native tools first ('whatsapp_action', 'email_action', 'search_actions', 'calendar_action', 'memory_actions', 'system_controller', 'gui_controller').</directive>
     </rule>
     <rule level="2" type="file_operations">
       <directive>USE 'file_operations' FOR FILE CRUD, REPO MAP & IMAGE VIEWING: Use 'repo_map' to inspect project architecture before coding. Use 'view' to read text/code files OR visually inspect image files (.png, .jpg, .jpeg, .webp, .gif) inline (single or batch via 'file_paths'). Use 'replace_block' for exact search-and-replace block edits. Use 'create' to create single file (with 'file_path' + 'content') or multiple files (with 'files' array) in one step. Always use full absolute file paths.</directive>
@@ -503,18 +503,59 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="email_action",
                     description=(
-                        "[WHEN TO USE]: Use when the user asks to send an email with optional file attachments.\n"
-                        "[CRITICAL RULE]: Always use a complete, valid email address ('to' field). Fetch recipient email from 'memory_actions' if needed."
+                        "[WHEN TO USE]: Send emails OR fetch/read emails from Gmail inbox.\n"
+                        "[MODE 'send']: Send an email with optional file attachment. Requires 'to', 'subject', 'body'.\n"
+                        "[MODE 'fetch']: Retrieve emails within a date range. Requires 'start_date' (YYYY-MM-DD). 'end_date' optional (same as start_date if omitted).\n"
+                        "[DATE FORMAT]: ALWAYS YYYY-MM-DD (e.g., '2024-01-15').\n"
+                        "[DATE INTERPRETATION]: 'aaj' = today, 'kal' = yesterday, 'parso' = day before yesterday, 'last week' = today-7 days to today, 'is hafte' = Monday to today, 'X se Y tak' = X is start_date, Y is end_date.\n"
+                        "[QUERY FILTERS]: 'from:kaif@example.com', 'subject:meeting', 'is:unread', 'has:attachment'. Combine multiple filters with spaces.\n"
+                        "[CRITICAL RULE]: For 'send', use a complete valid email address. Fetch recipient email from 'memory_actions' if needed."
                     ),
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
-                            "to": types.Schema(type=types.Type.STRING, description="Full email address of the recipient."),
-                            "subject": types.Schema(type=types.Type.STRING, description="Subject line of the email."),
-                            "body": types.Schema(type=types.Type.STRING, description="Main text body of the email."),
-                            "file_path": types.Schema(type=types.Type.STRING, description="MANDATORY IF ATTACHING: Exact absolute local file path.")
+                            "action": types.Schema(
+                                type=types.Type.STRING,
+                                description="MANDATORY. Must be exactly 'send' or 'fetch'."
+                            ),
+                            "to": types.Schema(
+                                type=types.Type.STRING,
+                                description="[SEND ONLY] Full email address of the recipient."
+                            ),
+                            "subject": types.Schema(
+                                type=types.Type.STRING,
+                                description="[SEND ONLY] Subject line of the email."
+                            ),
+                            "body": types.Schema(
+                                type=types.Type.STRING,
+                                description="[SEND ONLY] Main text body of the email."
+                            ),
+                            "file_path": types.Schema(
+                                type=types.Type.STRING,
+                                description="[SEND ONLY] Optional. Exact absolute local file path for attachment."
+                            ),
+                            "start_date": types.Schema(
+                                type=types.Type.STRING,
+                                description="[FETCH ONLY] MANDATORY. Start date in YYYY-MM-DD format."
+                            ),
+                            "end_date": types.Schema(
+                                type=types.Type.STRING,
+                                description="[FETCH ONLY] Optional. End date in YYYY-MM-DD. If omitted, same as start_date."
+                            ),
+                            "query": types.Schema(
+                                type=types.Type.STRING,
+                                description="[FETCH ONLY] Optional Gmail filter query (e.g., 'from:kaif@example.com', 'is:unread', 'subject:meeting')."
+                            ),
+                            "max_results": types.Schema(
+                                type=types.Type.INTEGER,
+                                description="[FETCH ONLY] Optional. Maximum emails to fetch. Default 50. Use 500+ for 'saari mails'."
+                            ),
+                            "mark_as_read": types.Schema(
+                                type=types.Type.BOOLEAN,
+                                description="[FETCH ONLY] Optional. If true, marks fetched emails as read. Default false."
+                            )
                         },
-                        required=["to", "subject", "body"]
+                        required=["action"]
                     )
                 ),
                 types.FunctionDeclaration(

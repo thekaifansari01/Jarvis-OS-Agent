@@ -336,6 +336,82 @@ def handle_file_transfer(transfer_cmd: dict) -> str:
 
 @with_observation
 def handle_email_action(email_action: dict) -> str:
+    action_type = str(email_action.get('action', 'send')).strip().lower()
+
+    if action_type == 'fetch':
+        start_date = email_action.get('start_date')
+        end_date = email_action.get('end_date')
+        query = email_action.get('query')
+        max_results = email_action.get('max_results', 50)
+        mark_as_read_flag = bool(email_action.get('mark_as_read', False))
+
+        if not start_date:
+            return "Error -> 'fetch' action requires 'start_date' (YYYY-MM-DD)."
+
+        logger.info(f"🤖 Agent Fetching Emails | start={start_date} | end={end_date} | query={query}")
+
+        from tools.Messanger.email_manager import fetch_emails_by_date
+
+        fetch_result = fetch_emails_by_date(
+            start_date=start_date,
+            end_date=end_date,
+            query=query,
+            max_results=max_results,
+            mark_as_read_flag=mark_as_read_flag
+        )
+
+        emails = fetch_result.get("emails", [])
+        attachments = fetch_result.get("saved_attachments", [])
+        date_range = fetch_result.get("date_range", {})
+
+        if not fetch_result.get("success") and not emails:
+            return f"Email fetch failed -> {fetch_result.get('error', 'Unknown error')}"
+
+        if not fetch_result.get("success") and emails:
+            logger.warning(f"⚠️ Partial fetch failure: {fetch_result.get('error')}. Returning {len(emails)} emails.")
+
+        if not emails:
+            return f"No emails found between {date_range.get('start')} and {date_range.get('end')}."
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        save_dir = os.path.join(base_dir, "Data", "SessionCookies", "FetchedEmails")
+        os.makedirs(save_dir, exist_ok=True)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        save_path = os.path.join(save_dir, f"emails_{timestamp}.json")
+
+        try:
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(fetch_result, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save fetched emails JSON: {e}")
+            save_path = None
+
+        summary_lines = []
+        summary_lines.append(f"Total Emails Fetched: {len(emails)}")
+        summary_lines.append(f"Date Range: {date_range.get('start')} to {date_range.get('end')}")
+        if attachments:
+            summary_lines.append(f"Attachments Saved: {len(attachments)}")
+        if save_path:
+            summary_lines.append(f"Full Data Saved At: {save_path}")
+        summary_lines.append("")
+        summary_lines.append("Recent 10 Emails Summary:")
+        for idx, mail in enumerate(emails[:10], 1):
+            summary_lines.append(
+                f"{idx}. From: {mail.get('from_name')} <{mail.get('from_email')}> | "
+                f"Subject: {mail.get('subject')} | Date: {mail.get('date')}"
+            )
+        if len(emails) > 10:
+            summary_lines.append(f"... and {len(emails) - 10} more (see JSON file).")
+        if attachments:
+            summary_lines.append("")
+            summary_lines.append("Attachment Paths:")
+            for att in attachments[:10]:
+                summary_lines.append(f"- {att}")
+            if len(attachments) > 10:
+                summary_lines.append(f"... and {len(attachments) - 10} more.")
+
+        return "\n".join(summary_lines)
+
     raw_requested_to = email_action.get('to', '').strip()
     if not raw_requested_to: return "Email action missing 'to' parameter."
     requested_to_lower = raw_requested_to.lower()
