@@ -162,8 +162,10 @@ def _producer_thread(sentences: list):
             data = {
                 "inputs": [sentence],
                 "target_language_code": "hi-IN",
-                "speaker": "shubh",
-                "model": "bulbul:v3"
+                "speaker": "aditya_hi_conversational",
+                "model": "bulbul:v4-flash",
+                "pace": 1,
+                "speech_sample_rate": 24000
             }
             try:
                 logger.debug(f"📡 Sarvam TTS request | sentence {idx}/{len(sentences)}")
