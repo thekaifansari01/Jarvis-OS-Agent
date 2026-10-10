@@ -770,9 +770,13 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             send_telegram_update(observation=str(observation))
                             break
                         else:
+                            obs_str = str(observation).strip()
+                            matched_kw = next((kw for kw in error_keywords if kw in obs_lower), "unknown")
+                            obs_preview = obs_str.replace("\n", " ")[:200]
                             logger.warning(
-                                f"⚠️ Tool execution error detected: {str(observation)[:100]}. Sending to AI for self-correction..."
+                                f"⚠️ Tool execution error detected | keyword='{matched_kw}' | preview: {obs_preview}"
                             )
+                            logger.debug(f"Full observation for self-correction:\n{obs_str[:2000]}")
                             break
                     elif attempt < retry_limit - 1:
                         logger.warning(
