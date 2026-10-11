@@ -25,1215 +25,490 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>J.A.R.V.I.S · Knowledge Indexer</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <style>
-:root {
-    --bg-0: #030711;
-    --bg-1: #0a0f24;
-    --bg-2: #111a35;
-    --surface: rgba(15, 23, 42, 0.55);
-    --surface-2: rgba(30, 41, 59, 0.65);
-    --border: rgba(148, 163, 184, 0.14);
-    --border-hover: rgba(56, 189, 248, 0.45);
-    --accent: #38bdf8;
-    --accent-2: #22d3ee;
-    --accent-3: #a855f7;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --text: #e2e8f0;
-    --muted: #94a3b8;
-    --muted-2: #64748b;
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body { min-height: 100%; }
-
-body {
-    min-height: 100vh;
-    font-family: 'Inter', system-ui, sans-serif;
-    background: var(--bg-0);
-    color: var(--text);
-    overflow-x: hidden;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding: 32px 20px;
-    position: relative;
-}
-
-.bg-orbs {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    overflow: hidden;
-    pointer-events: none;
-}
-
-.orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(90px);
-    opacity: 0.5;
-    will-change: transform;
-}
-
-.orb-1 {
-    width: 520px; height: 520px;
-    background: radial-gradient(circle, #0ea5e9, transparent 65%);
-    top: -180px; left: -140px;
-    animation: float1 22s ease-in-out infinite;
-}
-
-.orb-2 {
-    width: 620px; height: 620px;
-    background: radial-gradient(circle, #a855f7, transparent 65%);
-    bottom: -220px; right: -180px;
-    animation: float2 26s ease-in-out infinite;
-}
-
-.orb-3 {
-    width: 400px; height: 400px;
-    background: radial-gradient(circle, #06b6d4, transparent 65%);
-    top: 40%; left: 45%;
-    animation: float3 30s ease-in-out infinite;
-    opacity: 0.28;
-}
-
-@keyframes float1 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50%      { transform: translate(90px, 70px) scale(1.12); }
-}
-@keyframes float2 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50%      { transform: translate(-100px, -80px) scale(1.15); }
-}
-@keyframes float3 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33%      { transform: translate(-70px, 50px) scale(1.08); }
-    66%      { transform: translate(80px, -60px) scale(0.94); }
-}
-
-.shell {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 1180px;
-    background: linear-gradient(160deg, rgba(15,23,42,0.72), rgba(2,6,23,0.85));
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-radius: 24px;
-    border: 1px solid var(--border);
-    box-shadow:
-        0 30px 80px rgba(0, 0, 0, 0.55),
-        0 0 0 1px rgba(56, 189, 248, 0.05),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    padding: 34px;
-    animation: shellIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes shellIn {
-    from { opacity: 0; transform: translateY(28px) scale(0.985); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.hero {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.logo {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
-    display: grid;
-    place-items: center;
-    font-size: 22px;
-    color: #e0f2fe;
-    background: linear-gradient(135deg, #0ea5e9, #6366f1, #a855f7);
-    box-shadow: 0 0 30px rgba(56, 189, 248, 0.55), inset 0 1px 0 rgba(255,255,255,0.3);
-    animation: logoPulse 3.6s ease-in-out infinite;
-}
-
-@keyframes logoPulse {
-    0%, 100% { box-shadow: 0 0 30px rgba(56, 189, 248, 0.55), inset 0 1px 0 rgba(255,255,255,0.3); }
-    50%      { box-shadow: 0 0 50px rgba(168, 85, 247, 0.75), inset 0 1px 0 rgba(255,255,255,0.35); }
-}
-
-.brand h1 {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 22px;
-    font-weight: 900;
-    letter-spacing: 6px;
-    color: #f0f9ff;
-    text-shadow: 0 0 24px rgba(56, 189, 248, 0.65);
-}
-
-.brand p {
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 3px;
-    margin-top: 4px;
-    text-transform: uppercase;
-}
-
-.status-pill {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 18px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1.4px;
-    text-transform: uppercase;
-    transition: all 0.3s;
-    border: 1px solid;
-}
-
-.status-pill .pulse {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    box-shadow: 0 0 0 0 currentColor;
-    animation: pillPulse 1.8s infinite;
-}
-
-@keyframes pillPulse {
-    0%   { box-shadow: 0 0 0 0 currentColor; }
-    70%  { box-shadow: 0 0 0 10px transparent; }
-    100% { box-shadow: 0 0 0 0 transparent; }
-}
-
-.status-pill.idle { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.35); color: var(--success); }
-.status-pill.scanning { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.35); color: var(--warning); }
-.status-pill.paused { background: rgba(148,163,184,0.08); border-color: rgba(148,163,184,0.35); color: var(--muted); }
-.status-pill.error { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.35); color: var(--danger); }
-
-.stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    margin-bottom: 20px;
-}
-
-.stat {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px 18px;
-    border-radius: 14px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.stat:hover {
-    border-color: var(--border-hover);
-    transform: translateY(-3px);
-    box-shadow: 0 14px 34px rgba(56, 189, 248, 0.15);
-}
-
-.stat i {
-    font-size: 18px;
-    color: var(--accent);
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    border-radius: 10px;
-    background: rgba(56, 189, 248, 0.08);
-    border: 1px solid rgba(56, 189, 248, 0.2);
-    flex-shrink: 0;
-}
-
-.stat.accent-2 i { color: var(--accent-3); background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.2); }
-.stat.success i { color: var(--success); background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
-
-.stat > div {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.stat span {
-    font-size: 20px;
-    font-weight: 800;
-    color: #f8fafc;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.stat small {
-    font-size: 10.5px;
-    color: var(--muted);
-    letter-spacing: 1.4px;
-    text-transform: uppercase;
-    font-weight: 600;
-}
-
-.progress-card {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 18px 20px;
-    margin-bottom: 24px;
-    transition: border-color 0.3s;
-}
-
-.progress-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-}
-
-.progress-head .label {
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.progress-head .label i { color: var(--accent); }
-
-.progress-head .detail {
-    font-size: 12px;
-    color: var(--muted);
-    font-family: 'Inter', monospace;
-    letter-spacing: 0.5px;
-}
-
-.progress-track {
-    background: rgba(2, 6, 23, 0.7);
-    height: 10px;
-    border-radius: 5px;
-    overflow: hidden;
-    position: relative;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
-}
-
-.progress-fill {
-    background: linear-gradient(90deg, #38bdf8, #22d3ee, #a855f7, #38bdf8);
-    background-size: 300% 100%;
-    height: 100%;
-    width: 0%;
-    border-radius: 5px;
-    transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    animation: shimmer 3s linear infinite;
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
-}
-
-@keyframes shimmer {
-    0%   { background-position: 0% 50%; }
-    100% { background-position: 300% 50%; }
-}
-
-.tabs {
-    display: flex;
-    gap: 6px;
-    padding: 6px;
-    background: rgba(2, 6, 23, 0.5);
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    margin-bottom: 22px;
-    width: fit-content;
-    max-width: 100%;
-    overflow-x: auto;
-}
-
-.tab {
-    padding: 10px 22px;
-    cursor: pointer;
-    border: none;
-    background: transparent;
-    color: var(--muted);
-    font-size: 12.5px;
-    font-weight: 700;
-    letter-spacing: 1.4px;
-    text-transform: uppercase;
-    border-radius: 8px;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-    font-family: inherit;
-}
-
-.tab:hover { color: var(--text); }
-
-.tab.active {
-    color: #e0f2fe;
-    background: linear-gradient(135deg, rgba(56,189,248,0.18), rgba(168,85,247,0.18));
-    box-shadow: 0 0 18px rgba(56, 189, 248, 0.25), inset 0 1px 0 rgba(255,255,255,0.08);
-}
-
-.tab i { font-size: 12px; }
-
-.tab-content { display: none; animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-.tab-content.active { display: block; }
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-.card {
-    position: relative;
-    border-radius: 18px;
-    padding: 22px;
-    background: linear-gradient(160deg, rgba(30,41,59,0.5), rgba(2,6,23,0.7));
-    border: 1px solid var(--border);
-    margin-bottom: 18px;
-    overflow: hidden;
-    transition: border-color 0.35s;
-}
-
-.card::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 18px;
-    padding: 1px;
-    background: linear-gradient(135deg, transparent 40%, rgba(56,189,248,0.35) 50%, transparent 60%);
-    background-size: 300% 300%;
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.4s;
-    pointer-events: none;
-}
-
-.card:hover::after {
-    opacity: 1;
-    animation: borderShift 3s linear infinite;
-}
-
-@keyframes borderShift {
-    0%   { background-position: 0% 0%; }
-    100% { background-position: 300% 300%; }
-}
-
-.card-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2.4px;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 18px;
-}
-
-.card-head i { color: var(--accent); font-size: 13px; }
-
-.card-head .badge {
-    margin-left: auto;
-    background: rgba(56, 189, 248, 0.12);
-    border: 1px solid rgba(56, 189, 248, 0.35);
-    color: var(--accent);
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1px;
-}
-
-button {
-    font-family: inherit;
-    cursor: pointer;
-    border-radius: 10px;
-    font-size: 12.5px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    padding: 10px 18px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    justify-content: center;
-}
-
-button:hover { border-color: var(--border-hover); background: rgba(56,189,248,0.1); }
-button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-button.primary {
-    background: linear-gradient(135deg, #0ea5e9, #6366f1);
-    border-color: rgba(56, 189, 248, 0.5);
-    color: white;
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.35);
-}
-button.primary:hover {
-    box-shadow: 0 0 30px rgba(56, 189, 248, 0.6);
-    transform: translateY(-1px);
-}
-
-button.danger {
-    background: linear-gradient(135deg, #dc2626, #ef4444);
-    border-color: rgba(239, 68, 68, 0.5);
-    color: white;
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
-}
-button.danger:hover {
-    box-shadow: 0 0 30px rgba(239, 68, 68, 0.55);
-    transform: translateY(-1px);
-}
-
-button.ghost {
-    background: transparent;
-    border-color: var(--border);
-}
-
-button.warning {
-    background: linear-gradient(135deg, #d97706, #f59e0b);
-    border-color: rgba(245, 158, 11, 0.5);
-    color: white;
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
-}
-button.warning:hover { box-shadow: 0 0 30px rgba(245, 158, 11, 0.5); }
-
-.btn-icon {
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    border-radius: 10px;
-    font-size: 13px;
-}
-
-.btn-icon.danger {
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: var(--danger);
-    box-shadow: none;
-}
-.btn-icon.danger:hover {
-    background: var(--danger);
-    color: white;
-    border-color: var(--danger);
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
-    transform: scale(1.08);
-}
-
-.btn-icon:not(.danger) {
-    background: rgba(56, 189, 248, 0.08);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    color: var(--accent);
-    box-shadow: none;
-}
-.btn-icon:not(.danger):hover {
-    background: var(--accent);
-    color: #0a0f24;
-    border-color: var(--accent);
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
-    transform: scale(1.08);
-}
-
-input[type="text"], input[type="number"], textarea {
-    background: rgba(2, 6, 23, 0.7);
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-size: 13px;
-    font-family: inherit;
-    width: 100%;
-    transition: all 0.2s;
-}
-
-input:focus, textarea:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
-}
-
-textarea {
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 12px;
-    resize: vertical;
-    line-height: 1.6;
-}
-
-.form-row {
-    display: flex;
-    gap: 10px;
-    margin-top: 4px;
-    flex-wrap: wrap;
-}
-
-.form-row input { flex: 1; min-width: 200px; }
-
-.field { margin-bottom: 16px; }
-.field:last-child { margin-bottom: 0; }
-
-.field label {
-    display: block;
-    font-size: 11.5px;
-    color: var(--muted);
-    margin-bottom: 8px;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    font-weight: 700;
-}
-
-.field-hint {
-    font-size: 11px;
-    color: var(--muted-2);
-    margin-top: 6px;
-    line-height: 1.5;
-}
-
-.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-
-.folder-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 16px;
-    background: linear-gradient(145deg, rgba(30,41,59,0.7), rgba(15,23,42,0.85));
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    margin-bottom: 10px;
-    position: relative;
-    overflow: hidden;
-    animation: slideIn 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-    transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
-}
-
-.folder-row::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: linear-gradient(180deg, var(--accent), var(--accent-3));
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.folder-row:hover {
-    border-color: rgba(56, 189, 248, 0.4);
-    transform: translateX(4px);
-    box-shadow: 0 10px 30px rgba(56, 189, 248, 0.12);
-}
-
-.folder-row:hover::before { opacity: 1; }
-
-@keyframes slideIn {
-    from { opacity: 0; transform: translateX(-28px); }
-    to   { opacity: 1; transform: translateX(0); }
-}
-
-.folder-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 11px;
-    display: grid;
-    place-items: center;
-    font-size: 16px;
-    color: #fbbf24;
-    background: linear-gradient(135deg, rgba(56,189,248,0.18), rgba(168,85,247,0.18));
-    border: 1px solid rgba(56, 189, 248, 0.28);
-    flex-shrink: 0;
-}
-
-.folder-info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.folder-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: #f8fafc;
-    letter-spacing: 0.3px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.tag-default {
-    font-size: 9.5px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: rgba(56, 189, 248, 0.15);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    color: var(--accent);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    font-weight: 800;
-}
-
-.folder-meta {
-    display: flex;
-    gap: 14px;
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 0.5px;
-    font-weight: 600;
-}
-
-.folder-meta span {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.folder-meta i { font-size: 10px; color: var(--accent); }
-
-.folder-path {
-    font-size: 11px;
-    color: var(--muted-2);
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    letter-spacing: 0.3px;
-}
-
-.folder-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-.empty-state {
-    text-align: center;
-    padding: 46px 20px;
-    color: var(--muted);
-    border: 1px dashed var(--border);
-    border-radius: 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-}
-
-.empty-state i {
-    font-size: 28px;
-    color: var(--muted-2);
-    animation: softFloat 3s ease-in-out infinite;
-}
-
-@keyframes softFloat {
-    0%, 100% { transform: translateY(0); opacity: 0.7; }
-    50%      { transform: translateY(-6px); opacity: 1; }
-}
-
-.empty-state p {
-    font-size: 12.5px;
-    letter-spacing: 0.6px;
-}
-
-.toast {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    padding: 14px 22px;
-    background: linear-gradient(135deg, #10b981, #22d3ee);
-    color: white;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    opacity: 0;
-    transform: translateY(20px);
-    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-    pointer-events: none;
-    z-index: 1000;
-    box-shadow: 0 20px 50px rgba(16, 185, 129, 0.4);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: 380px;
-}
-
-.toast.show { opacity: 1; transform: translateY(0); }
-.toast.error {
-    background: linear-gradient(135deg, #dc2626, #ef4444);
-    box-shadow: 0 20px 50px rgba(239, 68, 68, 0.4);
-}
-
-.toast i { font-size: 15px; }
-
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: rgba(2, 6, 23, 0.4); border-radius: 4px; }
-::-webkit-scrollbar-thumb {
-    background: rgba(56, 189, 248, 0.25);
-    border-radius: 4px;
-    transition: background 0.2s;
-}
-::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.5); }
-
-@media (max-width: 900px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .grid-2 { grid-template-columns: 1fr; }
-    .grid-4 { grid-template-columns: repeat(2, 1fr); }
-    .shell { padding: 24px; }
-}
-
-@media (max-width: 560px) {
-    body { padding: 16px 12px; }
-    .stats { grid-template-columns: 1fr; }
-    .hero { flex-direction: column; align-items: flex-start; }
-    .brand h1 { font-size: 18px; letter-spacing: 4px; }
-    .tab { padding: 9px 14px; font-size: 11px; }
-    .tab span { display: none; }
-    .toast { left: 16px; right: 16px; bottom: 16px; }
-}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050914;--panel:rgba(15,23,42,.55);--panel-2:rgba(30,41,59,.5);
+  --border:rgba(148,163,184,.14);--border-h:rgba(56,189,248,.45);
+  --accent:#38bdf8;--accent2:#a855f7;--ok:#10b981;--warn:#f59e0b;--err:#ef4444;
+  --text:#e2e8f0;--muted:#94a3b8;--muted2:#64748b;
+}
+html,body{min-height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",Roboto,Helvetica,Arial,sans-serif;
+  background:radial-gradient(1200px 600px at 10% -10%,rgba(56,189,248,.10),transparent 60%),
+             radial-gradient(1000px 500px at 100% 100%,rgba(168,85,247,.10),transparent 60%),
+             var(--bg);
+  color:var(--text);display:flex;justify-content:center;padding:26px 16px;
+  -webkit-font-smoothing:antialiased;
+}
+.shell{
+  width:100%;max-width:1120px;background:var(--panel);
+  border:1px solid var(--border);border-radius:20px;padding:26px;
+  box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04);
+  animation:rise .45s cubic-bezier(.16,1,.3,1);
+}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes slideX{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+
+/* HERO */
+.hero{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  padding-bottom:18px;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(135deg,#0ea5e9,#6366f1,#a855f7);
+  box-shadow:0 0 24px rgba(56,189,248,.4);color:#fff}
+.logo svg{width:22px;height:22px}
+.brand h1{font-size:19px;font-weight:800;letter-spacing:5px;color:#f0f9ff}
+.brand p{font-size:10.5px;color:var(--muted);letter-spacing:2.5px;text-transform:uppercase;margin-top:3px}
+
+.pill{display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;
+  font-size:11.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border:1px solid}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.8s infinite}
+.pill.idle{color:var(--ok);border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.07)}
+.pill.scanning{color:var(--warn);border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.07)}
+.pill.paused{color:var(--muted);border-color:rgba(148,163,184,.35);background:rgba(148,163,184,.07)}
+.pill.error{color:var(--err);border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.07)}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;
+  background:var(--panel-2);border:1px solid var(--border);transition:transform .25s,border-color .25s}
+.stat:hover{transform:translateY(-2px);border-color:var(--border-h)}
+.stat .ic{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;
+  background:rgba(56,189,248,.09);border:1px solid rgba(56,189,248,.22);color:var(--accent);flex-shrink:0}
+.stat .ic svg{width:16px;height:16px}
+.stat.p .ic{background:rgba(168,85,247,.09);border-color:rgba(168,85,247,.22);color:var(--accent2)}
+.stat.s .ic{background:rgba(16,185,129,.09);border-color:rgba(16,185,129,.22);color:var(--ok)}
+.stat .val{font-size:19px;font-weight:800;color:#f8fafc;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .lb{font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;font-weight:700;margin-top:2px}
+
+/* PROGRESS */
+.prog{background:var(--panel-2);border:1px solid var(--border);border-radius:12px;
+  padding:16px 18px;margin-bottom:20px}
+.prog-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.prog-head .l{font-size:10.5px;color:var(--muted);letter-spacing:1.8px;text-transform:uppercase;font-weight:700}
+.prog-head .d{font-size:11.5px;color:var(--muted);font-family:ui-monospace,Consolas,monospace}
+.track{height:8px;background:rgba(2,6,23,.7);border-radius:4px;overflow:hidden}
+.fill{height:100%;width:0;border-radius:4px;
+  background:linear-gradient(90deg,#38bdf8,#22d3ee,#a855f7,#38bdf8);
+  background-size:200% 100%;transition:width .5s cubic-bezier(.16,1,.3,1);
+  animation:slideX 4s linear infinite;box-shadow:0 0 14px rgba(56,189,248,.5)}
+
+/* TABS */
+.tabs{display:flex;gap:4px;padding:5px;background:rgba(2,6,23,.55);
+  border:1px solid var(--border);border-radius:12px;margin-bottom:18px;width:fit-content;
+  max-width:100%;overflow-x:auto}
+.tab{padding:9px 18px;border:none;background:transparent;color:var(--muted);
+  font:inherit;font-size:11.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+  border-radius:8px;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:7px}
+.tab:hover{color:var(--text)}
+.tab.on{color:#e0f2fe;background:linear-gradient(135deg,rgba(56,189,248,.18),rgba(168,85,247,.18))}
+.tab svg{width:12px;height:12px}
+.tab-pane{display:none}
+.tab-pane.on{display:block;animation:fade .3s ease}
+
+/* CARD */
+.card{background:linear-gradient(160deg,rgba(30,41,59,.45),rgba(2,6,23,.65));
+  border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px}
+.card h2{font-size:10.5px;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:9px}
+.card h2 svg{width:13px;height:13px;color:var(--accent)}
+.card h2 .badge{margin-left:auto;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);
+  color:var(--accent);padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:800}
+
+/* FORM */
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row input{flex:1;min-width:200px}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:7px;
+  letter-spacing:1.2px;text-transform:uppercase;font-weight:700}
+input[type=text],input[type=number],textarea{
+  width:100%;background:rgba(2,6,23,.7);color:var(--text);border:1px solid var(--border);
+  padding:10px 12px;border-radius:9px;font:inherit;font-size:12.5px;transition:border-color .2s,box-shadow .2s}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.14)}
+textarea{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.6;resize:vertical}
+.hint{font-size:10.5px;color:var(--muted2);margin-top:5px;line-height:1.5}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+
+/* BUTTONS */
+button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:9px;
+  padding:9px 16px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);
+  display:inline-flex;align-items:center;gap:7px;transition:all .2s}
+button:hover{border-color:var(--border-h);background:rgba(56,189,248,.1);transform:translateY(-1px)}
+button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+button svg{width:13px;height:13px}
+button.pri{background:linear-gradient(135deg,#0ea5e9,#6366f1);border-color:rgba(56,189,248,.5);
+  color:#fff;box-shadow:0 0 16px rgba(56,189,248,.35)}
+button.pri:hover{box-shadow:0 0 22px rgba(56,189,248,.55)}
+button.dgr{background:linear-gradient(135deg,#dc2626,#ef4444);border-color:rgba(239,68,68,.5);
+  color:#fff;box-shadow:0 0 16px rgba(239,68,68,.25)}
+button.dgr:hover{box-shadow:0 0 22px rgba(239,68,68,.5)}
+button.wrn{background:linear-gradient(135deg,#d97706,#f59e0b);border-color:rgba(245,158,11,.5);
+  color:#fff;box-shadow:0 0 16px rgba(245,158,11,.25)}
+button.wrn:hover{box-shadow:0 0 22px rgba(245,158,11,.5)}
+button.gho{background:transparent}
+.icon-btn{width:34px;height:34px;padding:0;justify-content:center;border-radius:9px}
+.icon-btn.dgr{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:var(--err);box-shadow:none}
+.icon-btn.dgr:hover{background:var(--err);color:#fff;border-color:var(--err);box-shadow:0 0 16px rgba(239,68,68,.5)}
+.icon-btn.acc{background:rgba(56,189,248,.08);border-color:rgba(56,189,248,.3);color:var(--accent);box-shadow:none}
+.icon-btn.acc:hover{background:var(--accent);color:#0a0f24;border-color:var(--accent);box-shadow:0 0 16px rgba(56,189,248,.5)}
+
+/* FOLDER LIST */
+.folder{display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:12px;
+  background:linear-gradient(145deg,rgba(30,41,59,.6),rgba(15,23,42,.8));
+  border:1px solid var(--border);margin-bottom:9px;transition:border-color .25s,transform .25s;
+  animation:fade .35s ease}
+.folder:hover{border-color:var(--border-h);transform:translateX(3px)}
+.folder .fi{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(135deg,rgba(56,189,248,.15),rgba(168,85,247,.15));
+  border:1px solid rgba(56,189,248,.25);color:#fbbf24;flex-shrink:0}
+.folder .fi svg{width:16px;height:16px}
+.folder .inf{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.folder .nm{font-size:13.5px;font-weight:700;color:#f8fafc;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.folder .tag{font-size:9px;padding:2px 7px;border-radius:999px;background:rgba(56,189,248,.15);
+  border:1px solid rgba(56,189,248,.3);color:var(--accent);letter-spacing:.8px;text-transform:uppercase;font-weight:800}
+.folder .meta{display:flex;gap:12px;font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.4px}
+.folder .path{font-size:10.5px;color:var(--muted2);font-family:ui-monospace,Consolas,monospace;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.folder .acts{display:flex;gap:7px;flex-shrink:0}
+
+.empty{text-align:center;padding:38px 20px;color:var(--muted);border:1px dashed var(--border);
+  border-radius:12px;font-size:12.5px;letter-spacing:.5px}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;padding:13px 20px;border-radius:11px;
+  background:linear-gradient(135deg,#10b981,#22d3ee);color:#fff;font-size:12.5px;font-weight:600;
+  box-shadow:0 18px 44px rgba(16,185,129,.35);opacity:0;transform:translateY(16px);
+  pointer-events:none;transition:all .3s cubic-bezier(.16,1,.3,1);z-index:100;max-width:380px}
+.toast.on{opacity:1;transform:none}
+.toast.err{background:linear-gradient(135deg,#dc2626,#ef4444);box-shadow:0 18px 44px rgba(239,68,68,.35)}
+
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:rgba(2,6,23,.5)}
+::-webkit-scrollbar-thumb{background:rgba(56,189,248,.25);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:rgba(56,189,248,.5)}
+
+@media(max-width:880px){.stats{grid-template-columns:repeat(2,1fr)}.g2{grid-template-columns:1fr}.g4{grid-template-columns:repeat(2,1fr)}.shell{padding:20px}}
+@media(max-width:520px){.stats{grid-template-columns:1fr}.hero{flex-direction:column;align-items:flex-start}
+  .brand h1{font-size:16px;letter-spacing:3px}.tab span{display:none}.toast{left:14px;right:14px;bottom:14px}}
 </style>
 </head>
 <body>
-<div class="bg-orbs">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
-</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-folders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"/><path d="M15 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/><path d="M12 2v20"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-fire" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+</svg>
 
 <main class="shell">
-    <header class="hero">
-        <div class="brand">
-            <div class="logo"><i class="fa-solid fa-brain"></i></div>
-            <div>
-                <h1>J.A.R.V.I.S</h1>
-                <p>Knowledge Indexer</p>
-            </div>
-        </div>
-        <div id="state-badge" class="status-pill idle">
-            <span class="pulse"></span>
-            <span id="state-text">Loading</span>
-        </div>
-    </header>
-
-    <section class="stats">
-        <div class="stat">
-            <i class="fa-solid fa-folder-tree"></i>
-            <div>
-                <span id="stat-folders">0</span>
-                <small>Folders</small>
-            </div>
-        </div>
-        <div class="stat">
-            <i class="fa-solid fa-file-lines"></i>
-            <div>
-                <span id="stat-files">0 / 0</span>
-                <small>Files Indexed</small>
-            </div>
-        </div>
-        <div class="stat accent-2">
-            <i class="fa-solid fa-layer-group"></i>
-            <div>
-                <span id="stat-chunks">0</span>
-                <small>Chunks Stored</small>
-            </div>
-        </div>
-        <div class="stat success">
-            <i class="fa-solid fa-gauge-high"></i>
-            <div>
-                <span id="stat-progress">0%</span>
-                <small>Progress</small>
-            </div>
-        </div>
-    </section>
-
-    <div class="progress-card">
-        <div class="progress-head">
-            <div class="label"><i class="fa-solid fa-bolt"></i> Indexing Progress</div>
-            <div class="detail" id="progress-text">Idle</div>
-        </div>
-        <div class="progress-track">
-            <div class="progress-fill" id="progress-fill"></div>
-        </div>
+  <header class="hero">
+    <div class="brand">
+      <div class="logo"><svg><use href="#i-brain"/></svg></div>
+      <div>
+        <h1>J.A.R.V.I.S</h1>
+        <p>Knowledge Indexer</p>
+      </div>
     </div>
+    <div id="state-badge" class="pill idle"><span id="state-text">Loading</span></div>
+  </header>
 
-    <div class="tabs">
-        <button class="tab active" data-tab="tab-folders">
-            <i class="fa-solid fa-folder-open"></i><span>Folders</span>
-        </button>
-        <button class="tab" data-tab="tab-filters">
-            <i class="fa-solid fa-sliders"></i><span>Filters</span>
-        </button>
-        <button class="tab" data-tab="tab-actions">
-            <i class="fa-solid fa-shield-halved"></i><span>Actions</span>
-        </button>
+  <section class="stats">
+    <div class="stat">
+      <div class="ic"><svg><use href="#i-folders"/></svg></div>
+      <div><div class="val" id="stat-folders">0</div><div class="lb">Folders</div></div>
     </div>
-
-    <div id="tab-folders" class="tab-content active">
-        <div class="card">
-            <div class="card-head">
-                <i class="fa-solid fa-plus"></i>
-                <span>Add Folder</span>
-            </div>
-            <div class="form-row">
-                <input type="text" id="add-folder-input" placeholder="Full path to folder (e.g., D:/Projects)">
-                <button class="primary" onclick="addFolder()">
-                    <i class="fa-solid fa-bolt"></i> Add & Index
-                </button>
-            </div>
-            <div class="field-hint">System folders and sensitive paths are automatically blocked or flagged.</div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <i class="fa-solid fa-database"></i>
-                <span>Indexed Folders</span>
-                <span class="badge" id="folder-badge">0</span>
-            </div>
-            <div id="folders-list"></div>
-        </div>
+    <div class="stat">
+      <div class="ic"><svg><use href="#i-file"/></svg></div>
+      <div><div class="val" id="stat-files">0 / 0</div><div class="lb">Files Indexed</div></div>
     </div>
-
-    <div id="tab-filters" class="tab-content">
-        <div class="card">
-            <div class="card-head">
-                <i class="fa-solid fa-file-code"></i>
-                <span>File Extensions</span>
-            </div>
-            <div class="grid-2">
-                <div class="field">
-                    <label>Include Extensions</label>
-                    <textarea id="f-include" rows="6"></textarea>
-                    <div class="field-hint">One per line. Files with these extensions will be indexed.</div>
-                </div>
-                <div class="field">
-                    <label>Exclude Extensions</label>
-                    <textarea id="f-exclude" rows="6"></textarea>
-                    <div class="field-hint">One per line. Files with these extensions will be skipped.</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <i class="fa-solid fa-filter-circle-xmark"></i>
-                <span>Folder Exclusion</span>
-            </div>
-            <div class="grid-2">
-                <div class="field">
-                    <label>Skip Folder Names</label>
-                    <textarea id="f-folders" rows="5"></textarea>
-                    <div class="field-hint">Folders with these names will be skipped entirely.</div>
-                </div>
-                <div class="field">
-                    <label>Custom Ignore Patterns</label>
-                    <textarea id="f-patterns" rows="5"></textarea>
-                    <div class="field-hint">Glob patterns (e.g., *.tmp, backup_*) to skip.</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <i class="fa-solid fa-gauge-simple-high"></i>
-                <span>Limits & Toggles</span>
-            </div>
-            <div class="grid-4">
-                <div class="field">
-                    <label>Max File Size (MB)</label>
-                    <input type="number" id="f-max-size" min="1" max="100">
-                </div>
-                <div class="field">
-                    <label>Max Depth</label>
-                    <input type="number" id="f-max-depth" min="1" max="30">
-                </div>
-                <div class="field">
-                    <label>Skip Hidden</label>
-                    <input type="text" id="f-skip-hidden" placeholder="true / false">
-                </div>
-                <div class="field">
-                    <label>Skip Symlinks</label>
-                    <input type="text" id="f-skip-symlinks" placeholder="true / false">
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <button class="primary" onclick="saveFilters()">
-                    <i class="fa-solid fa-floppy-disk"></i> Save Filters
-                </button>
-                <button class="ghost" onclick="resetFilters()">
-                    <i class="fa-solid fa-rotate-left"></i> Reset Defaults
-                </button>
-            </div>
-            <div class="field-hint" style="margin-top:12px;">Saving filters only affects future indexing. Re-index folders to apply new rules.</div>
-        </div>
+    <div class="stat p">
+      <div class="ic"><svg><use href="#i-layers"/></svg></div>
+      <div><div class="val" id="stat-chunks">0</div><div class="lb">Chunks Stored</div></div>
     </div>
-
-    <div id="tab-actions" class="tab-content">
-        <div class="card">
-            <div class="card-head">
-                <i class="fa-solid fa-circle-play"></i>
-                <span>Indexing Control</span>
-            </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <button class="warning" onclick="pauseIndex()">
-                    <i class="fa-solid fa-pause"></i> Pause Indexing
-                </button>
-                <button class="primary" onclick="resumeIndex()">
-                    <i class="fa-solid fa-play"></i> Resume Indexing
-                </button>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);"></i>
-                <span>Danger Zone</span>
-            </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <button class="danger" onclick="purgeAll()">
-                    <i class="fa-solid fa-fire"></i> Purge Entire Index
-                </button>
-            </div>
-            <div class="field-hint" style="margin-top:12px;">This removes all indexed content from the vector database. Folders remain registered.</div>
-        </div>
+    <div class="stat s">
+      <div class="ic"><svg><use href="#i-gauge"/></svg></div>
+      <div><div class="val" id="stat-progress">0%</div><div class="lb">Progress</div></div>
     </div>
+  </section>
+
+  <div class="prog">
+    <div class="prog-head">
+      <div class="l"><svg width="11" height="11" style="vertical-align:-1px;margin-right:6px"><use href="#i-bolt"/></svg>Indexing Progress</div>
+      <div class="d" id="progress-text">Idle</div>
+    </div>
+    <div class="track"><div class="fill" id="progress-fill"></div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="tab-folders"><svg><use href="#i-folder"/></svg><span>Folders</span></button>
+    <button class="tab" data-tab="tab-filters"><svg><use href="#i-sliders"/></svg><span>Filters</span></button>
+    <button class="tab" data-tab="tab-actions"><svg><use href="#i-shield"/></svg><span>Actions</span></button>
+  </div>
+
+  <div id="tab-folders" class="tab-pane on">
+    <div class="card">
+      <h2><svg><use href="#i-plus"/></svg>Add Folder</h2>
+      <div class="row">
+        <input type="text" id="add-folder-input" placeholder="Full path to folder (e.g., D:/Projects)">
+        <button class="pri" onclick="addFolder()"><svg><use href="#i-bolt"/></svg>Add &amp; Index</button>
+      </div>
+      <div class="hint">System folders and sensitive paths are automatically blocked.</div>
+    </div>
+    <div class="card">
+      <h2><svg><use href="#i-db"/></svg>Indexed Folders<span class="badge" id="folder-badge">0</span></h2>
+      <div id="folders-list"></div>
+    </div>
+  </div>
+
+  <div id="tab-filters" class="tab-pane">
+    <div class="card">
+      <h2><svg><use href="#i-code"/></svg>File Extensions</h2>
+      <div class="g2">
+        <div class="field">
+          <label>Include Extensions</label>
+          <textarea id="f-include" rows="6"></textarea>
+          <div class="hint">One per line. Files with these extensions will be indexed.</div>
+        </div>
+        <div class="field">
+          <label>Exclude Extensions</label>
+          <textarea id="f-exclude" rows="6"></textarea>
+          <div class="hint">One per line. Files with these extensions will be skipped.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2><svg><use href="#i-filter"/></svg>Folder Exclusion</h2>
+      <div class="g2">
+        <div class="field">
+          <label>Skip Folder Names</label>
+          <textarea id="f-folders" rows="5"></textarea>
+          <div class="hint">Folders with these names will be skipped entirely.</div>
+        </div>
+        <div class="field">
+          <label>Custom Ignore Patterns</label>
+          <textarea id="f-patterns" rows="5"></textarea>
+          <div class="hint">Glob patterns (e.g., *.tmp, backup_*) to skip.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2><svg><use href="#i-gauge"/></svg>Limits &amp; Toggles</h2>
+      <div class="g4">
+        <div class="field"><label>Max File Size (MB)</label><input type="number" id="f-max-size" min="1" max="100"></div>
+        <div class="field"><label>Max Depth</label><input type="number" id="f-max-depth" min="1" max="30"></div>
+        <div class="field"><label>Skip Hidden</label><input type="text" id="f-skip-hidden" placeholder="true / false"></div>
+        <div class="field"><label>Skip Symlinks</label><input type="text" id="f-skip-symlinks" placeholder="true / false"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="pri" onclick="saveFilters()"><svg><use href="#i-save"/></svg>Save Filters</button>
+        <button class="gho" onclick="resetFilters()"><svg><use href="#i-reset"/></svg>Reset Defaults</button>
+      </div>
+      <div class="hint" style="margin-top:10px">Saving filters only affects future indexing. Re-index folders to apply new rules.</div>
+    </div>
+  </div>
+
+  <div id="tab-actions" class="tab-pane">
+    <div class="card">
+      <h2><svg><use href="#i-play"/></svg>Indexing Control</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="wrn" onclick="pauseIndex()"><svg><use href="#i-pause"/></svg>Pause Indexing</button>
+        <button class="pri" onclick="resumeIndex()"><svg><use href="#i-play"/></svg>Resume Indexing</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="color:var(--err)"><svg style="color:var(--err)"><use href="#i-alert"/></svg>Danger Zone</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="dgr" onclick="purgeAll()"><svg><use href="#i-fire"/></svg>Purge Entire Index</button>
+      </div>
+      <div class="hint" style="margin-top:10px">This removes all indexed content from the vector database. Folders remain registered.</div>
+    </div>
+  </div>
 </main>
 
-<div class="toast" id="toast">
-    <i class="fa-solid fa-circle-check"></i>
-    <span id="toast-msg">Notification</span>
-</div>
+<div class="toast" id="toast"><span id="toast-msg">Notification</span></div>
 
 <script>
-let toastTimer = null;
-let folderPaths = [];
-
-function escapeHtml(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    }[c]));
+let toastTimer=null, folderPaths=[];
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function showToast(msg,isErr){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.className='toast on'+(isErr?' err':'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.className='toast';},3200);
 }
-
-function showToast(msg, isError) {
-    const t = document.getElementById('toast');
-    const icon = t.querySelector('i');
-    const text = document.getElementById('toast-msg');
-    text.textContent = msg;
-    icon.className = isError ? 'fa-solid fa-circle-exclamation' : 'fa-solid fa-circle-check';
-    t.className = 'toast show' + (isError ? ' error' : '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.className = 'toast'; }, 3200);
-}
-
-document.querySelectorAll('.tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(btn.dataset.tab).classList.add('active');
-    });
+document.querySelectorAll('.tab').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.tab-pane').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById(b.dataset.tab).classList.add('on');
+  });
 });
-
-async function api(path, method, body) {
-    const opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
-    if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(path, opts);
-    return await res.json();
+async function api(p,m,b){
+  const o={method:m||'GET',headers:{'Content-Type':'application/json'}};
+  if(b)o.body=JSON.stringify(b);
+  const r=await fetch(p,o);
+  return await r.json();
 }
-
-async function refreshStatus() {
-    try {
-        const d = await api('/api/status');
-        const p = d.progress;
-
-        const badge = document.getElementById('state-badge');
-        const stateText = document.getElementById('state-text');
-        const state = (p.state || 'idle').toLowerCase();
-        badge.className = 'status-pill ' + state;
-        stateText.textContent = state;
-
-        document.getElementById('stat-folders').textContent = d.folders.length;
-        document.getElementById('stat-files').textContent = p.files_done + ' / ' + p.files_total;
-        document.getElementById('stat-chunks').textContent = p.chunks_done;
-        document.getElementById('stat-progress').textContent = p.percent.toFixed(1) + '%';
-        document.getElementById('progress-fill').style.width = p.percent + '%';
-
-        let txt = 'Idle — waiting for changes';
-        if (p.state === 'scanning') txt = 'Scanning: ' + (p.current_folder || '...');
-        else if (p.state === 'paused') txt = 'Paused';
-        else if (p.state === 'error') txt = 'Error: ' + (p.last_error || 'unknown');
-        else if (p.last_completed) txt = 'Last completed: ' + p.last_completed;
-        document.getElementById('progress-text').textContent = txt;
-
-        renderFolders(d.folders);
-    } catch (e) {
-        console.error('Status refresh failed', e);
-    }
+async function refreshStatus(){
+  try{
+    const d=await api('/api/status');
+    const p=d.progress;
+    const badge=document.getElementById('state-badge');
+    const st=(p.state||'idle').toLowerCase();
+    badge.className='pill '+st;
+    document.getElementById('state-text').textContent=st;
+    document.getElementById('stat-folders').textContent=d.folders.length;
+    document.getElementById('stat-files').textContent=p.files_done+' / '+p.files_total;
+    document.getElementById('stat-chunks').textContent=p.chunks_done;
+    document.getElementById('stat-progress').textContent=p.percent.toFixed(1)+'%';
+    document.getElementById('progress-fill').style.width=p.percent+'%';
+    let txt='Idle — waiting for changes';
+    if(p.state==='scanning')txt='Scanning: '+(p.current_folder||'...');
+    else if(p.state==='paused')txt='Paused';
+    else if(p.state==='error')txt='Error: '+(p.last_error||'unknown');
+    else if(p.last_completed)txt='Last completed: '+p.last_completed;
+    document.getElementById('progress-text').textContent=txt;
+    renderFolders(d.folders);
+  }catch(e){console.error('Status refresh failed',e);}
 }
-
-function renderFolders(folders) {
-    folderPaths = folders.map(f => f.path);
-    document.getElementById('folder-badge').textContent = folders.length;
-
-    const list = document.getElementById('folders-list');
-    if (!folders || folders.length === 0) {
-        list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i><p>No folders indexed yet. Add a folder to begin.</p></div>';
-        return;
-    }
-
-    const BS = String.fromCharCode(92);
-
-    list.innerHTML = folders.map((f, i) => {
-        const norm = f.path.split(BS).join('/');
-        const name = norm.split('/').pop() || f.path;
-        const defaultTag = f.is_default ? '<span class="tag-default">default</span>' : '';
-        return '<div class="folder-row" data-index="' + i + '">' +
-            '<div class="folder-icon"><i class="fa-solid fa-folder"></i></div>' +
-            '<div class="folder-info">' +
-                '<div class="folder-name">' + escapeHtml(name) + defaultTag + '</div>' +
-                '<div class="folder-meta">' +
-                    '<span><i class="fa-solid fa-file"></i> ' + f.file_count + ' files</span>' +
-                    '<span><i class="fa-solid fa-layer-group"></i> ' + f.chunk_count + ' chunks</span>' +
-                '</div>' +
-                '<div class="folder-path" title="' + escapeHtml(f.path) + '">' + escapeHtml(f.path) + '</div>' +
-            '</div>' +
-            '<div class="folder-actions">' +
-                '<button class="btn-icon" data-action="reindex" data-index="' + i + '" title="Reindex"><i class="fa-solid fa-rotate"></i></button>' +
-                '<button class="btn-icon danger" data-action="remove" data-index="' + i + '" title="Remove"><i class="fa-solid fa-trash"></i></button>' +
-            '</div>' +
-        '</div>';
-    }).join('');
-
-    list.querySelectorAll('[data-action]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const idx = parseInt(btn.dataset.index, 10);
-            const path = folderPaths[idx];
-            if (btn.dataset.action === 'remove') removeFolder(path);
-            else if (btn.dataset.action === 'reindex') reindexFolder(path);
-        });
+function renderFolders(folders){
+  folderPaths=folders.map(f=>f.path);
+  document.getElementById('folder-badge').textContent=folders.length;
+  const list=document.getElementById('folders-list');
+  if(!folders||folders.length===0){
+    list.innerHTML='<div class="empty">No folders indexed yet. Add a folder to begin.</div>';
+    return;
+  }
+  const BS=String.fromCharCode(92);
+  list.innerHTML=folders.map((f,i)=>{
+    const norm=f.path.split(BS).join('/');
+    const name=norm.split('/').pop()||f.path;
+    const tag=f.is_default?'<span class="tag">default</span>':'';
+    return '<div class="folder" data-index="'+i+'">'+
+      '<div class="fi"><svg><use href="#i-folder"/></svg></div>'+
+      '<div class="inf">'+
+        '<div class="nm">'+escapeHtml(name)+tag+'</div>'+
+        '<div class="meta"><span>'+f.file_count+' files</span><span>'+f.chunk_count+' chunks</span></div>'+
+        '<div class="path" title="'+escapeHtml(f.path)+'">'+escapeHtml(f.path)+'</div>'+
+      '</div>'+
+      '<div class="acts">'+
+        '<button class="icon-btn acc" data-action="reindex" data-index="'+i+'" title="Reindex"><svg><use href="#i-rotate"/></svg></button>'+
+        '<button class="icon-btn dgr" data-action="remove" data-index="'+i+'" title="Remove"><svg><use href="#i-x"/></svg></button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+  list.querySelectorAll('[data-action]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const idx=parseInt(btn.dataset.index,10);
+      const path=folderPaths[idx];
+      if(btn.dataset.action==='remove')removeFolder(path);
+      else if(btn.dataset.action==='reindex')reindexFolder(path);
     });
+  });
 }
-
-async function addFolder() {
-    const input = document.getElementById('add-folder-input');
-    const path = input.value.trim();
-    if (!path) return showToast('Enter a folder path', true);
-    const r = await api('/api/folders/add', 'POST', { path });
-    if (r.success) {
-        showToast('Folder added. Indexing started.');
-        input.value = '';
-        refreshStatus();
-    } else {
-        showToast(r.error || 'Failed to add folder', true);
-    }
+async function addFolder(){
+  const input=document.getElementById('add-folder-input');
+  const path=input.value.trim();
+  if(!path)return showToast('Enter a folder path',true);
+  const r=await api('/api/folders/add','POST',{path});
+  if(r.success){showToast('Folder added. Indexing started.');input.value='';refreshStatus();}
+  else showToast(r.error||'Failed to add folder',true);
 }
-
-async function removeFolder(path) {
-    if (!confirm('Remove this folder from index?')) return;
-    const r = await api('/api/folders/remove', 'POST', { path });
-    if (r.success) {
-        showToast('Folder removed.');
-        refreshStatus();
-    } else {
-        showToast(r.error || 'Failed to remove folder', true);
-    }
+async function removeFolder(path){
+  if(!confirm('Remove this folder from index?'))return;
+  const r=await api('/api/folders/remove','POST',{path});
+  if(r.success){showToast('Folder removed.');refreshStatus();}
+  else showToast(r.error||'Failed to remove folder',true);
 }
-
-async function reindexFolder(path) {
-    showToast('Reindexing started...');
-    const r = await api('/api/folders/reindex', 'POST', { path });
-    if (r.success) showToast('Reindex complete.');
-    else showToast(r.error || 'Reindex failed', true);
-    refreshStatus();
+async function reindexFolder(path){
+  const r=await api('/api/folders/reindex','POST',{path});
+  if(r.success)showToast('Reindex started in background.');
+  else showToast(r.error||'Reindex failed',true);
+  refreshStatus();
 }
-
-async function loadFilters() {
-    try {
-        const f = await api('/api/filters');
-        document.getElementById('f-include').value = (f.include_extensions || []).join('\\n');
-        document.getElementById('f-exclude').value = (f.exclude_extensions || []).join('\\n');
-        document.getElementById('f-folders').value = (f.exclude_folders || []).join('\\n');
-        document.getElementById('f-patterns').value = (f.custom_ignore_patterns || []).join('\\n');
-        document.getElementById('f-max-size').value = f.max_file_size_mb || 5;
-        document.getElementById('f-max-depth').value = f.max_depth || 15;
-        document.getElementById('f-skip-hidden').value = String(f.skip_hidden);
-        document.getElementById('f-skip-symlinks').value = String(f.skip_symlinks);
-    } catch (e) {
-        console.error('Load filters failed', e);
-    }
+async function loadFilters(){
+  try{
+    const f=await api('/api/filters');
+    document.getElementById('f-include').value=(f.include_extensions||[]).join('\\n');
+    document.getElementById('f-exclude').value=(f.exclude_extensions||[]).join('\\n');
+    document.getElementById('f-folders').value=(f.exclude_folders||[]).join('\\n');
+    document.getElementById('f-patterns').value=(f.custom_ignore_patterns||[]).join('\\n');
+    document.getElementById('f-max-size').value=f.max_file_size_mb||5;
+    document.getElementById('f-max-depth').value=f.max_depth||15;
+    document.getElementById('f-skip-hidden').value=String(f.skip_hidden);
+    document.getElementById('f-skip-symlinks').value=String(f.skip_symlinks);
+  }catch(e){console.error('Load filters failed',e);}
 }
-
-function parseLines(id) {
-    return document.getElementById(id).value.split('\\n').map(x => x.trim()).filter(x => x);
+function parseLines(id){return document.getElementById(id).value.split('\\n').map(x=>x.trim()).filter(x=>x);}
+async function saveFilters(){
+  const payload={
+    include_extensions:parseLines('f-include'),
+    exclude_extensions:parseLines('f-exclude'),
+    exclude_folders:parseLines('f-folders'),
+    custom_ignore_patterns:parseLines('f-patterns'),
+    max_file_size_mb:parseInt(document.getElementById('f-max-size').value,10)||5,
+    max_depth:parseInt(document.getElementById('f-max-depth').value,10)||15,
+    skip_hidden:document.getElementById('f-skip-hidden').value.toLowerCase()==='true',
+    skip_symlinks:document.getElementById('f-skip-symlinks').value.toLowerCase()==='true'
+  };
+  const r=await api('/api/filters','POST',payload);
+  if(r.success)showToast('Filters saved.');else showToast(r.error||'Save failed',true);
 }
-
-async function saveFilters() {
-    const payload = {
-        include_extensions: parseLines('f-include'),
-        exclude_extensions: parseLines('f-exclude'),
-        exclude_folders: parseLines('f-folders'),
-        custom_ignore_patterns: parseLines('f-patterns'),
-        max_file_size_mb: parseInt(document.getElementById('f-max-size').value, 10) || 5,
-        max_depth: parseInt(document.getElementById('f-max-depth').value, 10) || 15,
-        skip_hidden: document.getElementById('f-skip-hidden').value.toLowerCase() === 'true',
-        skip_symlinks: document.getElementById('f-skip-symlinks').value.toLowerCase() === 'true'
-    };
-    const r = await api('/api/filters', 'POST', payload);
-    if (r.success) showToast('Filters saved.');
-    else showToast(r.error || 'Save failed', true);
+async function resetFilters(){
+  if(!confirm('Reset all filters to defaults?'))return;
+  const r=await api('/api/filters/reset','POST',{});
+  if(r.success){showToast('Filters reset to defaults.');loadFilters();}
+  else showToast(r.error||'Reset failed',true);
 }
-
-async function resetFilters() {
-    if (!confirm('Reset all filters to defaults?')) return;
-    const r = await api('/api/filters/reset', 'POST', {});
-    if (r.success) { showToast('Filters reset to defaults.'); loadFilters(); }
-    else showToast(r.error || 'Reset failed', true);
+async function pauseIndex(){
+  const r=await api('/api/pause','POST',{});
+  if(r.success)showToast('Indexing paused.');
+  refreshStatus();
 }
-
-async function pauseIndex() {
-    const r = await api('/api/pause', 'POST', {});
-    if (r.success) showToast('Indexing paused.');
-    refreshStatus();
+async function resumeIndex(){
+  const r=await api('/api/resume','POST',{});
+  if(r.success)showToast('Indexing resumed.');
+  refreshStatus();
 }
-
-async function resumeIndex() {
-    const r = await api('/api/resume', 'POST', {});
-    if (r.success) showToast('Indexing resumed.');
-    refreshStatus();
+async function purgeAll(){
+  if(!confirm('PURGE ENTIRE INDEX? This cannot be undone.'))return;
+  const r=await api('/api/purge/all','POST',{});
+  if(r.success){showToast('Index purged.');refreshStatus();}
+  else showToast(r.error||'Purge failed',true);
 }
-
-async function purgeAll() {
-    if (!confirm('PURGE ENTIRE INDEX? This cannot be undone.')) return;
-    const r = await api('/api/purge/all', 'POST', {});
-    if (r.success) { showToast('Index purged.'); refreshStatus(); }
-    else showToast(r.error || 'Purge failed', true);
-}
-
 refreshStatus();
 loadFilters();
-setInterval(refreshStatus, 2500);
+setInterval(refreshStatus,2500);
 </script>
 </body>
 </html>"""
@@ -1317,10 +592,31 @@ def create_app():
             path = data.get("path", "").strip()
             if not path:
                 return jsonify({"success": False, "error": "Path is required."}), 400
+
+            from pathlib import Path
+            import os
+            try:
+                resolved = str(Path(path).expanduser().resolve())
+            except Exception:
+                return jsonify({"success": False, "error": "Invalid path."}), 400
+
+            if not os.path.isdir(resolved):
+                return jsonify({"success": False, "error": "Folder does not exist."}), 400
+
+            from core.brain.Indexer.config_store import config_store
+            folders = config_store.load_folders()
+            registered = any(f["path"] == resolved for f in folders)
+            if not registered:
+                return jsonify({"success": False, "error": "Folder not registered."}), 400
+
             from core.brain.RagEngine import rag_engine
-            result = rag_engine.reindex_folder(path)
-            status = 200 if result.get("success") else 400
-            return jsonify(result), status
+            threading.Thread(
+                target=rag_engine.reindex_folder,
+                args=(resolved,),
+                daemon=True
+            ).start()
+
+            return jsonify({"success": True, "path": resolved, "message": "Reindex started in background."})
         except Exception as e:
             logger.error(f"Dashboard api_folder_reindex failed: {e}")
             return jsonify({"success": False, "error": str(e)}), 500

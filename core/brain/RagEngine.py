@@ -1,10 +1,9 @@
-# RagEngine.py
 import os
 import json
 import hashlib
 import threading
-from pathlib import Path
 import time
+from pathlib import Path
 from datetime import datetime
 import chromadb
 from google import genai
@@ -31,6 +30,7 @@ class RagEngine:
         self.db_path = Path("Data/jarvis_memory/rag_chroma_db")
         self.db_path.mkdir(parents=True, exist_ok=True)
         self.file_hashes_file = Path("Data/jarvis_memory/rag_hashes.json")
+        self.default_marker_file = Path("Data/jarvis_memory/.default_folder_added")
 
         self.filter_engine = FilterEngine(config_store.load_filters())
         self.walker = FileWalker(self.filter_engine)
@@ -41,6 +41,8 @@ class RagEngine:
         self.db_lock = threading.Lock()
         self.status_lock = threading.Lock()
         self.hash_lock = threading.Lock()
+        self.index_lock = threading.Lock()
+        self.bm25_lock = threading.RLock()
 
         self.chroma_client = chromadb.PersistentClient(path=str(self.db_path))
         self.rag_collection = self.chroma_client.get_or_create_collection(
@@ -56,6 +58,7 @@ class RagEngine:
         self._pause_event = threading.Event()
         self._pause_event.set()
         self._shutdown_flag = False
+        self._indexing_thread = None
 
         self._status = {
             "state": "idle",
@@ -71,7 +74,8 @@ class RagEngine:
         self._ensure_default_folders()
         logger.info("RAG Engine initialized with knowledge indexer.")
 
-        threading.Thread(target=self._initial_index, daemon=True).start()
+        self._indexing_thread = threading.Thread(target=self._initial_index, daemon=True)
+        self._indexing_thread.start()
 
     def _load_json(self, file_path, default):
         try:
@@ -85,8 +89,10 @@ class RagEngine:
 
     def _save_json(self, file_path, data):
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
+            tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, file_path)
         except Exception as e:
             logger.error(f"RAG hashes save failed: {e}")
 
@@ -122,6 +128,8 @@ class RagEngine:
         folders = config_store.load_folders()
         if folders:
             return
+        if self.default_marker_file.exists():
+            return
         default_path = str(Path.home() / "Documents")
         if os.path.exists(default_path):
             folders = [{
@@ -132,26 +140,61 @@ class RagEngine:
                 "enabled": True
             }]
             config_store.save_folders(folders)
+            try:
+                self.default_marker_file.parent.mkdir(parents=True, exist_ok=True)
+                self.default_marker_file.touch()
+            except Exception:
+                pass
             logger.info(f"RAG indexer initialized with default folder: {default_path}")
         else:
             logger.warning("RAG indexer: default Documents folder not found.")
 
+    def _normalize_task_type(self, input_type):
+        if input_type == "search_query":
+            return "RETRIEVAL_QUERY"
+        return "RETRIEVAL_DOCUMENT"
+
     def get_embedding(self, text, input_type="search_document"):
         if not text or not text.strip() or not self.google_client:
             return None
-        try:
-            truncated = text[:2000] if len(text) > 2000 else text
-            response = self.google_client.models.embed_content(
-                model=GEMINI_EMBEDDING_MODEL,
-                contents=truncated,
-                config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM)
-            )
-            return response.embeddings[0].values
-        except Exception as e:
-            logger.error(f"RAG embedding failed: {e}")
-            return None
+        max_chars = max(RAG_CHUNK_SIZE, 2000)
+        truncated = text[:max_chars] if len(text) > max_chars else text
+        task_type = self._normalize_task_type(input_type)
+
+        for attempt in range(3):
+            try:
+                response = self.google_client.models.embed_content(
+                    model=GEMINI_EMBEDDING_MODEL,
+                    contents=truncated,
+                    config=types.EmbedContentConfig(
+                        output_dimensionality=EMBEDDING_DIM,
+                        task_type=task_type
+                    )
+                )
+                return response.embeddings[0].values
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "task_type" in err_msg and attempt == 0:
+                    try:
+                        response = self.google_client.models.embed_content(
+                            model=GEMINI_EMBEDDING_MODEL,
+                            contents=truncated,
+                            config=types.EmbedContentConfig(
+                                output_dimensionality=EMBEDDING_DIM
+                            )
+                        )
+                        return response.embeddings[0].values
+                    except Exception as e2:
+                        logger.warning(f"RAG embedding (no task_type) attempt {attempt + 1} failed: {e2}")
+                else:
+                    logger.warning(f"RAG embedding attempt {attempt + 1} failed: {e}")
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+        logger.error("RAG embedding failed after retries.")
+        return None
 
     def _recursive_chunk_text(self, text, file_extension=".txt"):
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
         chunk_size = RAG_CHUNK_SIZE
         overlap = RAG_CHUNK_OVERLAP
 
@@ -216,6 +259,26 @@ class RagEngine:
                 hasher.update(block)
         return hasher.hexdigest()
 
+    def _get_file_id(self, file_path):
+        try:
+            normalized = str(Path(file_path).resolve())
+        except Exception:
+            normalized = str(file_path)
+        if os.name == "nt":
+            normalized = normalized.lower()
+        return hashlib.md5(normalized.encode("utf-8")).hexdigest()
+
+    def _is_under_folder(self, file_path, folder_path):
+        try:
+            fp = Path(file_path).resolve()
+            fp_dir = Path(folder_path).resolve()
+            try:
+                return fp.is_relative_to(fp_dir)
+            except AttributeError:
+                return fp == fp_dir or fp_dir in fp.parents
+        except Exception:
+            return False
+
     def _initial_index(self):
         time.sleep(3)
         if self._shutdown_flag:
@@ -226,23 +289,24 @@ class RagEngine:
         if self._shutdown_flag:
             return
 
-        folders = config_store.load_folders()
-        enabled_folders = [f for f in folders if f.get("enabled", True)]
-
-        if not enabled_folders:
-            logger.info("RAG indexer: no enabled folders to index.")
-            return
-
-        self._set_status(
-            state="scanning",
-            started_at=datetime.now().isoformat(),
-            files_total=0,
-            files_done=0,
-            chunks_done=0,
-            last_error=""
-        )
-
+        self.index_lock.acquire()
         try:
+            folders = config_store.load_folders()
+            enabled_folders = [f for f in folders if f.get("enabled", True)]
+
+            if not enabled_folders:
+                logger.info("RAG indexer: no enabled folders to index.")
+                return
+
+            self._set_status(
+                state="scanning",
+                started_at=datetime.now().isoformat(),
+                files_total=0,
+                files_done=0,
+                chunks_done=0,
+                last_error=""
+            )
+
             all_files = []
             for folder in enabled_folders:
                 folder_path = folder["path"]
@@ -264,10 +328,11 @@ class RagEngine:
                     break
                 if not self._pause_event.is_set():
                     self._pause_event.wait()
+                    if self._shutdown_flag:
+                        break
 
                 try:
                     file_hash = self._get_file_hash(file_path)
-                    current_hashes[file_path] = file_hash
                 except Exception as e:
                     logger.warning(f"RAG indexer: hash failed for {file_path}: {e}")
                     files_done += 1
@@ -275,13 +340,16 @@ class RagEngine:
                     continue
 
                 if self.file_hashes.get(file_path) == file_hash:
+                    current_hashes[file_path] = file_hash
                     files_done += 1
                     self._set_status(files_done=files_done)
                     continue
 
-                added = self._process_file(file_path, root_folder, file_hash)
+                success, added = self._process_file(file_path, root_folder, file_hash)
+                if success:
+                    current_hashes[file_path] = file_hash
+                    chunks_done += added
                 files_done += 1
-                chunks_done += added
                 self._set_status(files_done=files_done, chunks_done=chunks_done)
 
             stale_files = set(self.file_hashes.keys()) - set(current_hashes.keys())
@@ -305,6 +373,8 @@ class RagEngine:
         except Exception as e:
             logger.error(f"RAG indexer: full indexing failed: {e}")
             self._set_status(state="error", last_error=str(e))
+        finally:
+            self.index_lock.release()
 
     def _process_file(self, file_path, root_folder, file_hash):
         try:
@@ -324,25 +394,28 @@ class RagEngine:
                     content = f.read()
 
             if not content.strip():
-                return 0
+                return True, 0
 
             mod_time = os.path.getmtime(file_path)
             mod_date = datetime.fromtimestamp(mod_time).isoformat()
             file_size = os.path.getsize(file_path)
 
             chunks = self._recursive_chunk_text(content, ext)
+            file_id = self._get_file_id(file_path)
 
             batch_ids = []
             batch_embeddings = []
             batch_metadatas = []
             batch_documents = []
+            failed_chunks = 0
 
             for i, chunk in enumerate(chunks):
                 embedding = self.get_embedding(chunk, "search_document")
                 if embedding:
-                    batch_ids.append(f"{file_hash}_{i}")
+                    batch_ids.append(f"{file_id}_{file_hash}_{i}")
                     batch_embeddings.append(embedding)
                     batch_metadatas.append({
+                        "file_id": file_id,
                         "file_name": Path(file_path).name,
                         "file_path": file_path,
                         "root_folder": root_folder,
@@ -350,11 +423,24 @@ class RagEngine:
                         "file_size": file_size
                     })
                     batch_documents.append(chunk)
+                else:
+                    failed_chunks += 1
+
+            if failed_chunks > 0:
+                logger.error(f"RAG index partial failure for {file_path}: {failed_chunks}/{len(chunks)} chunks failed embedding.")
+                return False, 0
 
             if not batch_ids:
-                return 0
+                return True, 0
 
-            self._remove_chunks_for_file(file_path)
+            old_ids = []
+            try:
+                with self.db_lock:
+                    existing = self.rag_collection.get(where={"file_path": file_path})
+                if existing and existing.get("ids"):
+                    old_ids = existing["ids"]
+            except Exception as e:
+                logger.warning(f"RAG existing chunk fetch failed for {file_path}: {e}")
 
             with self.db_lock:
                 self.rag_collection.upsert(
@@ -364,12 +450,21 @@ class RagEngine:
                     documents=batch_documents
                 )
 
+            new_id_set = set(batch_ids)
+            stale_ids = [oid for oid in old_ids if oid not in new_id_set]
+            if stale_ids:
+                try:
+                    with self.db_lock:
+                        self.rag_collection.delete(ids=stale_ids)
+                except Exception as e:
+                    logger.warning(f"RAG stale chunk cleanup failed for {file_path}: {e}")
+
             logger.info(f"RAG indexed: {Path(file_path).name} ({len(batch_ids)} chunks)")
-            return len(batch_ids)
+            return True, len(batch_ids)
 
         except Exception as e:
             logger.error(f"RAG file index failed for {file_path}: {e}")
-            return 0
+            return False, 0
 
     def _remove_chunks_for_file(self, file_path):
         try:
@@ -389,6 +484,9 @@ class RagEngine:
         except Exception as e:
             logger.warning(f"RAG folder cleanup failed for {folder_path}: {e}")
 
+    def _tokenize(self, text):
+        return [t for t in text.lower().split() if t]
+
     def _rebuild_bm25_cache(self):
         try:
             with self.db_lock:
@@ -399,6 +497,7 @@ class RagEngine:
                 self._all_metadatas_cache = None
                 self._all_ids_cache = None
                 self._bm25_index = None
+                self._corpus_tokens = None
                 logger.info("RAG BM25 cache cleared (empty collection).")
                 return
 
@@ -406,20 +505,19 @@ class RagEngine:
             self._all_metadatas_cache = all_data["metadatas"]
             self._all_ids_cache = all_data["ids"]
 
-            tokenized_corpus = [doc.lower().split() for doc in all_data["documents"]]
+            tokenized_corpus = [self._tokenize(doc) for doc in all_data["documents"]]
             self._bm25_index = BM25Okapi(tokenized_corpus)
             self._corpus_tokens = tokenized_corpus
 
-            logger.info(
-                f"RAG BM25 cache rebuilt: {len(all_data['documents'])} chunks loaded."
-            )
+            logger.info(f"RAG BM25 cache rebuilt: {len(all_data['documents'])} chunks loaded.")
         except Exception as e:
             logger.error(f"RAG BM25 cache rebuild failed: {e}")
             self._bm25_index = None
 
     def _rebuild_bm25_cache_if_needed(self):
-        if self._bm25_index is None:
-            self._rebuild_bm25_cache()
+        with self.bm25_lock:
+            if self._bm25_index is None:
+                self._rebuild_bm25_cache()
 
     def _reciprocal_rank_fusion(self, results_list, k=60):
         scores = {}
@@ -430,11 +528,9 @@ class RagEngine:
                     scores[doc_id] = {
                         "doc": item["doc"],
                         "meta": item["meta"],
-                        "score": 0.0,
-                        "rank_sum": 0
+                        "score": 0.0
                     }
                 scores[doc_id]["score"] += 1.0 / (k + rank + 1)
-                scores[doc_id]["rank_sum"] += rank
         return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
 
     def search_vault(self, query, top_k=RAG_TOP_K, folder_filter=None):
@@ -464,64 +560,72 @@ class RagEngine:
                     )
 
             vector_items = []
-            if vector_results["documents"] and vector_results["documents"][0]:
-                for i, doc in enumerate(vector_results["documents"][0]):
-                    meta = vector_results["metadatas"][0][i]
+            if vector_results.get("ids") and vector_results["ids"][0]:
+                for i, doc_id in enumerate(vector_results["ids"][0]):
                     vector_items.append({
-                        "id": f"{meta['file_path']}_{i}",
-                        "doc": doc,
-                        "meta": meta,
-                        "rank": i
+                        "id": doc_id,
+                        "doc": vector_results["documents"][0][i],
+                        "meta": vector_results["metadatas"][0][i]
                     })
 
             self._rebuild_bm25_cache_if_needed()
             bm25_items = []
             if self._bm25_index and self._all_metadatas_cache:
-                tokenized_query = query.lower().split()
-                bm25_scores = self._bm25_index.get_scores(tokenized_query)
-                sorted_indices = sorted(
-                    range(len(bm25_scores)),
-                    key=lambda i: bm25_scores[i],
-                    reverse=True
-                )[:top_k * 2]
-                for idx in sorted_indices:
-                    if bm25_scores[idx] == 0:
-                        continue
-                    meta = self._all_metadatas_cache[idx]
-                    if where_clause and meta.get("root_folder") != folder_filter:
-                        continue
-                    bm25_items.append({
-                        "id": self._all_ids_cache[idx],
-                        "doc": self._all_documents_cache[idx],
-                        "meta": meta,
-                        "rank": idx
-                    })
+                tokenized_query = self._tokenize(query)
+                if tokenized_query:
+                    bm25_scores = self._bm25_index.get_scores(tokenized_query)
+                    sorted_indices = sorted(
+                        range(len(bm25_scores)),
+                        key=lambda i: bm25_scores[i],
+                        reverse=True
+                    )
+                    taken = 0
+                    for idx in sorted_indices:
+                        if taken >= top_k * 2:
+                            break
+                        if bm25_scores[idx] == 0:
+                            continue
+                        meta = self._all_metadatas_cache[idx]
+                        if where_clause and meta.get("root_folder") != folder_filter:
+                            continue
+                        bm25_items.append({
+                            "id": self._all_ids_cache[idx],
+                            "doc": self._all_documents_cache[idx],
+                            "meta": meta
+                        })
+                        taken += 1
 
             fused = self._reciprocal_rank_fusion([vector_items, bm25_items])
 
             file_map = {}
-            for item in fused[:top_k]:
+            for item in fused[:top_k * 3]:
                 fpath = item["meta"].get("file_path", "")
+                if not fpath:
+                    continue
                 if fpath not in file_map:
                     file_map[fpath] = {
                         "file_name": item["meta"].get("file_name", ""),
                         "file_path": fpath,
                         "root_folder": item["meta"].get("root_folder", ""),
-                        "chunks": [],
+                        "chunks_map": {},
                         "modified": item["meta"].get("modified", ""),
                         "file_size": item["meta"].get("file_size", 0)
                     }
-                file_map[fpath]["chunks"].append(item["doc"])
+                file_map[fpath]["chunks_map"][item["id"]] = item["doc"]
 
             final_results = []
             for fpath, data in file_map.items():
-                with self.db_lock:
-                    all_chunks = self.rag_collection.get(where={"file_path": fpath})
+                try:
+                    with self.db_lock:
+                        all_chunks = self.rag_collection.get(where={"file_path": fpath})
+                except Exception:
+                    all_chunks = {"documents": []}
 
-                total_chunks = len(all_chunks["documents"]) if all_chunks["documents"] else 0
-                content = "\n\n".join(data["chunks"])
+                total_chunks = len(all_chunks["documents"]) if all_chunks.get("documents") else 0
+                unique_chunks = list(data["chunks_map"].values())
+                content = "\n\n".join(unique_chunks)
                 file_size_bytes = data["file_size"] if data["file_size"] else 0
-                is_complete = len(data["chunks"]) >= total_chunks
+                is_complete = total_chunks > 0 and len(unique_chunks) >= total_chunks
 
                 final_results.append({
                     "file_name": data["file_name"],
@@ -529,15 +633,16 @@ class RagEngine:
                     "root_folder": data["root_folder"],
                     "file_size_bytes": file_size_bytes,
                     "total_chunks": total_chunks,
-                    "chunks_found": len(data["chunks"]),
+                    "chunks_found": len(unique_chunks),
                     "is_complete": is_complete,
+                    "modified": data["modified"],
                     "content": content
                 })
 
             if final_results:
                 final_results.sort(key=lambda x: self._recency_boost(x), reverse=True)
                 logger.info(f"RAG hybrid search: {len(final_results)} files matched.")
-                return final_results
+                return final_results[:top_k]
 
             return self._fallback_keyword_search(query, top_k, folder_filter)
 
@@ -550,7 +655,12 @@ class RagEngine:
             mod_str = file_result.get("modified", "")
             if mod_str:
                 mod_date = datetime.fromisoformat(mod_str)
-                days_old = (datetime.now() - mod_date).days
+                now = datetime.now()
+                if mod_date > now:
+                    return 1.0 + RAG_RECENCY_BOOST
+                days_old = (now - mod_date).days
+                if days_old < 0:
+                    days_old = 0
                 boost = max(0, 1 - (days_old / 365)) * RAG_RECENCY_BOOST
                 return boost + 1
         except Exception:
@@ -562,7 +672,11 @@ class RagEngine:
             with self.db_lock:
                 results = self.rag_collection.get()
 
-            if not results["documents"]:
+            if not results.get("documents"):
+                return []
+
+            query_tokens = set(self._tokenize(query))
+            if not query_tokens:
                 return []
 
             file_map = {}
@@ -571,33 +685,38 @@ class RagEngine:
                 if folder_filter and meta.get("root_folder") != folder_filter:
                     continue
                 fpath = meta.get("file_path", "")
+                if not fpath:
+                    continue
                 if fpath not in file_map:
                     file_map[fpath] = {
                         "file_name": meta.get("file_name", ""),
                         "file_path": fpath,
                         "root_folder": meta.get("root_folder", ""),
-                        "chunks": [],
+                        "chunks_map": {},
                         "modified": meta.get("modified", ""),
                         "file_size": meta.get("file_size", 0)
                     }
-                file_map[fpath]["chunks"].append(doc)
+                doc_id = results["ids"][i] if results.get("ids") else f"{fpath}_{i}"
+                file_map[fpath]["chunks_map"][doc_id] = doc
 
-            query_lower = query.lower()
             matched = []
             for fpath, data in file_map.items():
-                for chunk in data["chunks"]:
-                    if query_lower in chunk.lower():
-                        matched.append(fpath)
-                        break
+                combined = " ".join(data["chunks_map"].values()).lower()
+                score = sum(1 for tok in query_tokens if tok in combined)
+                if score > 0:
+                    matched.append((fpath, score))
 
             if not matched:
                 return []
 
+            matched.sort(key=lambda x: x[1], reverse=True)
+
             final_results = []
-            for fpath in matched[:top_k]:
+            for fpath, _ in matched[:top_k]:
                 data = file_map[fpath]
-                total_chunks = len(data["chunks"])
-                content = "\n\n".join(data["chunks"])
+                unique_chunks = list(data["chunks_map"].values())
+                total_chunks = len(unique_chunks)
+                content = "\n\n".join(unique_chunks)
                 file_size_bytes = data["file_size"] if data["file_size"] else 0
                 final_results.append({
                     "file_name": data["file_name"],
@@ -607,8 +726,11 @@ class RagEngine:
                     "total_chunks": total_chunks,
                     "chunks_found": total_chunks,
                     "is_complete": True,
+                    "modified": data["modified"],
                     "content": content
                 })
+
+            final_results.sort(key=lambda x: self._recency_boost(x), reverse=True)
             logger.info(f"RAG fallback keyword search: {len(final_results)} files matched.")
             return final_results
 
@@ -636,11 +758,14 @@ class RagEngine:
             return {"success": False, "error": "System folders cannot be indexed."}
 
         if self.filter_engine.is_sensitive_path(resolved):
-            logger.warning(f"RAG add folder: sensitive path flagged: {resolved}")
+            logger.warning(f"RAG add folder: sensitive path blocked: {resolved}")
+            return {"success": False, "error": "Sensitive folders cannot be indexed."}
 
         folders = config_store.load_folders()
+        resolved_cmp = resolved.lower() if os.name == "nt" else resolved
         for f in folders:
-            if f["path"] == resolved:
+            existing_cmp = f["path"].lower() if os.name == "nt" else f["path"]
+            if existing_cmp == resolved_cmp:
                 logger.info(f"RAG add folder: already indexed: {resolved}")
                 return {"success": False, "error": "Folder already indexed."}
 
@@ -682,7 +807,7 @@ class RagEngine:
         with self.hash_lock:
             self.file_hashes = {
                 k: v for k, v in self.file_hashes.items()
-                if not k.startswith(resolved)
+                if not self._is_under_folder(k, resolved)
             }
             self._save_json(self.file_hashes_file, self.file_hashes)
 
@@ -736,26 +861,33 @@ class RagEngine:
             logger.error(f"RAG reindex: path resolve failed: {e}")
             return {"success": False, "error": "Invalid path."}
 
-        folders = config_store.load_folders()
-        target = next((f for f in folders if f["path"] == resolved), None)
-        if not target:
-            logger.warning(f"RAG reindex: folder not registered: {resolved}")
-            return {"success": False, "error": "Folder not registered."}
-
-        logger.info(f"RAG reindex: starting for {resolved}")
-        self._remove_chunks_for_folder(resolved)
-
-        self._set_status(
-            state="scanning",
-            current_folder=resolved,
-            started_at=datetime.now().isoformat(),
-            files_total=0,
-            files_done=0,
-            chunks_done=0,
-            last_error=""
-        )
-
+        self.index_lock.acquire()
         try:
+            folders = config_store.load_folders()
+            target = next((f for f in folders if f["path"] == resolved), None)
+            if not target:
+                logger.warning(f"RAG reindex: folder not registered: {resolved}")
+                return {"success": False, "error": "Folder not registered."}
+
+            logger.info(f"RAG reindex: starting for {resolved}")
+            self._remove_chunks_for_folder(resolved)
+
+            with self.hash_lock:
+                self.file_hashes = {
+                    k: v for k, v in self.file_hashes.items()
+                    if not self._is_under_folder(k, resolved)
+                }
+
+            self._set_status(
+                state="scanning",
+                current_folder=resolved,
+                started_at=datetime.now().isoformat(),
+                files_total=0,
+                files_done=0,
+                chunks_done=0,
+                last_error=""
+            )
+
             files = list(self.walker.walk_folder(resolved))
             self._set_status(files_total=len(files))
 
@@ -767,6 +899,8 @@ class RagEngine:
                     break
                 if not self._pause_event.is_set():
                     self._pause_event.wait()
+                    if self._shutdown_flag:
+                        break
 
                 try:
                     file_hash = self._get_file_hash(str(file_path))
@@ -776,12 +910,12 @@ class RagEngine:
                     self._set_status(files_done=files_done)
                     continue
 
-                with self.hash_lock:
-                    self.file_hashes[str(file_path)] = file_hash
-
-                added = self._process_file(str(file_path), resolved, file_hash)
+                success, added = self._process_file(str(file_path), resolved, file_hash)
+                if success:
+                    with self.hash_lock:
+                        self.file_hashes[str(file_path)] = file_hash
+                    chunks_done += added
                 files_done += 1
-                chunks_done += added
                 self._set_status(files_done=files_done, chunks_done=chunks_done)
 
             with self.hash_lock:
@@ -806,6 +940,8 @@ class RagEngine:
             logger.error(f"RAG reindex failed for {resolved}: {e}")
             self._set_status(state="error", last_error=str(e))
             return {"success": False, "error": str(e)}
+        finally:
+            self.index_lock.release()
 
     def pause_indexing(self):
         self._pause_event.clear()
@@ -814,8 +950,10 @@ class RagEngine:
         return {"success": True}
 
     def resume_indexing(self):
+        snap = self._get_status_snapshot()
         self._pause_event.set()
-        self._set_status(state="resuming")
+        if snap.get("state") == "paused":
+            self._set_status(state="scanning")
         logger.info("RAG indexer: resumed.")
         return {"success": True}
 
@@ -833,6 +971,7 @@ class RagEngine:
             return {"success": False, "error": str(e)}
 
     def purge_all(self):
+        self.index_lock.acquire()
         try:
             with self.db_lock:
                 all_ids = self.rag_collection.get().get("ids", [])
@@ -844,11 +983,20 @@ class RagEngine:
                 self._save_json(self.file_hashes_file, self.file_hashes)
 
             self._rebuild_bm25_cache()
+            self._set_status(
+                state="idle",
+                current_folder="",
+                files_total=0,
+                files_done=0,
+                chunks_done=0
+            )
             logger.info("RAG indexer: full purge complete.")
             return {"success": True}
         except Exception as e:
             logger.error(f"RAG purge failed: {e}")
             return {"success": False, "error": str(e)}
+        finally:
+            self.index_lock.release()
 
     def purge_folder(self, folder_path):
         try:
@@ -857,18 +1005,22 @@ class RagEngine:
             logger.error(f"RAG purge folder: path resolve failed: {e}")
             return {"success": False, "error": "Invalid path."}
 
-        self._remove_chunks_for_folder(resolved)
+        self.index_lock.acquire()
+        try:
+            self._remove_chunks_for_folder(resolved)
 
-        with self.hash_lock:
-            self.file_hashes = {
-                k: v for k, v in self.file_hashes.items()
-                if not k.startswith(resolved)
-            }
-            self._save_json(self.file_hashes_file, self.file_hashes)
+            with self.hash_lock:
+                self.file_hashes = {
+                    k: v for k, v in self.file_hashes.items()
+                    if not self._is_under_folder(k, resolved)
+                }
+                self._save_json(self.file_hashes_file, self.file_hashes)
 
-        self._rebuild_bm25_cache()
-        logger.info(f"RAG indexer: folder purge complete: {resolved}")
-        return {"success": True, "path": resolved}
+            self._rebuild_bm25_cache()
+            logger.info(f"RAG indexer: folder purge complete: {resolved}")
+            return {"success": True, "path": resolved}
+        finally:
+            self.index_lock.release()
 
     def get_indexed_folders_summary(self):
         folders = config_store.load_folders()
@@ -889,6 +1041,11 @@ class RagEngine:
     def shutdown(self):
         self._shutdown_flag = True
         self._pause_event.set()
+        try:
+            if self._indexing_thread and self._indexing_thread.is_alive():
+                self._indexing_thread.join(timeout=10)
+        except Exception as e:
+            logger.warning(f"RAG shutdown: thread join warning: {e}")
         try:
             with self.hash_lock:
                 self._save_json(self.file_hashes_file, self.file_hashes)

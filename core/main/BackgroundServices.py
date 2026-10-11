@@ -183,25 +183,30 @@ def is_mobile_bridge_running() -> bool:
     return _mobile_bridge_process.poll() is None
 
 def start_rag_engine():
-    global _rag_engine_init_started
-    _rag_engine_init_started = True
+    global _rag_engine_init_started, _rag_engine_initialized
     try:
         from core.brain.RagEngine import rag_engine
+        _rag_engine_initialized = True
+        _rag_engine_init_started = True
         logging.info("RAG Engine initialized successfully.")
         start_indexer_dashboard()
     except Exception as e:
+        _rag_engine_init_started = False
+        _rag_engine_initialized = False
         logging.error(f"RAG Engine initialization failed: {e}")
 
 def stop_rag_engine():
-    global _rag_engine_initialized
+    global _rag_engine_initialized, _rag_engine_init_started
     stop_indexer_dashboard()
     if _rag_engine_initialized:
         try:
-            pass
+            from core.brain.RagEngine import rag_engine
+            rag_engine.shutdown()
         except Exception as e:
             logging.error(f"RAG Engine stop error: {e}")
         finally:
             _rag_engine_initialized = False
+            _rag_engine_init_started = False
             logging.info("RAG Engine stopped successfully.")
 
 def start_indexer_dashboard():
