@@ -108,11 +108,36 @@ def optimize_observation(text: str, max_chars: int = 10000) -> str:
     )
 
 
+def _is_failure_prefix(text: str) -> bool:
+
+    payload = str(text or "").strip()
+    if not payload:
+        return True
+
+    if payload.startswith("[") and " Result]:" in payload[:80]:
+        _, sep, rest = payload.partition("]:")
+        payload = rest.strip() if sep else payload
+
+    if payload.startswith("Observation:"):
+        payload = payload[len("Observation:"):].strip()
+
+    head = payload[:200]
+    failure_markers = (
+        "[ERROR]",
+        "[FAILED]",
+        "[CRITICAL SYNTAX ERROR",
+        "Traceback (most recent call last)",
+        "Error ->",
+        "Failed to ",
+    )
+    return head.startswith(failure_markers)
+
+
 def update_confirmed_facts(
     facts_ledger: Dict[str, str], action_key: str, action_detail: str, observation: str
 ) -> None:
     obs_str = str(observation).strip()
-    if not obs_str or "error" in obs_str.lower() or "failed" in obs_str.lower():
+    if not obs_str or _is_failure_prefix(obs_str):
         return
 
     if action_key == "execute_terminal_command":
@@ -707,18 +732,7 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                                 })
                             observation = observation.get("observation", "Observation: [Media Loaded Inline] -> Images ready for inspection.")
 
-                        obs_lower = str(observation).lower()
-                        error_keywords = [
-                            "[error]",
-                            "traceback (most recent call last)",
-                            "syntaxerror",
-                            "pycompileerror",
-                            "critical syntax error",
-                            "failed to ",
-                            "error ->",
-                            "exception:",
-                        ]
-                        is_failure = any(kw in obs_lower for kw in error_keywords)
+                        is_failure = _is_failure_prefix(str(observation))
 
                         if not is_failure:
                             for t_key in executed_tools:
@@ -771,10 +785,9 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
                             break
                         else:
                             obs_str = str(observation).strip()
-                            matched_kw = next((kw for kw in error_keywords if kw in obs_lower), "unknown")
                             obs_preview = obs_str.replace("\n", " ")[:200]
                             logger.warning(
-                                f"⚠️ Tool execution error detected | keyword='{matched_kw}' | preview: {obs_preview}"
+                                f"⚠️ Tool execution error detected | prefix-based | preview: {obs_preview}"
                             )
                             logger.debug(f"Full observation for self-correction:\n{obs_str[:2000]}")
                             break

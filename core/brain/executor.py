@@ -475,10 +475,15 @@ def handle_whatsapp_action(whatsapp_action: dict) -> str:
 
     logger.info(f"🤖 Agent Sending WhatsApp to: {to_name}")
     wa_result = send_whatsapp_message(to_name, msg_body, attachment_abs_path)
-    if "Error" in wa_result or "failed" in wa_result.lower():
-        logger.error(f"❌ WhatsApp message failed: {wa_result}")
+    wa_result_str = str(wa_result).strip()
+    wa_failed = (
+        wa_result_str.startswith(("[ERROR]", "[FAILED]"))
+        or wa_result_str.startswith("Error ->")
+    )
+    if wa_failed:
+        logger.error(f"❌ WhatsApp message failed: {wa_result_str}")
     else:
-        logger.info(f"✅ WhatsApp result: {wa_result}")
+        logger.info(f"✅ WhatsApp result: {wa_result_str}")
     return wa_result
 
 @with_observation
@@ -498,10 +503,15 @@ def handle_telegram_action(telegram_action: dict) -> str:
     file_paths = telegram_action.get('file_paths', [])
     logger.info(f"🤖 Agent Sending Telegram to: {to_name}")
     tg_result = send_telegram_message(to_name, msg_body, file_paths)
-    if "Error" in tg_result or "failed" in tg_result.lower():
-        logger.error(f"❌ Telegram message failed: {tg_result}")
+    tg_result_str = str(tg_result).strip()
+    tg_failed = (
+        tg_result_str.startswith(("[ERROR]", "[FAILED]"))
+        or tg_result_str.startswith("Error ->")
+    )
+    if tg_failed:
+        logger.error(f"❌ Telegram message failed: {tg_result_str}")
     else:
-        logger.info(f"✅ Telegram result: {tg_result}")
+        logger.info(f"✅ Telegram result: {tg_result_str}")
     return tg_result
 
 @with_observation
