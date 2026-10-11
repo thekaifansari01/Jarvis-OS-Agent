@@ -72,6 +72,7 @@ class RagEngine:
         }
 
         self._ensure_default_folders()
+        self._ensure_schema_compatibility()
         logger.info("RAG Engine initialized with knowledge indexer.")
 
         self._indexing_thread = threading.Thread(target=self._initial_index, daemon=True)
@@ -148,6 +149,36 @@ class RagEngine:
             logger.info(f"RAG indexer initialized with default folder: {default_path}")
         else:
             logger.warning("RAG indexer: default Documents folder not found.")
+
+    def _ensure_schema_compatibility(self):
+        try:
+            with self.db_lock:
+                sample = self.rag_collection.get(limit=1)
+            metas = sample.get("metadatas") or []
+            if not metas:
+                return
+            first_meta = metas[0]
+            if not isinstance(first_meta, dict):
+                self._purge_for_migration("metadata malformed")
+                return
+            if "file_id" not in first_meta:
+                logger.warning("RAG schema migration: old chunks detected (missing 'file_id'). Clearing index for clean rebuild.")
+                self._purge_for_migration("missing file_id")
+        except Exception as e:
+            logger.warning(f"RAG schema check failed: {e}")
+
+    def _purge_for_migration(self, reason):
+        try:
+            with self.db_lock:
+                all_ids = self.rag_collection.get().get("ids", []) or []
+                if all_ids:
+                    self.rag_collection.delete(ids=all_ids)
+            with self.hash_lock:
+                self.file_hashes = {}
+                self._save_json(self.file_hashes_file, self.file_hashes)
+            logger.info(f"RAG migration purge complete: {reason}. Files will re-index on next scan.")
+        except Exception as e:
+            logger.error(f"RAG migration purge failed: {e}")
 
     def _normalize_task_type(self, input_type):
         if input_type == "search_query":
@@ -492,7 +523,11 @@ class RagEngine:
             with self.db_lock:
                 all_data = self.rag_collection.get()
 
-            if not all_data["documents"]:
+            documents = all_data.get("documents") or []
+            metadatas = all_data.get("metadatas") or []
+            ids = all_data.get("ids") or []
+
+            if not documents:
                 self._all_documents_cache = None
                 self._all_metadatas_cache = None
                 self._all_ids_cache = None
@@ -501,18 +536,50 @@ class RagEngine:
                 logger.info("RAG BM25 cache cleared (empty collection).")
                 return
 
-            self._all_documents_cache = all_data["documents"]
-            self._all_metadatas_cache = all_data["metadatas"]
-            self._all_ids_cache = all_data["ids"]
+            valid_docs = []
+            valid_metas = []
+            valid_ids = []
+            for i, doc in enumerate(documents):
+                if not doc:
+                    continue
+                if i >= len(metadatas):
+                    continue
+                meta = metadatas[i]
+                if not isinstance(meta, dict):
+                    continue
+                if i >= len(ids):
+                    continue
+                doc_id = ids[i]
+                if not doc_id:
+                    continue
+                valid_docs.append(doc)
+                valid_metas.append(meta)
+                valid_ids.append(doc_id)
 
-            tokenized_corpus = [self._tokenize(doc) for doc in all_data["documents"]]
+            if not valid_docs:
+                self._all_documents_cache = None
+                self._all_metadatas_cache = None
+                self._all_ids_cache = None
+                self._bm25_index = None
+                self._corpus_tokens = None
+                logger.info("RAG BM25 cache cleared (no valid entries).")
+                return
+
+            self._all_documents_cache = valid_docs
+            self._all_metadatas_cache = valid_metas
+            self._all_ids_cache = valid_ids
+
+            tokenized_corpus = [self._tokenize(doc) for doc in valid_docs]
             self._bm25_index = BM25Okapi(tokenized_corpus)
             self._corpus_tokens = tokenized_corpus
 
-            logger.info(f"RAG BM25 cache rebuilt: {len(all_data['documents'])} chunks loaded.")
+            logger.info(f"RAG BM25 cache rebuilt: {len(valid_docs)} chunks loaded.")
         except Exception as e:
             logger.error(f"RAG BM25 cache rebuild failed: {e}")
             self._bm25_index = None
+            self._all_documents_cache = None
+            self._all_metadatas_cache = None
+            self._all_ids_cache = None
 
     def _rebuild_bm25_cache_if_needed(self):
         with self.bm25_lock:
@@ -522,19 +589,33 @@ class RagEngine:
     def _reciprocal_rank_fusion(self, results_list, k=60):
         scores = {}
         for results in results_list:
+            if not results:
+                continue
             for rank, item in enumerate(results):
-                doc_id = item["id"]
+                if not isinstance(item, dict):
+                    continue
+                doc_id = item.get("id")
+                if not doc_id:
+                    continue
+                meta = item.get("meta")
+                if not isinstance(meta, dict):
+                    continue
                 if doc_id not in scores:
                     scores[doc_id] = {
-                        "doc": item["doc"],
-                        "meta": item["meta"],
+                        "doc": item.get("doc", "") or "",
+                        "meta": meta,
                         "score": 0.0
                     }
                 scores[doc_id]["score"] += 1.0 / (k + rank + 1)
         return sorted(scores.values(), key=lambda x: x["score"], reverse=True)
 
     def search_vault(self, query, top_k=RAG_TOP_K, folder_filter=None):
-        if not query or not query.strip():
+        if isinstance(query, list):
+            query = " ".join(str(q) for q in query if q)
+        elif not isinstance(query, str):
+            query = str(query) if query else ""
+        query = query.strip()
+        if not query:
             return []
 
         try:
@@ -550,68 +631,104 @@ class RagEngine:
                         query_embeddings=[query_embedding],
                         n_results=top_k * 2,
                         where=where_clause,
-                        include=["documents", "metadatas", "distances"]
+                        include=["documents", "metadatas", "distances", "ids"]
                     )
                 else:
                     vector_results = self.rag_collection.query(
                         query_embeddings=[query_embedding],
                         n_results=top_k * 2,
-                        include=["documents", "metadatas", "distances"]
+                        include=["documents", "metadatas", "distances", "ids"]
                     )
 
             vector_items = []
-            if vector_results.get("ids") and vector_results["ids"][0]:
-                for i, doc_id in enumerate(vector_results["ids"][0]):
-                    vector_items.append({
-                        "id": doc_id,
-                        "doc": vector_results["documents"][0][i],
-                        "meta": vector_results["metadatas"][0][i]
-                    })
+            try:
+                ids_batch = vector_results.get("ids") or []
+                docs_batch = vector_results.get("documents") or []
+                metas_batch = vector_results.get("metadatas") or []
+                ids_list = ids_batch[0] if ids_batch and len(ids_batch) > 0 else []
+                docs_list = docs_batch[0] if docs_batch and len(docs_batch) > 0 else []
+                metas_list = metas_batch[0] if metas_batch and len(metas_batch) > 0 else []
+                if ids_list:
+                    for i, doc_id in enumerate(ids_list):
+                        if not doc_id:
+                            continue
+                        doc = docs_list[i] if i < len(docs_list) else ""
+                        meta = metas_list[i] if i < len(metas_list) else None
+                        if not isinstance(meta, dict):
+                            continue
+                        vector_items.append({
+                            "id": doc_id,
+                            "doc": doc if doc else "",
+                            "meta": meta
+                        })
+            except Exception as e:
+                logger.warning(f"RAG vector result parsing failed: {e}")
+                vector_items = []
 
             self._rebuild_bm25_cache_if_needed()
             bm25_items = []
-            if self._bm25_index and self._all_metadatas_cache:
+            if self._bm25_index and self._all_metadatas_cache and self._all_ids_cache and self._all_documents_cache:
                 tokenized_query = self._tokenize(query)
                 if tokenized_query:
-                    bm25_scores = self._bm25_index.get_scores(tokenized_query)
-                    sorted_indices = sorted(
-                        range(len(bm25_scores)),
-                        key=lambda i: bm25_scores[i],
-                        reverse=True
-                    )
-                    taken = 0
-                    for idx in sorted_indices:
-                        if taken >= top_k * 2:
-                            break
-                        if bm25_scores[idx] == 0:
-                            continue
-                        meta = self._all_metadatas_cache[idx]
-                        if where_clause and meta.get("root_folder") != folder_filter:
-                            continue
-                        bm25_items.append({
-                            "id": self._all_ids_cache[idx],
-                            "doc": self._all_documents_cache[idx],
-                            "meta": meta
-                        })
-                        taken += 1
+                    try:
+                        bm25_scores = self._bm25_index.get_scores(tokenized_query)
+                        sorted_indices = sorted(
+                            range(len(bm25_scores)),
+                            key=lambda i: bm25_scores[i],
+                            reverse=True
+                        )
+                        taken = 0
+                        for idx in sorted_indices:
+                            if taken >= top_k * 2:
+                                break
+                            if bm25_scores[idx] == 0:
+                                continue
+                            if idx >= len(self._all_metadatas_cache):
+                                continue
+                            if idx >= len(self._all_ids_cache):
+                                continue
+                            if idx >= len(self._all_documents_cache):
+                                continue
+                            meta = self._all_metadatas_cache[idx]
+                            doc_id = self._all_ids_cache[idx]
+                            doc = self._all_documents_cache[idx]
+                            if not isinstance(meta, dict) or not doc_id:
+                                continue
+                            if where_clause and meta.get("root_folder") != folder_filter:
+                                continue
+                            bm25_items.append({
+                                "id": doc_id,
+                                "doc": doc if doc else "",
+                                "meta": meta
+                            })
+                            taken += 1
+                    except Exception as e:
+                        logger.warning(f"RAG BM25 ranking failed: {e}")
+                        bm25_items = []
 
             fused = self._reciprocal_rank_fusion([vector_items, bm25_items])
 
             file_map = {}
             for item in fused[:top_k * 3]:
-                fpath = item["meta"].get("file_path", "")
+                meta = item.get("meta") or {}
+                if not isinstance(meta, dict):
+                    continue
+                fpath = meta.get("file_path", "")
                 if not fpath:
+                    continue
+                item_id = item.get("id")
+                if not item_id:
                     continue
                 if fpath not in file_map:
                     file_map[fpath] = {
-                        "file_name": item["meta"].get("file_name", ""),
+                        "file_name": meta.get("file_name", ""),
                         "file_path": fpath,
-                        "root_folder": item["meta"].get("root_folder", ""),
+                        "root_folder": meta.get("root_folder", ""),
                         "chunks_map": {},
-                        "modified": item["meta"].get("modified", ""),
-                        "file_size": item["meta"].get("file_size", 0)
+                        "modified": meta.get("modified", ""),
+                        "file_size": meta.get("file_size", 0)
                     }
-                file_map[fpath]["chunks_map"][item["id"]] = item["doc"]
+                file_map[fpath]["chunks_map"][item_id] = item.get("doc", "") or ""
 
             final_results = []
             for fpath, data in file_map.items():
@@ -672,7 +789,11 @@ class RagEngine:
             with self.db_lock:
                 results = self.rag_collection.get()
 
-            if not results.get("documents"):
+            documents = results.get("documents") or []
+            metadatas = results.get("metadatas") or []
+            ids = results.get("ids") or []
+
+            if not documents:
                 return []
 
             query_tokens = set(self._tokenize(query))
@@ -680,8 +801,14 @@ class RagEngine:
                 return []
 
             file_map = {}
-            for i, doc in enumerate(results["documents"]):
-                meta = results["metadatas"][i]
+            for i, doc in enumerate(documents):
+                if not doc:
+                    continue
+                if i >= len(metadatas):
+                    continue
+                meta = metadatas[i]
+                if not isinstance(meta, dict):
+                    continue
                 if folder_filter and meta.get("root_folder") != folder_filter:
                     continue
                 fpath = meta.get("file_path", "")
@@ -696,7 +823,10 @@ class RagEngine:
                         "modified": meta.get("modified", ""),
                         "file_size": meta.get("file_size", 0)
                     }
-                doc_id = results["ids"][i] if results.get("ids") else f"{fpath}_{i}"
+                if i < len(ids) and ids[i]:
+                    doc_id = ids[i]
+                else:
+                    doc_id = f"{fpath}_{i}"
                 file_map[fpath]["chunks_map"][doc_id] = doc
 
             matched = []
