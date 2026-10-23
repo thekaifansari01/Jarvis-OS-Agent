@@ -236,6 +236,19 @@ User Command: "{raw_command}"
 
     native_tools = get_native_tools()
 
+    panic_step = max_steps - 2
+    active_domains = ephemeral.get("active_domains") or [
+        ephemeral.get("current_domain", "general_none")
+    ]
+    dynamic_agent_prompt = build_agentic_system_prompt(
+        base_agent_prompt=AGENT_SYSTEM_PROMPT,
+        domains=active_domains,
+        raw_command=raw_command,
+        context=context,
+        max_steps=max_steps,
+        panic_step=panic_step,
+    )
+
     while step < max_steps:
         elapsed = time.time() - start_time
         if elapsed > timeout_seconds:
@@ -367,26 +380,18 @@ If the <Mission> is fully complete, call 'complete_task'.
             provider_switched = False
             for attempt in range(max_api_retries):
                 try:
-                    panic_step = max_steps - 2
-                    active_domains = ephemeral.get("active_domains") or [
-                        ephemeral.get("current_domain", "general_none")
-                    ]
-                    dynamic_agent_prompt = build_agentic_system_prompt(
-                        base_agent_prompt=AGENT_SYSTEM_PROMPT,
-                        domains=active_domains,
-                        raw_command=raw_command,
-                        context=context,
-                        max_steps=max_steps,
-                        panic_step=panic_step,
-                    )
-                    full_prompt = f"{dynamic_agent_prompt}\n\n{prompt}"
-
                     if pending_image_payloads:
-                        content_block = [{"type": "text", "text": full_prompt}] + pending_image_payloads
-                        messages = [{"role": "user", "content": content_block}]
+                        user_content = [{"type": "text", "text": prompt}] + pending_image_payloads
+                        messages = [
+                            {"role": "system", "content": dynamic_agent_prompt},
+                            {"role": "user", "content": user_content}
+                        ]
                         pending_image_payloads = []
                     else:
-                        messages = [{"role": "user", "content": full_prompt}]
+                        messages = [
+                            {"role": "system", "content": dynamic_agent_prompt},
+                            {"role": "user", "content": prompt}
+                        ]
 
                     if any(name in current_provider.__class__.__name__.lower() for name in ["regolo", "openrouter", "custom"]):
                         thought_text = ""
