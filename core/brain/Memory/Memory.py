@@ -523,7 +523,7 @@ class ContextMemory:
 
         return "\n\n".join(blocks)
 
-        def get_static_ephemeral_context(self, current_command: str = "") -> str:
+    def get_static_ephemeral_context(self, current_command: str = "") -> str:
         with self._lock:
             self._prune_expired_ephemeral()
             self.sync_connected_devices()
