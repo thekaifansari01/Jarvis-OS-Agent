@@ -1,6 +1,20 @@
 import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import os
 import math
+import base64
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QFrame, QTextEdit, QLabel, QWidget,
     QVBoxLayout, QHBoxLayout, QSizePolicy
@@ -229,10 +243,10 @@ class InputPopup(QDialog):
     EXIT_SLIDE_MS = 300
     RESIZE_MS = 340
     PULSE_PERIOD_MS = 1200
+    FOCUS_DELAY_MS = 150
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        qInstallMessageHandler(_input_qt_message_handler)
 
         self.isClosing = False
         self.isTypingMode = False
@@ -250,8 +264,6 @@ class InputPopup(QDialog):
         self.glow_timer = QTimer(self)
         self.glow_timer.timeout.connect(self.update_glow_effect)
         self.glow_timer.start(self.GLOW_INTERVAL_MS)
-
-        QTimer.singleShot(60, self.forceFocus)
 
     def _load_fonts(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(
@@ -422,6 +434,31 @@ class InputPopup(QDialog):
         self.entry_anim_group.addAnimation(slide_up)
         self.entry_anim_group.start(QAbstractAnimation.DeleteWhenStopped)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(self.FOCUS_DELAY_MS, self.forceFocus)
+
+    def closeEvent(self, event):
+        if not self.isClosing:
+            self.isClosing = True
+            self.commandText = ""
+            try:
+                if self.glow_timer and self.glow_timer.isActive():
+                    self.glow_timer.stop()
+            except Exception:
+                pass
+            try:
+                if self.pulse_anim and self.pulse_anim.state() == QAbstractAnimation.Running:
+                    self.pulse_anim.stop()
+            except Exception:
+                pass
+            try:
+                if self.indicator_anim:
+                    self.indicator_anim.stop()
+            except Exception:
+                pass
+        event.accept()
+
     def update_glow_effect(self):
         self.gradient_phase += self.GLOW_PHASE_STEP
         if self.gradient_phase >= math.pi * 2:
@@ -434,9 +471,14 @@ class InputPopup(QDialog):
         self.enter_indicator.set_visuals(self.current_rgb)
 
     def forceFocus(self):
-        self.activateWindow()
-        self.raise_()
-        self.inputField.setFocus()
+        if self.isClosing:
+            return
+        try:
+            self.activateWindow()
+            self.raise_()
+            self.inputField.setFocus()
+        except Exception:
+            pass
 
     def onTextChanged(self):
         text = self.inputField.toPlainText().strip()
@@ -566,10 +608,23 @@ class InputPopup(QDialog):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    popup = InputPopup()
-    popup.exec_()
-    command = popup.getCommandText()
-    if command:
-        print(f"JARVIS_CMD:::{command}", flush=True)
-    sys.exit(0)
+    try:
+        app = QApplication(sys.argv)
+        popup = InputPopup()
+        popup.exec_()
+        command = popup.getCommandText()
+        if command:
+            encoded = base64.b64encode(command.encode("utf-8")).decode("ascii")
+            sys.stdout.write(f"JARVIS_CMD_B64:::{encoded}\n")
+            sys.stdout.flush()
+        sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception:
+        import traceback
+        try:
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+        except Exception:
+            pass
+        sys.exit(1)
