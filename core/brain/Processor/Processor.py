@@ -374,13 +374,6 @@ def fetch_hybrid_response(raw_command: str, memory_instance=None) -> Optional[Di
                 if hasattr(memory_instance, "get_and_clear_feedback"):
                     memory_instance.get_and_clear_feedback()
 
-                try:
-                    logger.info("Fetching Initial Profile, Mood & Workspace Context...")
-                    personal_context = memory_instance.get_relevant_context(raw_command)
-                    if personal_context:
-                        context_blocks.append(personal_context)
-                except Exception as e:
-                    logger.error(f"Memory Fetch Error: {e}")
 
                 if hasattr(memory_instance, "ephemeral") and memory_instance.ephemeral.get("proactive_confirmed"):
                     pending_data = (

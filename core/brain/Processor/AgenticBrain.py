@@ -3,7 +3,6 @@ import os
 import re
 import time
 import tempfile
-import datetime
 from typing import Dict, Optional
 import tiktoken
 from core.brain.config import CONFIG
@@ -293,7 +292,6 @@ User Command: "{raw_command}"
         logger.info(
             f"🔄 Agent Loop Step {step + 1}/{max_steps} (Provider: {current_provider.__class__.__name__})"
         )
-        current_time = datetime.datetime.now().strftime("%A, %d %B %Y | %I:%M %p")
 
         live_feedback = ""
         override_block = "[⚡ LIVE OVERRIDES]\nNone"
@@ -339,9 +337,7 @@ User Command: "{raw_command}"
             if ephemeral.get("last_screenshot"):
                 ephemeral_prompt += f"\n[EPHEMERAL: Last screenshot taken = {ephemeral['last_screenshot']}]"
 
-        prompt = f"""[SYSTEM STATUS]
-Time: {current_time}
-[BUDGET TRACKER]
+        prompt = f"""[BUDGET TRACKER]
 Current Step: {step + 1} out of {max_steps}. {panic_warning}
 
 <Confirmed_Facts>

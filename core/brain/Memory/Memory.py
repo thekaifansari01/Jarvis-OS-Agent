@@ -3,6 +3,11 @@ import os
 import threading
 import time
 import re
+import getpass
+import socket
+import subprocess
+import platform
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 import openai
@@ -92,6 +97,10 @@ class ContextMemory:
         self._ephemeral_expiry = {}
         self._devices_cache = []
         self._devices_cache_mtime = 0.0
+        self._sys_info_cache = {}
+        self._sys_info_expiry = {}
+        self._net_info_cache = {}
+        self._net_info_expiry = {}
         self.live_feedback_queue = []
         self.current_mode = "General Assistant"
         self.mode_timer = datetime.now()
@@ -292,57 +301,227 @@ class ContextMemory:
             for k in ("ml_prediction", "predicted_mood", "recommended_emotion", "predicted_apps", "predicted_tools"):
                 self._ephemeral_expiry[k] = exp_ts
 
+    def _prune_expired_sys_net_cache(self):
+        now = time.time()
+        with self._lock:
+            for k in list(self._sys_info_expiry.keys()):
+                if now >= self._sys_info_expiry[k]:
+                    self._sys_info_cache.pop(k, None)
+                    self._sys_info_expiry.pop(k, None)
+            for k in list(self._net_info_expiry.keys()):
+                if now >= self._net_info_expiry[k]:
+                    self._net_info_cache.pop(k, None)
+                    self._net_info_expiry.pop(k, None)
+
+    def _gather_system_info(self) -> dict:
+        self._prune_expired_sys_net_cache()
+        with self._lock:
+            cached = dict(self._sys_info_cache)
+        needed = ("os_name", "os_release", "username", "hostname",
+                  "home", "desktop", "downloads", "timezone", "python")
+        if all(k in cached for k in needed):
+            return cached
+
+        fresh = {}
+        try:
+            fresh["os_name"] = platform.system() or "Unknown"
+            fresh["os_release"] = platform.release() or ""
+            fresh["username"] = getpass.getuser() or "unknown"
+            fresh["hostname"] = platform.node() or "Unknown"
+            home_path = Path.home()
+            fresh["home"] = str(home_path).replace("\\", "/")
+            fresh["desktop"] = str(home_path / "Desktop").replace("\\", "/")
+            fresh["downloads"] = str(home_path / "Downloads").replace("\\", "/")
+            try:
+                fresh["timezone"] = str(datetime.now().astimezone().tzinfo)
+            except Exception:
+                fresh["timezone"] = "Unknown"
+            fresh["python"] = ".".join(str(x) for x in sys.version_info[:2])
+        except Exception as e:
+            logger.warning(f"System info gather failed: {e}")
+
+        now = time.time()
+        with self._lock:
+            for k, v in fresh.items():
+                self._sys_info_cache[k] = v
+                self._sys_info_expiry[k] = now + 3600
+            cached = dict(self._sys_info_cache)
+        return cached
+
+    def _get_wifi_ssid(self) -> str:
+        self._prune_expired_sys_net_cache()
+        with self._lock:
+            if "ssid" in self._net_info_cache:
+                return self._net_info_cache["ssid"]
+
+        ssid = None
+        try:
+            system = platform.system()
+            if system == "Windows":
+                try:
+                    result = subprocess.run(
+                        ["netsh", "wlan", "show", "interfaces"],
+                        capture_output=True, text=True, timeout=3,
+                        creationflags=0x08000000
+                    )
+                    for line in result.stdout.splitlines():
+                        if "SSID" in line and "BSSID" not in line:
+                            parts = line.split(":", 1)
+                            if len(parts) == 2:
+                                candidate = parts[1].strip()
+                                if candidate:
+                                    ssid = candidate
+                                    break
+                except Exception:
+                    pass
+            elif system == "Linux":
+                try:
+                    result = subprocess.run(
+                        ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
+                        capture_output=True, text=True, timeout=3
+                    )
+                    for line in result.stdout.splitlines():
+                        if line.startswith("yes:"):
+                            ssid = line.split(":", 1)[1].strip()
+                            break
+                except Exception:
+                    pass
+            elif system == "Darwin":
+                try:
+                    result = subprocess.run(
+                        ["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I"],
+                        capture_output=True, text=True, timeout=3
+                    )
+                    for line in result.stdout.splitlines():
+                        if " SSID:" in line:
+                            ssid = line.split("SSID:", 1)[1].strip()
+                            break
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"WiFi detection failed: {e}")
+
+        ssid = ssid or "Unknown"
+        now = time.time()
+        with self._lock:
+            self._net_info_cache["ssid"] = ssid
+            self._net_info_expiry["ssid"] = now + 30
+        return ssid
+
+    def _get_local_ip(self) -> str:
+        self._prune_expired_sys_net_cache()
+        with self._lock:
+            if "ip" in self._net_info_cache:
+                return self._net_info_cache["ip"]
+
+        ip = "Unknown"
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
+        except Exception:
+            try:
+                ip = socket.gethostbyname(socket.gethostname())
+            except Exception:
+                ip = "Unknown"
+
+        now = time.time()
+        with self._lock:
+            self._net_info_cache["ip"] = ip
+            self._net_info_expiry["ip"] = now + 60
+        return ip
+
     def get_ephemeral_context(self, mode: str = "agentic", current_command: str = "") -> str:
         with self._lock:
             self._prune_expired_ephemeral()
             self.sync_connected_devices()
 
             devices = self.ephemeral.get("connected_devices") or []
-            last_img = self.ephemeral.get("last_generated_image")
-            last_shot = self.ephemeral.get("last_screenshot")
             english_query = self.ephemeral.get("current_english_query", "")
             domain = self.ephemeral.get("current_domain", "")
+            waiting_confirm = bool(self.ephemeral.get("waiting_for_confirmation"))
+            pending_data = self.ephemeral.get("pending_task_data") or {}
+            current_mode = self.current_mode
 
-            beh_block = ""
+        sys_info = self._gather_system_info()
+        wifi_ssid = self._get_wifi_ssid()
+        local_ip = self._get_local_ip()
+
+        beh_block = ""
+        try:
             if domain and domain != "general_none":
-                try:
-                    from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
-                    beh_block = behavioral_pattern_engine.format_ephemeral_block(
-                        current_command=current_command,
-                        mode=mode,
-                        english_query=english_query,
-                        domain=domain,
-                    )
-                except Exception as e:
-                    logger.error(f"Behavioral ephemeral inject error ({mode}): {e}")
+                from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
+                beh_block = behavioral_pattern_engine.format_ephemeral_block(
+                    current_command=current_command,
+                    mode=mode,
+                    english_query=english_query,
+                    domain=domain,
+                )
+        except Exception as e:
+            logger.error(f"Behavioral ephemeral inject error ({mode}): {e}")
+            beh_block = ""
 
-            if mode == "fast":
-                lines = []
-                if devices:
-                    lines.append(f"Active Connected Phones: {', '.join(str(d) for d in devices)}")
-                if last_img:
-                    lines.append(f"Last generated image: {last_img}")
-                if last_shot:
-                    lines.append(f"Last screenshot taken: {last_shot}")
+        user_name = os.getenv("USER_NAME", "Sir")
+        now = datetime.now()
+        time_str = now.strftime("%A, %d %B %Y | %I:%M %p")
+        tz_str = sys_info.get("timezone", "Unknown")
+        os_line = f"{sys_info.get('os_name', 'Unknown')} {sys_info.get('os_release', '')}".strip()
+        phones_str = ", ".join(str(d) for d in devices) if devices else "None"
 
-                out_blocks = []
-                if lines:
-                    out_blocks.append("[[RECENT AGENT ACTIVITY]]\n" + "\n".join(lines))
-                if beh_block:
-                    out_blocks.append(beh_block)
-                return ("\n\n".join(out_blocks) + "\n") if out_blocks else ""
+        if waiting_confirm:
+            pending_summary = None
+            if isinstance(pending_data, dict):
+                pending_summary = pending_data.get("proactive_question")
+            confirm_str = pending_summary or "Active — awaiting user reply"
+        else:
+            confirm_str = "None"
 
-            lines = []
-            if devices:
-                lines.append(f"[EPHEMERAL: Active Connected Phones = {', '.join(str(d) for d in devices)}]")
-            if last_img:
-                lines.append(f"[EPHEMERAL: Last generated image = {last_img}]")
-            if last_shot:
-                lines.append(f"[EPHEMERAL: Last screenshot taken = {last_shot}]")
+        if mode == "fast":
+            blocks = []
+            blocks.append(
+                f"[IDENTITY] User Name: {user_name} | Device: {sys_info.get('hostname', 'Unknown')}"
+            )
+            blocks.append(f"[SYSTEM_ENVIRONMENT] OS: {os_line}")
+            blocks.append(f"[NETWORK] WiFi: {wifi_ssid} | Phones: {phones_str}")
+            blocks.append(f"[RUNTIME] Time: {time_str} | Mode: {current_mode}")
             if beh_block:
-                lines.append(beh_block)
+                blocks.append(f"[BEHAVIORAL_PATTERNS]\n{beh_block}")
+            return "\n\n".join(blocks) + "\n"
 
-            return "\n".join(lines)
+        blocks = []
+        blocks.append(
+            "[IDENTITY]\n"
+            f"- User Name: {user_name}\n"
+            f"- OS Username: {sys_info.get('username', 'unknown')}\n"
+            f"- Device: {sys_info.get('hostname', 'Unknown')}"
+        )
+        blocks.append(
+            "[SYSTEM_ENVIRONMENT]\n"
+            f"- OS: {os_line}\n"
+            f"- Home: {sys_info.get('home', 'Unknown')}\n"
+            f"- Desktop: {sys_info.get('desktop', 'Unknown')}\n"
+            f"- Downloads: {sys_info.get('downloads', 'Unknown')}"
+        )
+        blocks.append(
+            "[NETWORK]\n"
+            f"- WiFi: {wifi_ssid}\n"
+            f"- Local IP: {local_ip}\n"
+            f"- Connected Phones: {phones_str}"
+        )
+        blocks.append(
+            "[RUNTIME]\n"
+            f"- Time: {time_str}\n"
+            f"- Timezone: {tz_str}\n"
+            f"- Mode: {current_mode}\n"
+            f"- Pending Confirmation: {confirm_str}"
+        )
+        if beh_block:
+            blocks.append(f"[BEHAVIORAL_PATTERNS — VERIFIED USER PREFERENCES]\n{beh_block}")
+
+        return "\n\n".join(blocks)
 
     def add_live_feedback(self, text):
         if text and text.strip():
@@ -1015,17 +1194,6 @@ Return STRICT JSON matching this exact schema:
         except Exception as e:
             logger.error(f"Agent context retrieval error: {e}")
             return "<Recent_Context>\nError retrieving history.\n</Recent_Context>"
-
-    def get_relevant_context(self, query):
-        try:
-            context = [
-                f"Current Time: {datetime.now().strftime('%A, %Y-%m-%d %H:%M')}",
-                f"SESSION MODE: {self.current_mode}"
-            ]
-            return "\n".join(context)
-        except Exception as e:
-            logger.error(f"Relevant context retrieval error: {e}")
-            return "Error retrieving relevant context."
 
     def get_chat_history_for_tool(self, query=None):
         try:

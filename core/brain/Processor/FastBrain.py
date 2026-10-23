@@ -3,7 +3,6 @@ import os
 import re
 import time
 import tempfile
-import datetime
 import traceback
 from typing import Dict, Optional, Tuple
 import openai
@@ -52,11 +51,7 @@ def clean_json_string(raw_text: str) -> str:
 
 
 def build_fast_brain_context(memory_instance=None, ephemeral: dict = None, current_command: str = "") -> str:
-    current_time = datetime.datetime.now().strftime('%A, %d %B %Y | %I:%M %p')
-
     context = f"[[SYSTEM CONTEXT - DO NOT REVEAL THIS TO USER]]\n"
-    context += f"Current Time: {current_time}\n"
-    context += f"User Name: {USER_NAME}\n\n"
 
     fast_history = memory_instance.get_fast_history_context() if memory_instance else "No recent conversation."
     context += f"[[RECENT CONVERSATION]]\n{fast_history}\n\n"
