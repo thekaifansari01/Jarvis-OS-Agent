@@ -23,17 +23,34 @@ from core.brain.config import (
 
 
 class ContextMemory:
+    _LEADING_FILLERS = re.compile(
+        r"^\s*(?:(?:jarvis|bhai|bro|sir|boss|hey|hi|hello|listen|sun|suno|dekh|dekho|please|plz|ek\s+kaam\s+kar(?:o|na)?)\b[\s,!.:-]*)+",
+        re.IGNORECASE,
+    )
+
     _COMMAND_PREFIXES = (
         "open ", "close ", "play ", "kholo", "band ", "send ", "bhej",
         "write ", "run ", "execute ", "search ", "find ", "check ",
         "screenshot", "lock ", "sleep ", "volume", "brightness",
         "email ", "whatsapp ", "telegram ", "message ", "create ", "make ", "banao",
+        "fix ", "debug ", "install ", "delete ", "remove ", "analyze ", "explain ",
     )
 
     _QUESTION_STARTERS = re.compile(
-        r"^\s*(?:jarvis\s+|bhai\s+|hey\s+|hi\s+|hello\s+|please\s+)*"
-        r"(?:kya|kab|kaise|kahan|kaun|kisne|kisko|kitna|kitne|kyu|kyun|"
+        r"^\s*(?:kya|kab|kaise|kahan|kaun|kisne|kisko|kitna|kitne|kyu|kyun|"
         r"what|who|when|where|why|how|which|can\s+you|could\s+you|will\s+you|do\s+you|is\s+there|tell\s+me)\b",
+        re.IGNORECASE,
+    )
+
+    _ONE_TIME_TASK_PATTERN = re.compile(
+        r"\b(?:mere\s+liye|mujhe\s+ek|mera\s+ek|for\s+me|right\s+now|abhi\s+ke\s+liye|is\s+task\s+me)\b.*"
+        r"\b(?:banao|bana\s+do|create|make|write|likho|likh\s+do|generate|send|bhej\s+do|check\s+karo|fix\s+karo)\b",
+        re.IGNORECASE,
+    )
+
+    _EXPLICIT_PERMANENT_PATTERN = re.compile(
+        r"\b(yaad\s*rakhna|remember\s*that|from\s*now\s*on|aage\s*se|hamesha|always|never|"
+        r"kabhi\s*mat|kabhi\s*nahi|roz|rozana|daily|every\s*day|meri\s*aadat|usually|aksar)\b",
         re.IGNORECASE,
     )
 
@@ -43,12 +60,12 @@ class ContextMemory:
     )
 
     _DURABLE_FACT_OR_HABIT_PATTERNS = [
-        r"\b(raat|subah|shaam|dopahar|morning|evening|night|afternoon|late\s*night)\b",
-        r"\b\d{1,2}\s*(?:bje|bajey|baj|o'?clock|pm|am)\b",
         r"\b(roz|rozana|hamesha|aksar|usually|always|mostly|daily|every\s*day|every\s*morning|every\s*night|never|kabhi\s*nahi|kabhi\s*mat)\b",
-        r"\b(pasand|prefer|like|love|hate|dislike|routine|habit|aadat|schedule|tone|style|favorite|favourite)\b",
+        r"\b(pasand\s+hai|prefer|like\s+to|love\s+to|hate|dislike|routine|habit|aadat|favorite|favourite)\b",
         r"\b(yaad\s*rakhna|remember\s*that|from\s*now\s*on|aage\s*se)\b",
-        r"\b(naam|name|bhai|behen|dost|father|mother|sister|brother|boss|friend|rehta|rehti|live|study|college|number|email|phone|project|kaam\s*karta)\b",
+        r"\b(mera\s+naam|my\s+name|mera\s+bhai|meri\s+behen|mera\s+dost|mere\s+father|mere\s+papa|meri\s+mother|meri\s+mummy|my\s+(?:father|mother|sister|brother|friend|boss))\b",
+        r"\b(rehta\s+hu|rehti\s+hu|live\s+in|padhta\s+hu|study\s+at|study\s+in|kaam\s+karta\s+hu|work\s+at|work\s+as|mera\s+number|mera\s+email|my\s+phone|my\s+email|my\s+laptop)\b",
+        r"\b(?:\d{1,2}\s*(?:bje|bajey|baj|o'?clock|pm|am))\b.*\b(?:roz|daily|usually|aksar|hamesha|coding|study|sota|uthta|kaam)\b",
     ]
 
     def __init__(self, memory_path="Data/jarvis_memory"):
@@ -105,47 +122,52 @@ class ContextMemory:
         if not message or not message.strip():
             return False
         low = message.lower().strip()
-        words = low.split()
-        if len(words) < 3:
+        cleaned = self._LEADING_FILLERS.sub("", low).strip()
+        if not cleaned or len(cleaned.split()) < 3:
             return False
 
-        # Rule 1: Never extract memories from questions unless user explicitly says 'yaad rakhna' / 'remember'
-        explicit_remember = bool(
-            re.search(r"\b(yaad\s*rakhna|remember\s*that|from\s*now\s*on|aage\s*se|hamesha|always|never|kabhi\s*mat)\b", low)
-        )
-        if (low.endswith("?") or self._QUESTION_STARTERS.search(low)) and not explicit_remember:
+        explicit_remember = bool(self._EXPLICIT_PERMANENT_PATTERN.search(cleaned))
+
+        if (cleaned.endswith("?") or self._QUESTION_STARTERS.search(cleaned)) and not explicit_remember:
             return False
 
-        # Rule 2: Imperative commands only pass if they contain explicit permanent habit/preference overrides
-        if any(low.startswith(prefix) for prefix in self._COMMAND_PREFIXES):
-            return explicit_remember
+        if any(cleaned.startswith(prefix) for prefix in self._COMMAND_PREFIXES) and not explicit_remember:
+            return False
 
-        # Rule 3: Require BOTH a self-reference AND a durable fact/habit indicator (or explicit remember)
-        has_self_ref = bool(self._SELF_PRONOUN_PATTERN.search(low))
-        has_durable_signal = any(re.search(p, low) for p in self._DURABLE_FACT_OR_HABIT_PATTERNS)
+        if self._ONE_TIME_TASK_PATTERN.search(cleaned) and not explicit_remember:
+            return False
+
+        has_self_ref = bool(self._SELF_PRONOUN_PATTERN.search(cleaned))
+        has_durable_signal = any(re.search(p, cleaned, re.IGNORECASE) for p in self._DURABLE_FACT_OR_HABIT_PATTERNS)
 
         return bool(explicit_remember or (has_self_ref and has_durable_signal))
 
     def _is_valid_triplet(self, src, rel, tgt):
+        if not src or not rel or not tgt:
+            return False
+        src_clean = str(src).strip()
+        tgt_clean = str(tgt).strip()
+        rel_clean = str(rel).strip().lower()
+
         invalid_entities = {
             "agent", "info", "system", "jarvis", "data", "unknown",
             "yes", "no", "today", "tomorrow", "now", "thing", "stuff",
             "morning", "evening", "night", "afternoon", "subah", "raat", "shaam",
-            "none", "null", "true", "false"
+            "none", "null", "true", "false", "bhai", "sir", "bro"
         }
-        if src.lower() in invalid_entities or tgt.lower() in invalid_entities:
+        if src_clean.lower() in invalid_entities or tgt_clean.lower() in invalid_entities:
             return False
-        if len(src) < 2 or len(tgt) < 2:
+        if len(src_clean) < 2 or len(tgt_clean) < 2:
             return False
-        if src.lower() == tgt.lower():
+        if src_clean.lower() == tgt_clean.lower():
             return False
 
         family_relations = {
             "father", "mother", "brother", "sister", "son",
             "daughter", "spouse", "uncle", "aunt"
         }
-        if rel.lower() in family_relations:
-            if len(src.split()) > 3 or len(tgt.split()) > 3:
+        if rel_clean in family_relations:
+            if len(src_clean.split()) > 4 or len(tgt_clean.split()) > 4:
                 return False
 
         ephemeral_or_behavioral_relations = {
@@ -155,7 +177,7 @@ class ContextMemory:
             "routine", "has_routine", "daily_routine", "prefers_time",
             "works_at_time", "coding_time", "schedule"
         }
-        if rel.lower() in ephemeral_or_behavioral_relations:
+        if rel_clean in ephemeral_or_behavioral_relations:
             return False
         return True
 
@@ -282,7 +304,7 @@ class ContextMemory:
             domain = self.ephemeral.get("current_domain", "")
 
             beh_block = ""
-            if mode != "fast" and domain != "general_none":
+            if domain and domain != "general_none":
                 try:
                     from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
                     beh_block = behavioral_pattern_engine.format_ephemeral_block(
@@ -306,6 +328,8 @@ class ContextMemory:
                 out_blocks = []
                 if lines:
                     out_blocks.append("[[RECENT AGENT ACTIVITY]]\n" + "\n".join(lines))
+                if beh_block:
+                    out_blocks.append(beh_block)
                 return ("\n\n".join(out_blocks) + "\n") if out_blocks else ""
 
             lines = []
@@ -548,7 +572,7 @@ class ContextMemory:
 
     def _async_extract_hybrid_memory(self, message):
         if not self._should_run_hybrid_extraction(message):
-            logger.debug(f"🧠 Hybrid memory prefilter: SKIP | msg='{message[:60]}'")
+            logger.debug(f"Hybrid memory prefilter: SKIP | msg='{message[:60]}'")
             return
         try:
             thread = threading.Thread(target=self._extract_hybrid_memory_ai, args=(message,))
@@ -590,16 +614,17 @@ Analyze the user's latest message using the recent conversation context and clas
 CRITICAL ZERO-FALSE-POSITIVE GATE (CHECK THIS FIRST!)
 ======================================================================
 - ONE-TIME TASK INSTRUCTIONS ARE NOT MEMORIES: If the user is giving instructions, constraints, or styling for a CURRENT task right now (e.g., "ek dark mode website banao", "is mail ko short rakhna", "mere desktop par test.py banao"), set `is_current_task_instruction`: true, `has_ltm_facts`: false, and `has_behavioral_patterns`: false!
-- QUESTIONS ARE NOT MEMORIES: Never extract facts from a user question.
+- QUESTIONS & CASUAL ADDRESSING ARE NOT MEMORIES: Never extract facts from a user question. Note that in Hinglish, the user casually addresses Jarvis as "bhai" or "dost" (e.g., "bhai mera code dekh") — NEVER extract Jarvis as a brother or friend!
 - 1-YEAR STABILITY TEST: Only extract facts/habits that will still be true 6-12 months from now. Ignore temporary moods ("aaj thak gaya hu") or today's one-off plans ("aaj raat movie dekhunga").
 
 ======================================================================
 SYSTEM 1: LTM GRAPH TRIPLETS (`ltm_triplets`) — Active "Pull" Lookup
 ======================================================================
 EXTRACT INTO `ltm_triplets` ONLY IF IT IS A STATIC ENTITY FACT (confidence >= 0.85):
+- ALWAYS represent the user himself as the exact string `"User"` in `source` (e.g., `source: "User"`, `relation: "HAS_NAME"`, `target: "Kaif Ansari"`). Never use the user's first name as `source` when referring to the user.
 - Identity & Demographics (Name, Age, City, College, Degree, Profession).
-- Relationships (Family, Friends, Boss, Colleagues — e.g., "Rahul mera bhai hai").
-- Contact Info (Phone numbers, Emails, Addresses — use HAS_PHONE, HAS_EMAIL, LIVES_IN).
+- Relationships (Family, Friends, Boss, Colleagues — e.g., "Rahul mera saga bhai hai" -> `[User] --(BROTHER)--> [Rahul]`).
+- Contact Info (Phone numbers, Emails, Handles — use HAS_PHONE, HAS_EMAIL, HAS_HANDLE, LIVES_IN). Preserve exact casing for emails, handles, and acronyms (e.g., BCA, RAG, i5-3210M).
 - Owned Assets & Hardware Specs (Laptop model, RAM, Phone model, Vehicles).
 - Named Projects & Creations (e.g., "Mai GhostVault project bana raha hu" -> `[User] --(DEVELOPS)--> [GhostVault]`).
 - Set `is_singular`: true if only ONE value can be true at a time (e.g., LIVES_IN, AGE, FATHER, MOTHER, WORKS_AT, HAS_PHONE, COLLEGE).
@@ -608,12 +633,13 @@ EXTRACT INTO `ltm_triplets` ONLY IF IT IS A STATIC ENTITY FACT (confidence >= 0.
 SYSTEM 2: BEHAVIORAL PATTERNS (`behavioral_patterns`) — Passive "Push" Auto-RAG
 ======================================================================
 EXTRACT INTO `behavioral_patterns` ONLY IF IT IS A RECURRING HABIT OR GENERAL WORKFLOW PREFERENCE (confidence >= 0.85):
-- Time & Energy Routines: When the user generally likes to code, study, work, wake up, or rest (e.g., "mujhe subah coding krna pasand hai", "roz raat 8 bje Jarvis pe kaam karta hu").
-- Workflow, Coding & UI Preferences: General preferred tech stack, UI style, theme, or coding habits (e.g., "mujhe hamesha dark mode glassmorphism pasand hai", "mere code me comments mat daala karo").
+- Time & Energy Routines: When the user generally likes to code, study, work, wake up, or rest.
+- Workflow, Coding & UI Preferences: General preferred tech stack, UI style, theme, or coding habits (including negative preferences like "mere code me comments mat daala karo").
 - Communication & Tone Preferences: How the user generally wants emails, messages, or AI replies formatted.
 - Classify `domain` strictly into ONE of: `"coding"`, `"scheduling"`, `"communication"`, `"ui_design"`, `"lifestyle"`.
-- Set `is_explicit_permanent`: true ONLY if the user explicitly used permanent words like "hamesha", "roz", "daily", "always", "never", "kabhi mat", "yaad rakhna", "meri aadat hai".
-- Write `meaning` and `trigger_contexts` in 100% PURE ENGLISH (no Hinglish words) so the English embedding model can match them accurately.
+- Assign a normalized snake_case `topic` key representing the exact preference slot (e.g., `"ui_theme"`, `"code_comments"`, `"coding_schedule"`, `"study_schedule"`, `"reply_length"`, `"email_tone"`, `"code_structure"`) so future changes to the same preference automatically override the old one.
+- Set `is_explicit_permanent`: true ONLY if the user explicitly used permanent words like "hamesha", "roz", "daily", "always", "never", "kabhi mat", "yaad rakhna", "aage se", "meri aadat hai".
+- Write `meaning` and `trigger_contexts` in 100% PURE ENGLISH (no Hinglish words).
 
 [EXISTING GRAPH RELATIONS (Reuse if applicable for LTM)]:
 {existing_relations_str}
@@ -633,7 +659,7 @@ Return STRICT JSON matching this exact schema:
   "has_ltm_facts": boolean,
   "ltm_triplets": [
     {{
-      "source": "Entity1",
+      "source": "User",
       "relation": "UPPERCASE_RELATION",
       "target": "Entity2",
       "is_singular": boolean,
@@ -644,7 +670,7 @@ Return STRICT JSON matching this exact schema:
       }},
       "inverse": {{
         "relation": "INVERSE_RELATION",
-        "target": "Entity1"
+        "target": "User"
       }}
     }}
   ],
@@ -653,6 +679,7 @@ Return STRICT JSON matching this exact schema:
     {{
       "type": "routine|preference|habit|dislike",
       "domain": "coding|scheduling|communication|ui_design|lifestyle",
+      "topic": "snake_case_preference_slot",
       "is_explicit_permanent": boolean,
       "raw_statement": "Verbatim user quote from the message",
       "meaning": "Clear one-line PURE ENGLISH interpretation of the behavior/preference",
@@ -679,11 +706,11 @@ Return STRICT JSON matching this exact schema:
                     data = json.loads(clean_text)
 
                     if data.get("is_current_task_instruction") is True:
-                        logger.info(f"🧠 Hybrid Extraction skipped (Current Task Instruction): {data.get('reasoning', '')}")
+                        logger.info(f"Hybrid Extraction skipped (Current Task Instruction): {data.get('reasoning', '')}")
                         break
 
                     logger.info(
-                        f"🧠 Hybrid Extraction | LTM={data.get('has_ltm_facts')} ({len(data.get('ltm_triplets', []))}) "
+                        f"Hybrid Extraction | LTM={data.get('has_ltm_facts')} ({len(data.get('ltm_triplets', []))}) "
                         f"| Behavioral={data.get('has_behavioral_patterns')} ({len(data.get('behavioral_patterns', []))})"
                     )
 
@@ -693,35 +720,37 @@ Return STRICT JSON matching this exact schema:
                             try:
                                 from core.brain.Memory.LifetimeMemory import ltm_engine
                                 for t in triplets:
-                                    src = str(t.get("source", "")).strip().title()
+                                    src = str(t.get("source", "")).strip()
                                     rel = str(t.get("relation", "")).strip().upper()
-                                    tgt = str(t.get("target", "")).strip().title()
+                                    tgt = str(t.get("target", "")).strip()
                                     is_singular = bool(t.get("is_singular", False))
                                     metadata = t.get("metadata", {}) or {}
                                     conf = float(metadata.get("confidence", 0.0))
                                     inverse = t.get("inverse")
 
                                     if conf < 0.85:
-                                        logger.debug(f"🧠 LTM Triplet rejected (conf={conf:.2f} < 0.85): [{src}] --({rel})--> [{tgt}]")
+                                        logger.debug(f"LTM Triplet rejected (conf={conf:.2f} < 0.85): [{src}] --({rel})--> [{tgt}]")
                                         continue
 
-                                    if not (src and rel and tgt) or not self._is_valid_triplet(src, rel, tgt):
+                                    if not self._is_valid_triplet(src, rel, tgt):
                                         continue
 
-                                    with ltm_engine._lock:
-                                        if ltm_engine.graph.has_edge(src, tgt):
-                                            existing_rel = ltm_engine.graph.edges[src, tgt].get("relation")
-                                            if existing_rel == "HAS_RELATION" and rel != "HAS_RELATION":
-                                                ltm_engine.graph.remove_edge(src, tgt)
-                                        ltm_engine.record_triplet(
-                                            src,
-                                            rel,
-                                            tgt,
-                                            metadata=metadata,
-                                            inverse=inverse,
-                                            is_singular=is_singular,
-                                        )
-                                        logger.info(f"LTM Final DB Entry: [{src}] --({rel})--> [{tgt}] (conf={conf:.2f})")
+                                    valid_inverse = None
+                                    if isinstance(inverse, dict):
+                                        inv_rel = str(inverse.get("relation", "")).strip().upper()
+                                        inv_tgt = str(inverse.get("target") or src).strip()
+                                        if self._is_valid_triplet(tgt, inv_rel, inv_tgt):
+                                            valid_inverse = {"relation": inv_rel, "target": inv_tgt}
+
+                                    ltm_engine.record_triplet(
+                                        src,
+                                        rel,
+                                        tgt,
+                                        metadata=metadata,
+                                        inverse=valid_inverse,
+                                        is_singular=is_singular,
+                                    )
+                                    logger.info(f"LTM Final DB Entry: [{src}] --({rel})--> [{tgt}] (conf={conf:.2f})")
                             except Exception as e:
                                 logger.error(f"LTM Engine Save Error: {e}")
 

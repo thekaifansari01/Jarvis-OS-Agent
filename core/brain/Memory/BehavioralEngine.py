@@ -13,9 +13,33 @@ VALID_BEHAVIORAL_DOMAINS = {"coding", "scheduling", "communication", "ui_design"
 EXPLICIT_PERMANENT_REGEX = re.compile(
     r"\b(hamesha|always|never|kabhi\s*nahi|kabhi\s*mat|yaad\s*rakhna|remember\s*that|"
     r"from\s*now\s*on|aage\s*se|roz|rozana|daily|every\s*day|every\s*morning|"
-    r"every\s*night|aadat|routine|usually|aksar)\b",
+    r"every\s*night|aadat|routine|usually|aksar|meri\s*aadat)\b",
     re.IGNORECASE,
 )
+
+OPPOSITION_GROUPS = [
+    ({"dark", "black", "amoled"}, {"light", "white", "bright"}),
+    ({"short", "concise", "brief", "compact", "minimal"}, {"long", "detailed", "verbose", "elaborate", "comprehensive"}),
+    ({"morning", "subah", "early", "dawn"}, {"night", "raat", "late", "midnight", "evening", "shaam"}),
+    ({"formal", "professional", "polite"}, {"casual", "informal", "friendly", "chill", "frank"}),
+    ({"modular", "split", "multi-file", "separate"}, {"monolithic", "single-file", "one-file", "inline"}),
+]
+
+NEGATION_TOKENS = {
+    "no", "not", "never", "without", "avoid", "dislike", "hate",
+    "dont", "don't", "mat", "nahi", "na", "skip", "omit", "remove", "disable"
+}
+
+AFFIRMATIVE_TOKENS = {
+    "always", "prefer", "like", "love", "include", "add", "use",
+    "with", "keep", "enable", "hamesha", "pasand", "chahiye", "want"
+}
+
+STOPWORDS = {
+    "user", "prefers", "likes", "wants", "always", "never", "when", "while",
+    "the", "and", "for", "with", "without", "that", "this", "from", "into",
+    "should", "must", "applicable", "requests", "asking", "tasks", "general"
+}
 
 
 class BehavioralPatternEngine:
@@ -25,16 +49,19 @@ class BehavioralPatternEngine:
         self.patterns_file = self.memory_dir / "behavioral_patterns.jsonl"
         self._lock = threading.RLock()
 
-        self.dedupe_threshold = 0.84
-        self.similarity_threshold = 0.75
+        self.dedupe_threshold = 0.82
+        self.conflict_sim_threshold = 0.72
+        self.similarity_threshold = 0.72
         self.min_confidence_gate = 0.85
         self.top_k = 2
         self.recency_decay_days = 180
+        self.candidate_ttl_days = 30
 
         self._last_cache_key = None
         self._last_ephemeral_block = ""
 
         self.patterns = self._load_patterns()
+        self._prune_stale_candidates()
 
         logger.info(
             f"BehavioralPatternEngine ready | patterns_loaded={len(self.patterns)} "
@@ -42,20 +69,35 @@ class BehavioralPatternEngine:
         )
 
     @staticmethod
+    def _normalize_topic(topic: str, meaning: str = "", domain: str = "") -> str:
+        clean = re.sub(r"[^a-z0-9_]+", "_", (topic or "").strip().lower()).strip("_")
+        if clean and len(clean) >= 3:
+            return clean
+        low = (meaning or "").lower()
+        if any(w in low for w in ("dark mode", "light mode", "theme", "glassmorphism", "color", "palette")):
+            return "ui_theme"
+        if any(w in low for w in ("comment", "comments", "docstring")):
+            return "code_comments"
+        if any(w in low for w in ("short", "concise", "brief", "detailed", "length", "reply", "tone")):
+            return "communication_style"
+        if any(w in low for w in ("morning", "night", "subah", "raat", "schedule", "slot", "wake", "sleep")):
+            return f"{domain or 'general'}_timing"
+        return ""
+
+    @staticmethod
     def _build_embed_text(pattern_entry: dict) -> str:
-        """
-        Builds a 100% pure English representation for BAAI/bge-small-en-v1.5.
-        Excludes Hinglish raw_statement to prevent cross-lingual vector pollution.
-        """
-        meaning = (pattern_entry.get("meaning") or "").strip()
-        triggers = (pattern_entry.get("trigger_contexts") or "").strip()
+        meaning = (pattern_entry.get("meaning") or "").strip().rstrip(".")
+        triggers = (pattern_entry.get("trigger_contexts") or "").strip().rstrip(".")
+        topic = (pattern_entry.get("topic") or "").replace("_", " ").strip()
         raw = (pattern_entry.get("raw_statement") or "").strip()
 
         parts = []
-        if meaning:
-            parts.append(meaning.rstrip("."))
         if triggers:
-            parts.append(f"Applicable when user requests: {triggers.rstrip('.')}")
+            parts.append(triggers)
+        if meaning:
+            parts.append(meaning)
+        if topic:
+            parts.append(f"Topic: {topic}")
         if not parts and raw:
             parts.append(raw)
         return ". ".join(parts)
@@ -65,7 +107,7 @@ class BehavioralPatternEngine:
         low = (text or "").lower()
         if any(w in low for w in ("schedule", "timetable", "study", "morning", "night", "8 pm", "hour", "slot", "routine", "wake", "sleep")):
             return "scheduling"
-        if any(w in low for w in ("dark mode", "glassmorphism", "ui", "css", "dashboard", "theme", "frontend", "layout", "design")):
+        if any(w in low for w in ("dark mode", "light mode", "glassmorphism", "ui", "css", "dashboard", "theme", "frontend", "layout", "design")):
             return "ui_design"
         if any(w in low for w in ("code", "coding", "python", "script", "comment", "modular", "ide", "react", "programming")):
             return "coding"
@@ -73,10 +115,70 @@ class BehavioralPatternEngine:
             return "communication"
         return "lifestyle"
 
+    @staticmethod
+    def _extract_content_tokens(text: str) -> set:
+        tokens = set(re.findall(r"[a-z0-9]+", (text or "").lower()))
+        return {t for t in tokens if len(t) >= 3 and t not in STOPWORDS and t not in NEGATION_TOKENS and t not in AFFIRMATIVE_TOKENS}
+
+    @classmethod
+    def _is_contradictory(cls, old_entry: dict, new_entry: dict) -> bool:
+        old_text = f"{old_entry.get('meaning', '')} {old_entry.get('raw_statement', '')}".lower()
+        new_text = f"{new_entry.get('meaning', '')} {new_entry.get('raw_statement', '')}".lower()
+
+        old_words = set(re.findall(r"[a-z0-9']+", old_text))
+        new_words = set(re.findall(r"[a-z0-9']+", new_text))
+
+        for side_a, side_b in OPPOSITION_GROUPS:
+            if (old_words & side_a and new_words & side_b) or (old_words & side_b and new_words & side_a):
+                return True
+
+        old_type = str(old_entry.get("type", "preference")).lower()
+        new_type = str(new_entry.get("type", "preference")).lower()
+        old_neg = bool(old_words & NEGATION_TOKENS) or old_type == "dislike"
+        new_neg = bool(new_words & NEGATION_TOKENS) or new_type == "dislike"
+
+        if old_neg != new_neg:
+            old_content = cls._extract_content_tokens(old_entry.get("meaning", ""))
+            new_content = cls._extract_content_tokens(new_entry.get("meaning", ""))
+            if old_content and new_content and (old_content & new_content):
+                return True
+
+        old_topic = old_entry.get("topic", "")
+        new_topic = new_entry.get("topic", "")
+        if old_topic and new_topic and old_topic == new_topic and old_neg != new_neg:
+            return True
+
+        return False
+
     def _invalidate_cache(self):
         with self._lock:
             self._last_cache_key = None
             self._last_ephemeral_block = ""
+
+    def _prune_stale_candidates(self):
+        with self._lock:
+            if not self.patterns:
+                return
+            now = datetime.now()
+            kept = []
+            removed = 0
+            for p in self.patterns:
+                if p.get("active", True):
+                    kept.append(p)
+                    continue
+                try:
+                    last_dt = datetime.fromisoformat(p.get("last_mentioned", ""))
+                    if (now - last_dt).days > self.candidate_ttl_days:
+                        removed += 1
+                        continue
+                except Exception:
+                    pass
+                kept.append(p)
+            if removed > 0:
+                self.patterns = kept
+                self._invalidate_cache()
+                self._save_patterns()
+                logger.info(f"BehavioralPatternEngine pruned {removed} expired candidate patterns.")
 
     def _load_patterns(self):
         if not self.patterns_file.exists():
@@ -95,6 +197,11 @@ class BehavioralPatternEngine:
                             if "domain" not in entry or entry["domain"] not in VALID_BEHAVIORAL_DOMAINS:
                                 combined = f"{entry.get('meaning', '')} {entry.get('trigger_contexts', '')}"
                                 entry["domain"] = self._infer_domain_from_text(combined)
+                            entry["topic"] = self._normalize_topic(
+                                entry.get("topic", ""),
+                                entry.get("meaning", ""),
+                                entry["domain"],
+                            )
                             if "active" not in entry:
                                 count = int(entry.get("evidence_count", 1))
                                 conf = float(entry.get("confidence", 0.7))
@@ -149,13 +256,17 @@ class BehavioralPatternEngine:
 
         if conf < self.min_confidence_gate:
             logger.debug(
-                f"🧠 Behavioral pattern rejected by confidence gate ({conf:.2f} < {self.min_confidence_gate}): '{raw[:45]}'"
+                f"Behavioral pattern rejected by confidence gate ({conf:.2f} < {self.min_confidence_gate}): '{raw[:45]}'"
             )
             return
 
         domain = str(new_pattern.get("domain") or "").strip().lower()
         if domain not in VALID_BEHAVIORAL_DOMAINS:
             domain = self._infer_domain_from_text(f"{meaning} {triggers}")
+
+        topic = self._normalize_topic(new_pattern.get("topic", ""), meaning, domain)
+        new_pattern["domain"] = domain
+        new_pattern["topic"] = topic
 
         is_explicit_perm = bool(
             new_pattern.get("is_explicit_permanent", False)
@@ -165,7 +276,8 @@ class BehavioralPatternEngine:
         embed_text = self._build_embed_text({
             "raw_statement": raw,
             "meaning": meaning,
-            "trigger_contexts": triggers
+            "trigger_contexts": triggers,
+            "topic": topic,
         })
         try:
             from core.brain.Memory.LifetimeMemory import ltm_engine
@@ -180,7 +292,12 @@ class BehavioralPatternEngine:
         with self._lock:
             best_idx = -1
             best_sim = 0.0
+            topic_match_idx = -1
+
             for idx, ex in enumerate(self.patterns):
+                if topic and ex.get("domain") == domain and ex.get("topic") == topic:
+                    topic_match_idx = idx
+
                 ex_emb = ex.get("_embedding")
                 if not ex_emb:
                     continue
@@ -194,35 +311,63 @@ class BehavioralPatternEngine:
 
             now_iso = datetime.now().isoformat()
 
-            if best_idx >= 0 and best_sim >= self.dedupe_threshold:
-                ex = self.patterns[best_idx]
-                ex["evidence_count"] = int(ex.get("evidence_count", 1)) + 1
-                ex["last_mentioned"] = now_iso
-                old_conf = float(ex.get("confidence", 0.8))
-                ex["confidence"] = round(min(0.98, old_conf + 0.05), 3)
-                ex["active"] = True  # Promoted to active on 2nd+ hit!
+            target_idx = -1
+            if topic_match_idx >= 0:
+                target_idx = topic_match_idx
+            elif best_idx >= 0 and best_sim >= self.dedupe_threshold:
+                target_idx = best_idx
+            elif (
+                best_idx >= 0
+                and best_sim >= self.conflict_sim_threshold
+                and self.patterns[best_idx].get("domain") == domain
+                and self._is_contradictory(self.patterns[best_idx], new_pattern)
+            ):
+                target_idx = best_idx
 
-                updated_fields = False
-                if meaning and len(meaning) > len(ex.get("meaning", "")):
-                    ex["meaning"] = meaning
-                    updated_fields = True
-                if triggers and not ex.get("trigger_contexts"):
-                    ex["trigger_contexts"] = triggers
-                    updated_fields = True
-                if domain in VALID_BEHAVIORAL_DOMAINS:
+            if target_idx >= 0:
+                ex = self.patterns[target_idx]
+                if self._is_contradictory(ex, new_pattern):
+                    ex["type"] = new_pattern.get("type", "preference")
                     ex["domain"] = domain
-                if updated_fields:
+                    ex["topic"] = topic or ex.get("topic", "")
+                    ex["raw_statement"] = raw
+                    ex["meaning"] = meaning
+                    if triggers:
+                        ex["trigger_contexts"] = triggers
+                    ex["confidence"] = round(max(conf, 0.88), 3)
+                    ex["evidence_count"] = 1
+                    ex["active"] = True
+                    ex["first_mentioned"] = now_iso
+                    ex["last_mentioned"] = now_iso
                     ex["_embedding"] = new_emb
-
-                logger.info(
-                    f"🧠 Behavioral pattern reinforced & ACTIVE: '{meaning[:50]}' "
-                    f"(sim={best_sim:.2f}, count={ex['evidence_count']}, conf={ex['confidence']})"
-                )
+                    logger.info(
+                        f"Behavioral pattern SUPERSEDED contradictory preference [domain={domain} | topic={ex['topic']}]: '{meaning[:50]}'"
+                    )
+                else:
+                    ex["evidence_count"] = int(ex.get("evidence_count", 1)) + 1
+                    ex["last_mentioned"] = now_iso
+                    old_conf = float(ex.get("confidence", 0.8))
+                    ex["confidence"] = round(min(0.98, max(old_conf, conf) + 0.05), 3)
+                    ex["active"] = True
+                    ex["type"] = new_pattern.get("type", ex.get("type", "preference"))
+                    ex["domain"] = domain
+                    if topic:
+                        ex["topic"] = topic
+                    ex["raw_statement"] = raw
+                    ex["meaning"] = meaning
+                    if triggers:
+                        ex["trigger_contexts"] = triggers
+                    ex["_embedding"] = new_emb
+                    logger.info(
+                        f"Behavioral pattern reinforced & ACTIVE: '{meaning[:50]}' "
+                        f"(sim={best_sim:.2f}, count={ex['evidence_count']}, conf={ex['confidence']})"
+                    )
             else:
-                is_active_immediately = bool(is_explicit_perm or conf >= 0.92)
+                is_active_immediately = bool(is_explicit_perm or conf >= 0.90)
                 entry = {
                     "type": new_pattern.get("type", "preference"),
                     "domain": domain,
+                    "topic": topic,
                     "raw_statement": raw,
                     "meaning": meaning,
                     "trigger_contexts": triggers,
@@ -235,7 +380,7 @@ class BehavioralPatternEngine:
                 }
                 self.patterns.append(entry)
                 state_label = "ACTIVE" if is_active_immediately else "CANDIDATE (awaiting 2nd confirmation)"
-                logger.info(f"🧠 Behavioral pattern stored [{state_label} | domain={domain}]: '{meaning[:50]}'")
+                logger.info(f"Behavioral pattern stored [{state_label} | domain={domain} | topic={topic}]: '{meaning[:50]}'")
 
             self._invalidate_cache()
             self._save_patterns()
@@ -279,7 +424,6 @@ class BehavioralPatternEngine:
                 p_domain = p.get("domain", "")
                 if clean_domain in VALID_BEHAVIORAL_DOMAINS and p_domain in VALID_BEHAVIORAL_DOMAINS:
                     if p_domain != clean_domain:
-                        # Allow coding <-> ui_design or scheduling <-> lifestyle crossover only if very high similarity
                         compatible = (
                             {clean_domain, p_domain} == {"coding", "ui_design"}
                             or {clean_domain, p_domain} == {"scheduling", "lifestyle"}
@@ -295,9 +439,8 @@ class BehavioralPatternEngine:
                 except Exception:
                     continue
 
-                effective_threshold = self.similarity_threshold
                 if clean_domain in VALID_BEHAVIORAL_DOMAINS and p_domain == clean_domain:
-                    effective_threshold = self.similarity_threshold
+                    effective_threshold = self.similarity_threshold - 0.03
                 else:
                     effective_threshold = self.similarity_threshold + 0.04
 
@@ -322,7 +465,18 @@ class BehavioralPatternEngine:
                 })
 
         scored.sort(key=lambda x: x["score"], reverse=True)
-        return scored[:self.top_k]
+        selected = []
+        seen_topics = set()
+        for item in scored:
+            p_topic = item["pattern"].get("topic", "")
+            if p_topic and p_topic in seen_topics:
+                continue
+            if p_topic:
+                seen_topics.add(p_topic)
+            selected.append(item)
+            if len(selected) >= self.top_k:
+                break
+        return selected
 
     def format_ephemeral_block(
         self,
@@ -336,7 +490,7 @@ class BehavioralPatternEngine:
         if not query_text:
             return ""
 
-        cache_key = f"{query_text}||{english_query}||{domain}"
+        cache_key = f"{query_text}||{english_query}||{domain}||{mode}"
         with self._lock:
             if cache_key == self._last_cache_key:
                 return self._last_ephemeral_block
@@ -402,6 +556,7 @@ class BehavioralPatternEngine:
 
     def shutdown(self):
         try:
+            self._prune_stale_candidates()
             self._save_patterns()
             logger.info("BehavioralPatternEngine shutdown complete.")
         except Exception as e:

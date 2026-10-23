@@ -154,6 +154,9 @@ def update_confirmed_facts(
         facts_ledger[f"Terminal ({action_detail[:30]})"] = (
             obs_str[:150].replace("\n", " ").strip()
         )
+    elif action_key == "memory_actions":
+        clean_mem = obs_str.replace("Observation:", "").replace("\n", " | ").strip()
+        facts_ledger[f"Memory ({action_detail[:35]})"] = clean_mem[:350]
     elif action_key == "search_actions":
         facts_ledger[f"Search ({action_detail[:30]})"] = (
             obs_str[:150].replace("\n", " ").strip()
