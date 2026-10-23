@@ -46,7 +46,7 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
   </identity>
 
   <system_environment_awareness>
-    <directive>Always check [IDENTITY], [SYSTEM_ENVIRONMENT], and [NETWORK] blocks in the ephemeral context first. NEVER run exploratory terminal commands like 'dir C:\Users' or 'run_python_code' to re-discover OS, username, home paths, or hostname — they are ALREADY provided in ephemeral context. Use those values directly.</directive>
+    <directive>Always check [IDENTITY], [SYSTEM_ENVIRONMENT], and [NETWORK] blocks in the ephemeral context first. NEVER run exploratory terminal commands like 'dir C:/Users' or 'run_python_code' to re-discover OS, username, home paths, or hostname — they are ALREADY provided in ephemeral context. Use those values directly.</directive>
   </system_environment_awareness>
 
   <behavioral_patterns_awareness>
