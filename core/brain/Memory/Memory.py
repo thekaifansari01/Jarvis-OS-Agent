@@ -523,6 +523,93 @@ class ContextMemory:
 
         return "\n\n".join(blocks)
 
+        def get_static_ephemeral_context(self, current_command: str = "") -> str:
+        with self._lock:
+            self._prune_expired_ephemeral()
+            self.sync_connected_devices()
+            english_query = self.ephemeral.get("current_english_query", "")
+            domain = self.ephemeral.get("current_domain", "")
+
+        sys_info = self._gather_system_info()
+
+        beh_block = ""
+        try:
+            if domain and domain != "general_none":
+                from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
+                beh_block = behavioral_pattern_engine.format_ephemeral_block(
+                    current_command=current_command,
+                    mode="agentic",
+                    english_query=english_query,
+                    domain=domain,
+                )
+        except Exception as e:
+            logger.error(f"Behavioral ephemeral inject error (static): {e}")
+            beh_block = ""
+
+        os_line = f"{sys_info.get('os_name', 'Unknown')} {sys_info.get('os_release', '')}".strip()
+        user_name = os.getenv("USER_NAME", "Sir")
+
+        blocks = []
+        blocks.append(
+            "[IDENTITY]\n"
+            f"- User Name: {user_name}\n"
+            f"- OS Username: {sys_info.get('username', 'unknown')}\n"
+            f"- Device: {sys_info.get('hostname', 'Unknown')}"
+        )
+        blocks.append(
+            "[SYSTEM_ENVIRONMENT]\n"
+            f"- OS: {os_line}\n"
+            f"- Home: {sys_info.get('home', 'Unknown')}\n"
+            f"- Desktop: {sys_info.get('desktop', 'Unknown')}\n"
+            f"- Downloads: {sys_info.get('downloads', 'Unknown')}"
+        )
+        if beh_block:
+            blocks.append(f"[BEHAVIORAL_PATTERNS — VERIFIED USER PREFERENCES]\n{beh_block}")
+
+        return "\n\n".join(blocks)
+
+    def get_dynamic_ephemeral_context(self, current_command: str = "") -> str:
+        with self._lock:
+            self._prune_expired_ephemeral()
+            self.sync_connected_devices()
+            devices = self.ephemeral.get("connected_devices") or []
+            waiting_confirm = bool(self.ephemeral.get("waiting_for_confirmation"))
+            pending_data = self.ephemeral.get("pending_task_data") or {}
+            current_mode = self.current_mode
+
+        wifi_ssid = self._get_wifi_ssid()
+        local_ip = self._get_local_ip()
+        phones_str = ", ".join(str(d) for d in devices) if devices else "None"
+        tz_str = self._gather_system_info().get("timezone", "Unknown")
+
+        if waiting_confirm:
+            pending_summary = None
+            if isinstance(pending_data, dict):
+                pending_summary = pending_data.get("proactive_question")
+            confirm_str = pending_summary or "Active — awaiting user reply"
+        else:
+            confirm_str = "None"
+
+        now = datetime.now()
+        time_str = now.strftime("%A, %d %B %Y | %I:%M %p")
+
+        blocks = []
+        blocks.append(
+            "[NETWORK]\n"
+            f"- WiFi: {wifi_ssid}\n"
+            f"- Local IP: {local_ip}\n"
+            f"- Connected Phones: {phones_str}"
+        )
+        blocks.append(
+            "[RUNTIME]\n"
+            f"- Time: {time_str}\n"
+            f"- Timezone: {tz_str}\n"
+            f"- Mode: {current_mode}\n"
+            f"- Pending Confirmation: {confirm_str}"
+        )
+
+        return "\n\n".join(blocks)
+
     def add_live_feedback(self, text):
         if text and text.strip():
             clean_text = text.strip()

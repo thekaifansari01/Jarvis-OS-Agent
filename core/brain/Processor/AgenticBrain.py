@@ -200,7 +200,31 @@ def run_agentic_loop(
         else "<Recent_Context>\nNo recent conversation.\n</Recent_Context>"
     )
 
-    scratchpad = f"""<Mission>
+    static_snapshot = ""
+    if memory_instance and hasattr(memory_instance, "get_static_ephemeral_context"):
+        try:
+            static_snapshot = memory_instance.get_static_ephemeral_context(
+                current_command=raw_command
+            )
+        except Exception as e:
+            logger.warning(f"Static ephemeral snapshot failed: {e}")
+            static_snapshot = ""
+
+    if static_snapshot:
+        scratchpad = f"""<Mission>
+User Command: "{raw_command}"
+</Mission>
+
+{recent_context_xml}
+
+<System_Snapshot>
+{static_snapshot}
+</System_Snapshot>
+
+<Thought_Trail>
+"""
+    else:
+        scratchpad = f"""<Mission>
 User Command: "{raw_command}"
 </Mission>
 
@@ -324,10 +348,17 @@ User Command: "{raw_command}"
             else "No confirmed facts pinned yet."
         )
 
-        if memory_instance and hasattr(memory_instance, "get_ephemeral_context"):
-            ephemeral_prompt = memory_instance.get_ephemeral_context(
-                mode="agentic", current_command=raw_command
+        if memory_instance and hasattr(memory_instance, "get_dynamic_ephemeral_context"):
+            ephemeral_prompt = memory_instance.get_dynamic_ephemeral_context(
+                current_command=raw_command
             )
+        elif memory_instance and hasattr(memory_instance, "get_ephemeral_context"):
+            try:
+                ephemeral_prompt = memory_instance.get_ephemeral_context(
+                    mode="agentic", current_command=raw_command
+                )
+            except TypeError:
+                ephemeral_prompt = memory_instance.get_ephemeral_context(mode="agentic")
         else:
             ephemeral_prompt = ""
             if ephemeral.get("connected_devices"):
@@ -360,6 +391,7 @@ Current Step: {step + 1} out of {max_steps}. {panic_warning}
 =========================================
 [🛑 CURRENT STATE & DIRECTIVE]
 Based on the <Mission>, <Confirmed_Facts>, [LIVE OVERRIDES], and the <Thought_Trail> above, determine your absolute next step natively.
+The <System_Snapshot> inside the scratchpad is the FROZEN system state captured at Step 1 (identity, paths, preferences). The [NETWORK] and [RUNTIME] blocks above show the LIVE current values — always prefer those for time, WiFi, IP, phone connections, and pending confirmations.
 If the <Mission> is fully complete, call 'complete_task'.
 """
 

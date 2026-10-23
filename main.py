@@ -447,10 +447,11 @@ def run_jarvis():
         logger.warning(f"Failed to initialize ContextMemory, using fallback: {e}")
 
         class FakeMemory:
-            def get_relevant_context(self, text): return ""
             def get_fast_history_context(self): return "No recent conversation."
             def get_agentic_fast_context(self): return "<Recent_Context>\nNo recent conversation.\n</Recent_Context>"
-            def get_ephemeral_context(self, mode="agentic"): return ""
+            def get_ephemeral_context(self, mode="agentic", current_command=""): return ""
+            def get_static_ephemeral_context(self, current_command=""): return ""
+            def get_dynamic_ephemeral_context(self, current_command=""): return ""
             def add_message(self, role, text, metadata=None): pass
             preferences = {"likes": []}
             ephemeral = {}
