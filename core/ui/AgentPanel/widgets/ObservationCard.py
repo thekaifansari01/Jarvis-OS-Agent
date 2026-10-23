@@ -14,8 +14,10 @@ class ObservationCard(QFrame):
         return QSize(0, 0)
 
     def set_accent(self, rgb):
-        self.rgb = rgb
-        self.update()
+        new_rgb = [max(0, min(255, int(c))) for c in rgb]
+        if new_rgb != self.rgb:
+            self.rgb = new_rgb
+            self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
