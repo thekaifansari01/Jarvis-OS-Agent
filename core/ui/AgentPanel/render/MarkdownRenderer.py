@@ -24,7 +24,11 @@ class MarkdownRenderer:
         re.MULTILINE
     )
 
-    CODE_BLOCK_RE = re.compile(r"```([a-zA-Z0-9_+-]*)[ \t]*\n?(.*?)```", re.DOTALL)
+    FENCE_LINE_RE = re.compile(r"(?m)^[ \t]*```([a-zA-Z0-9_+#.-]*)[ \t\r]*$")
+    CODE_BLOCK_RE = re.compile(
+        r"(?m)^[ \t]*```([a-zA-Z0-9_+#.-]*)[ \t\r]*\n?(.*?)^[ \t]*```[ \t\r]*$",
+        re.DOTALL,
+    )
     INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
     LINK_RE = re.compile(r"\[([^\]\n]+)\]\(([^)\s]+)\)")
     IMAGE_RE = re.compile(r"!\[([^\]\n]*)\]\(([^)\s]+)\)")
@@ -37,14 +41,16 @@ class MarkdownRenderer:
     NUMBERED_RE = re.compile(r"^(\s*)(\d+)\.\s+(.+)$")
     BLOCKQUOTE_RE = re.compile(r"^((?:>[ \t]*)+)(.*)$")
     TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
-    TABLE_SEP_RE = re.compile(r"^\s*\|[\s:|\-]+\|\s*$")
+    TABLE_SEP_RE = re.compile(r"^\s*\|(?=[\s:|\-]*-)[\s:|\-]+\|\s*$")
     LONG_TOKEN_RE = re.compile(r"\S{65,}")
 
     _highlight_cache = {}
+    _code_line_cache = {}
     _html_cache = {}
     _line_cache = {}
     _HTML_CACHE_LIMIT = 120
-    _HIGHLIGHT_CACHE_LIMIT = 300
+    _HIGHLIGHT_CACHE_LIMIT = 200
+    _CODE_LINE_CACHE_LIMIT = 2000
     _LINE_CACHE_LIMIT = 1500
 
     @classmethod
@@ -82,8 +88,19 @@ class MarkdownRenderer:
 
     @classmethod
     def auto_heal_markdown(cls, text: str) -> str:
-        if text.count("```") % 2 != 0:
+        if len(cls.FENCE_LINE_RE.findall(text)) % 2 != 0:
             return text + "\n```"
+
+        last_nl = text.rfind("\n")
+        if last_nl != -1:
+            last_line = text[last_nl + 1:].strip()
+            if last_line.startswith("|") and not last_line.endswith("|"):
+                prev_nl = text.rfind("\n", 0, last_nl)
+                prev_line = text[prev_nl + 1:last_nl].strip()
+                if cls.TABLE_ROW_RE.match(prev_line):
+                    if all(c in " -:|" for c in last_line):
+                        return text + " - |"
+                    return text + " |"
         return text
 
     @classmethod
@@ -110,12 +127,29 @@ class MarkdownRenderer:
         return highlighted.replace("\t", "    ")
 
     @classmethod
+    def _highlight_code_line(cls, line: str) -> str:
+        if not line:
+            return ""
+        cached = cls._code_line_cache.get(line)
+        if cached is not None:
+            return cached
+        res = cls.highlight_code(line)
+        cls._code_line_cache[line] = res
+        cls._evict_oldest(cls._code_line_cache, cls._CODE_LINE_CACHE_LIMIT)
+        return res
+
+    @classmethod
     def highlight_code_cached(cls, code: str) -> str:
         key = (code, get_code_font())
         cached = cls._highlight_cache.get(key)
         if cached is not None:
             return cached
-        result = cls.highlight_code(code)
+
+        if '"""' not in code and "'''" not in code and "/*" not in code:
+            result = "\n".join(cls._highlight_code_line(ln) for ln in code.split("\n"))
+        else:
+            result = cls.highlight_code(code)
+
         cls._highlight_cache[key] = result
         cls._evict_oldest(cls._highlight_cache, cls._HIGHLIGHT_CACHE_LIMIT)
         return result
@@ -191,6 +225,7 @@ class MarkdownRenderer:
             'font-weight: bold; color: #FFFFFF; '
             'background-color: rgba(255, 255, 255, 0.06);'
         )
+        col_count = max(1, len(headers))
         parts = [
             '<table cellspacing="0" cellpadding="0" '
             'style="border-collapse: collapse; margin: 6px 0px; '
@@ -203,7 +238,8 @@ class MarkdownRenderer:
         parts.append('</tr>')
         for row in rows:
             parts.append('<tr>')
-            for cell in row:
+            normalized_row = (row + [""] * col_count)[:col_count]
+            for cell in normalized_row:
                 c_html = cls.format_inline(cell, accent_hex)
                 parts.append(f'<td style="{td_style}">{c_html}</td>')
             parts.append('</tr>')

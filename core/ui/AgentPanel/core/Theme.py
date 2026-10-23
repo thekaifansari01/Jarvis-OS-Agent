@@ -51,7 +51,7 @@ MOTION = {
     "resize_anim_ms": 180,
     "fade_in_ms": 210,
     "fade_out_ms": 190,
-    "thought_throttle_ms": 65,
+    "thought_throttle_ms": 90,
     "rgb_tick_ms": 45,
     "resize_relayout_ms": 60,
 }

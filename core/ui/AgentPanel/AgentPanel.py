@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import math
 from collections import deque
 
@@ -64,7 +65,7 @@ class AgentPanel(QWidget):
         self.user_width = self.DEFAULT_WIDTH
         self.user_height = self.DEFAULT_HEIGHT
         self._user_resized = False
-        self.MAX_THOUGHT_CHARS = 50000
+        self.MAX_THOUGHT_CHARS = 5000
 
         self._raw_detail_text = ""
         self._raw_to_text = ""
@@ -692,7 +693,8 @@ class AgentPanel(QWidget):
         if (self._viewer_at_max_height
                 and not in_confirm
                 and self._last_sync_width == for_width
-                and len(self._current_thought_text) >= self._last_sync_text_len - 100):
+                and (len(self._current_thought_text) >= self._last_sync_text_len - 100
+                     or len(self._current_thought_text) >= 1800)):
             return max_h
 
         if (self._last_sync_width == for_width
@@ -1416,6 +1418,10 @@ class AgentPanel(QWidget):
             base_title = f"{base_title} +{len(parts) - 1}"
         return base_title, act_type
 
+    _FENCE_LINE_RE = re.compile(r"(?m)^[ \t]*```([a-zA-Z0-9_+#.-]*)[ \t\r]*$")
+    _TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+    _TABLE_SEP_RE = re.compile(r"^\s*\|(?=[\s:|\-]*-)[\s:|\-]+\|\s*$")
+
     def _trim_thought_safely(self, text: str) -> str:
         if len(text) <= self.MAX_THOUGHT_CHARS:
             return text
@@ -1423,30 +1429,62 @@ class AgentPanel(QWidget):
         excess = len(text) - self.MAX_THOUGHT_CHARS
         newline_pos = text.find("\n", excess)
         if newline_pos == -1:
-            newline_pos = len(text) - 1
+            return "...\n" + text[-self.MAX_THOUGHT_CHARS:].lstrip("\r\n")
         cutoff = newline_pos + 1
 
-        fences = []
-        i = 0
-        while True:
-            pos = text.find("```", i)
-            if pos == -1:
-                break
-            fences.append(pos)
-            i = pos + 3
+        prefix = text[:cutoff]
+        tail = text[cutoff:].strip("\r\n")
+        if not tail:
+            return "...\n" + text[-self.MAX_THOUGHT_CHARS:].lstrip("\r\n")
 
-        fences_before = sum(1 for f in fences if f < cutoff)
-        if fences_before % 2 == 1:
-            last_opener = None
-            for f in fences:
-                if f < cutoff:
-                    last_opener = f
-                else:
-                    break
-            if last_opener is not None:
-                cutoff = last_opener
+        fence_matches = list(self._FENCE_LINE_RE.finditer(prefix))
+        if len(fence_matches) % 2 == 1:
+            first_nl = tail.find("\n")
+            first_line = (tail if first_nl == -1 else tail[:first_nl]).strip()
+            if first_line == "```":
+                if first_nl == -1:
+                    return "...\n"
+                tail = tail[first_nl + 1:].strip("\r\n")
+                if not tail:
+                    return "...\n"
+            else:
+                lang_token = (fence_matches[-1].group(1) or "").strip()
+                return f"...\n```{lang_token}\n{tail}"
 
-        return "...\n" + text[cutoff:].strip()
+        first_nl = tail.find("\n")
+        first_line = (tail if first_nl == -1 else tail[:first_nl]).strip()
+        if first_line.startswith("|"):
+            second_line = ""
+            if first_nl != -1:
+                second_nl = tail.find("\n", first_nl + 1)
+                second_line = (
+                    tail[first_nl + 1:] if second_nl == -1 else tail[first_nl + 1:second_nl]
+                ).strip()
+
+            if not self._TABLE_SEP_RE.match(second_line):
+                prev_chunk = prefix.rstrip("\r\n")
+                table_prefix_lines = []
+                pos = len(prev_chunk)
+                while pos > 0:
+                    nl = prev_chunk.rfind("\n", 0, pos)
+                    line_str = prev_chunk[nl + 1:pos].strip()
+                    if self._TABLE_ROW_RE.match(line_str):
+                        table_prefix_lines.append(line_str)
+                        pos = nl
+                    else:
+                        break
+
+                if table_prefix_lines:
+                    table_prefix_lines.reverse()
+                    if self._TABLE_SEP_RE.match(first_line):
+                        header_line = table_prefix_lines[0]
+                        return f"...\n{header_line}\n{tail}"
+                    if len(table_prefix_lines) >= 2 and self._TABLE_SEP_RE.match(table_prefix_lines[1]):
+                        header_line = table_prefix_lines[0]
+                        sep_line = table_prefix_lines[1]
+                        return f"...\n{header_line}\n{sep_line}\n{tail}"
+
+        return "...\n" + tail
 
     def process_status_update(self, status):
         if not isinstance(status, dict):
