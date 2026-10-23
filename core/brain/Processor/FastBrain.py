@@ -10,6 +10,11 @@ import openai
 
 from core.logger.logger import logger
 from core.brain.Processor.Prompts import SYSTEM_PROMPT
+from core.brain.prompts import (
+    build_fast_system_prompt,
+    normalize_domains,
+    select_behavioral_domain,
+)
 from core.brain.config import FAST_BRAIN_API_KEY, FAST_BRAIN_MODEL, FAST_BRAIN_ENDPOINT
 from core.ui.typing_status import update_typing_status, launch_popup
 from core.ui.telegram_status import send_telegram_update, clear_telegram_context
@@ -297,6 +302,12 @@ def _handle_escalate_to_agentic(tool_args_str: str, raw_command: str, memory_ins
     time.sleep(0.4)
 
     try:
+        if memory_instance and hasattr(memory_instance, "ephemeral"):
+            existing_domains = memory_instance.ephemeral.get("active_domains")
+            merged_domains = normalize_domains(existing_domains, raw_command)
+            memory_instance.ephemeral["active_domains"] = merged_domains
+            memory_instance.ephemeral["current_domain"] = select_behavioral_domain(merged_domains)
+
         from core.brain.Processor.AgenticBrain import run_agentic_loop
         agentic_result = run_agentic_loop(
             raw_command=raw_command,
@@ -341,8 +352,19 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
         time.sleep(0.12)
         update_typing_status("typing", "...")
 
+        active_domains = (
+            ephemeral.get("active_domains")
+            if isinstance(ephemeral, dict)
+            else None
+        )
+        dynamic_fast_prompt = build_fast_system_prompt(
+            base_system_prompt=SYSTEM_PROMPT,
+            domains=active_domains,
+            raw_command=raw_command,
+        )
+
         messages = [
-            {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{system_context}"},
+            {"role": "system", "content": f"{dynamic_fast_prompt}\n\n{system_context}"},
             {"role": "user", "content": raw_command}
         ]
 

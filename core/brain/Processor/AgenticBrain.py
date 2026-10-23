@@ -16,6 +16,7 @@ from core.brain.config import (
 )
 from core.brain.Providers import get_provider
 from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
+from core.brain.prompts import build_agentic_system_prompt
 from core.brain.Processor.FastBrain import make_result, clean_json_string
 from core.ui.typing_status import launch_popup, update_typing_status
 from core.utils.shutdown import is_shutdown
@@ -348,9 +349,6 @@ Current Step: {step + 1} out of {max_steps}. {panic_warning}
 [🛑 CURRENT STATE & DIRECTIVE]
 Based on the <Mission>, <Confirmed_Facts>, [LIVE OVERRIDES], and the <Thought_Trail> above, determine your absolute next step natively.
 If the <Mission> is fully complete, call 'complete_task'.
-
-[IMPORTANT] When generating Python code, DO NOT use emoji characters (✅, ❌, 🎉, ✨, 🔥, 🚀, ✓, ✔, ✗, ✘) in print statements.
-Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
 """
 
         try:
@@ -370,13 +368,18 @@ Use plain text like [SUCCESS], [ERROR], [DONE], [OK], [FAIL], [V], [X] instead.
             for attempt in range(max_api_retries):
                 try:
                     panic_step = max_steps - 2
-                    full_prompt = (
-                        AGENT_SYSTEM_PROMPT.format(
-                            max_steps=max_steps, panic_step=panic_step
-                        )
-                        + "\n\n"
-                        + prompt
+                    active_domains = ephemeral.get("active_domains") or [
+                        ephemeral.get("current_domain", "general_none")
+                    ]
+                    dynamic_agent_prompt = build_agentic_system_prompt(
+                        base_agent_prompt=AGENT_SYSTEM_PROMPT,
+                        domains=active_domains,
+                        raw_command=raw_command,
+                        context=context,
+                        max_steps=max_steps,
+                        panic_step=panic_step,
                     )
+                    full_prompt = f"{dynamic_agent_prompt}\n\n{prompt}"
 
                     if pending_image_payloads:
                         content_block = [{"type": "text", "text": full_prompt}] + pending_image_payloads

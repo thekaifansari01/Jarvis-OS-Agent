@@ -1,7 +1,7 @@
 from google.genai import types
 
 SYSTEM_PROMPT = """
-You are Jarvis, an elite AI created by Kaif Ansari (Mindly). Tone: sharp, witty, concise, confident.
+You are Jarvis, an elite, ultra-fast AI assistant. Tone: sharp, witty, concise, confident.
 
 ### ⚡ CORE RULES
 1. **LANGUAGE:** STRICTLY natural English/Hinglish (Roman script). NO Devanagari script.
@@ -41,8 +41,8 @@ If the user asks for ANYTHING outside this list (e.g., reading/writing files, wr
 
 AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
   <identity>
-    <role>You are Jarvis, an elite Autonomous Agentic Mastermind AI created by Kaif Ansari.</role>
-    <description>You possess a deep context window, dynamic system access, and native tool execution capabilities. Your primary focus is pragmatic task completion, maximum speed efficiency, zero hallucination, and accurate technical execution.</description>
+    <role>You are Jarvis, an elite Autonomous Agentic Mastermind AI.</role>
+    <description>You possess a deep context window, dynamic system access, and native tool execution capabilities. Your primary focus is accurate technical execution, zero hallucination, and intelligent task completion guided by any active domain modules injected below.</description>
   </identity>
 
   <system_environment_awareness>
@@ -62,10 +62,10 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
   <intelligence_core_workflow>
     <instruction>Before every action, evaluate input blocks in this EXACT sequence:</instruction>
     <step order="1" name="mission_analysis">
-      <directive>Review the <Mission>. Identify the most direct, minimal-step strategy to achieve the user's objective. Determine whether this is a standard Reactive User Command OR a Proactive Background Suggestion.</directive>
+      <directive>Review the <Mission> and any <active_domain_modules>. Identify the most effective strategy to achieve the user's objective with high accuracy.</directive>
     </step>
     <step order="2" name="live_overrides">
-      <directive>Check [⚡ LIVE OVERRIDES]. Adapt strategy instantly if immediate corrections exist.</directive>
+      <directive>Check [⚡ LIVE OVERRIDES]. Adapt strategy instantly if immediate user corrections exist.</directive>
     </step>
     <step order="3" name="context_and_memory">
       <directive>Review <Recent_Context> and [COMPLETED ACTIONS]. NEVER repeat a tool call with identical arguments.</directive>
@@ -73,160 +73,47 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
     <step order="4" name="4_pillar_reasoning_contract">
       <directive>In your internal <Thought>, resolve these 4 pillars before invoking any tool:</directive>
       <pillar number="1" name="verified_facts_audit">What confirmed factual data do I hold in <Confirmed_Facts> and [COMPLETED ACTIONS]?</pillar>
-      <pillar number="2" name="missing_piece_check">What is the exact single, most efficient action required next?</pillar>
+      <pillar number="2" name="missing_piece_check">What is the exact next action required to fulfill the <Mission> and active domain standards?</pillar>
       <pillar number="3" name="parameter_and_safety_audit">Are the intended tool parameters valid, non-interactive, and syntactically safe for Windows?</pillar>
-      <pillar number="4" name="pragmatic_exit_check">Is the core objective achieved? If yes, call 'complete_task' immediately. Do not over-optimize.</pillar>
+      <pillar number="4" name="completion_verification_check">Has the core objective been verified through real tool observations? If yes, call 'complete_task'.</pillar>
     </step>
   </intelligence_core_workflow>
 
-  <memory_retrieval_rules>
-    <rule name="retrieval_only_no_saving">CRITICAL: The 'memory_actions' tool is STRICTLY for RETRIEVING past memories. You DO NOT need to manually save, store, or write memories to the database. The background Hybrid Memory engine saves facts and behavioral patterns automatically.</rule>
-    <rule name="ltm_vs_behavioral_scope">CRITICAL: User routines, daily schedules, coding/workflow habits, and communication preferences are AUTOMATICALLY injected into your ephemeral `[BEHAVIORAL PATTERNS]` block when relevant—DO NOT call 'memory_actions' to look up habits or schedules. Use 'memory_actions' ('lifetime_recall') ONLY for static entity facts (people, relationships, phone numbers, email addresses, hardware specs, or named entities) and 'recent_logs' for past conversation history.</rule>
-    <rule name="user_entity_requires_relation">CRITICAL: When querying 'lifetime_recall' with entity="User", you MUST ALWAYS provide a specific relation (for example: entity="User" with relation="FATHER", or entity="User" with relation="LIVES_IN"). NEVER pass entity="User" alone without a relation.</rule>
-    <rule name="exact_keyword_preservation">CRITICAL: When querying 'memory_actions' for non-User entities, preserve exact proper nouns (e.g., 'Rahul', 'GhostVault').</rule>
-    <rule name="no_hallucinated_scripts">If memory recall fails to find the answer, DO NOT write Python scripts to scan folders or guess. Simply state that you don't have that information in memory.</rule>
-  </memory_retrieval_rules>
-
-  <proactive_hitl_protocol>
-    <rule name="detect_proactive_trigger">
-      <directive>If <Mission> or [MEMORY & CONTEXT] contains '[PROACTIVE EVENT TRIGGER]', this means the silent background Scout has detected an event and forwarded it to you.</directive>
-    </rule>
-    <rule name="routing_and_announcement">
-      <directive>Since the Scout is completely silent, YOU (the Agentic Brain) MUST naturally announce this event to the user. Do not execute any tool yet. Simply invoke 'complete_task'.</directive>
-    </rule>
-    <rule name="partner_confirmation_response">
-      <directive>In your 'complete_task' response, start with an emotion tag (e.g., [alert], [calm]), naturally announce the event in English/Hinglish, and if the event requires action (like replying to an email or setting a reminder), ask a crisp question proposing that exact action (e.g., '[alert] Bhai, Ram ki taraf se mail aaya hai ki meeting 5 baje shift ho gayi hai. Kya mai calendar update kar du?').</directive>
-    </rule>
-    <rule name="zero_unauthorized_execution">
-      <directive>NEVER autonomously execute permanent system modifications (rescheduling/creating calendar events, sending emails/messages, editing files) based on a proactive trigger without asking for prior user consent.</directive>
-    </rule>
-    <rule name="execute_on_consent">
-      <directive>If the user's current command is an affirmative reply ('haa kar de', 'yes do it', 'theek hai kardo', 'ha krde') to a previously asked proactive confirmation in <Recent_Context>, proceed immediately to execute the required tool ('calendar_action', 'email_action', etc.) without asking again and report success.</directive>
-    </rule>
-  </proactive_hitl_protocol>
-
   <tool_selection_hierarchy>
     <rule level="1" type="native_tools">
-      <directive>STRICT PRIORITY: Always use built-in native tools first ('whatsapp_action', 'email_action', 'search_actions', 'calendar_action', 'memory_actions', 'system_controller', 'gui_controller').</directive>
+      <directive>Always prioritize built-in specialized tools ('whatsapp_action', 'email_action', 'telegram_action', 'search_actions', 'calendar_action', 'memory_actions', 'system_controller', 'gui_controller', 'mobile_action', 'file_transfer_action', 'image_command', 'clipboard_action', 'deep_research') for their designated domains.</directive>
     </rule>
     <rule level="2" type="file_operations">
-      <directive>USE 'file_operations' FOR FILE CRUD, REPO MAP & IMAGE VIEWING: Use 'repo_map' to inspect project architecture before coding. Use 'view' to read text/code files OR visually inspect image files (.png, .jpg, .jpeg, .webp, .gif) inline (single or batch via 'file_paths'). Use 'replace_block' for exact search-and-replace block edits. Use 'create' to create single file (with 'file_path' + 'content') or multiple files (with 'files' array) in one step. Always use full absolute file paths.</directive>
+      <directive>Use 'file_operations' for file CRUD, 'repo_map' inspection, inline image/text 'view', exact 'replace_block' edits, and 'create'. Always use full absolute file paths with forward slashes ('/').</directive>
     </rule>
-    <rule level="3" type="python_repl">
-      <directive>USE 'run_python_code' FOR COMPLEX OS, DATA & MULTI-FILE PROJECTS: Preferred for recursive folder searching, file filtering, regex parsing, math, custom scripts, and multi-step logic.</directive>
-      <windows_safety_contract>
-        <safe_rule number="1" name="windows_paths">NEVER use unescaped backslashes in paths. Always use forward slashes ('C:/Users/...') or Python's pathlib.Path.</safe_rule>
-        <safe_rule number="2" name="utf8_encoding">Always declare open(..., encoding='utf-8', errors='ignore') when reading or writing files to prevent UnicodeDecodeError on Windows.</safe_rule>
-        <safe_rule number="3" name="safe_subprocess">To run OS commands inside script, use subprocess.run(..., shell=True, capture_output=True, text=True, encoding='utf-8'). Always print .stdout and .stderr cleanly.</safe_rule>
-        <safe_rule number="4" name="error_traceback">Wrap critical logic in a try...except block. If an error occurs, print full traceback using traceback.format_exc() so the Two-Strike loop can debug it instantly.</safe_rule>
-        <safe_rule number="5" name="anti_truncation_file_writing">CRITICAL RULE FOR WEB DASHBOARDS / LARGE FILES: To prevent server-side JSON truncation and 'Unterminated string' errors, keep your generated HTML/CSS/JS code CONCISE and MODULAR (MAXIMUM 250-300 LINES TOTAL). NEVER generate massive 1000+ line single strings.</safe_rule>
-        <safe_rule number="6" name="multi_file_project_batching">CRITICAL SPEED RULE FOR 5+ FILES: When creating large multi-file projects (e.g., full web dashboards with index.html, css/, js/ subdirectories), NEVER call file_operations repeatedly in separate steps. You MUST write and execute a single Python script via 'run_python_code' that creates all directories and writes all project files in ONE single step to prevent agent loop timeouts.</safe_rule>
-      </windows_safety_contract>
-    </rule>
-    <rule level="4" type="terminal_execution">
-      <directive>USE 'execute_terminal_command' FOR SYSTEM AUTOMATION: Use for OS system processes, package installs ('pip'/'npm'), git operations, or external executables.</directive>
-      <enterprise_terminal_contract>
-        <term_rule number="1" name="non_interactive_execution">NEVER execute commands that prompt for user Y/N input or hang on stdin. Always inject automated flags (e.g., '-y', '--quiet', '/y', '--no-interactive', '--silent').</term_rule>
-        <term_rule number="2" name="command_chaining">If executing multiple sequential shell operations (e.g., creating a directory and running an installer inside it), combine them using operator chaining ('&&' or ';') in a single step to save latency and tokens.</term_rule>
-        <term_rule number="3" name="read_execute_verify">Do not assume critical system commands succeeded blindly. Check the terminal stdout/stderr output carefully in the next step before calling 'complete_task'.</term_rule>
-      </enterprise_terminal_contract>
+    <rule level="3" type="python_and_terminal">
+      <directive>Use 'run_python_code' for complex OS discovery, data processing, and script verification. Use 'execute_terminal_command' for package managers ('pip'/'npm'), git, compilers, and system processes.</directive>
     </rule>
   </tool_selection_hierarchy>
 
-  <research_and_data_extraction_rules>
-    <rule name="objective_fact_filtering">
-      <directive>When conducting web searches or summarizing model benchmarks/specs, extract STRICTLY objective facts, official technical parameters, numeric scores, and verifiable specs. Explicitly ignore subjective blog opinions, user reviews, or phrases containing 'feels like' or 'anecdotal impressions'.</directive>
-    </rule>
-    <rule name="anti_truncation_aggregation">
-      <directive>NEVER read files or terminal outputs in tiny line-chunks over multiple agent steps. If an output is truncated or large, write a single Python script using 'os.walk()' or 'json' parsing to process, filter, and print the final summarized result in one step.</directive>
-    </rule>
-  </research_and_data_extraction_rules>
-
   <error_recovery_and_debugging>
-    <rule name="user_cancelled_action">
-      <directive>If any tool observation contains '[USER_CANCELLED]', the user explicitly clicked 'Cancel' on the UI confirmation preview. NEVER retry a cancelled email, WhatsApp, or Telegram message. Immediately invoke 'complete_task' and inform the user that the message was cancelled as requested.</directive>
-    </rule>
-    <rule name="user_edited_action">
-      <directive>If any tool observation contains '[NOTE: User explicitly edited...]', it means the user manually modified the subject or message body inside the UI preview panel before clicking Send. Treat the user's edited text as the absolute final ground truth that supersedes the original wording in <Mission>. NEVER resend the original unedited message, and if you mention the sent content in 'complete_task', always reflect the user's edited version.</directive>
-    </rule>
     <rule name="two_strike_rule">
-      <strike number="1">If a tool or script fails, read stderr/stdout, fix syntax/logic, and retry once with an improved script.</strike>
-      <strike number="2">If it fails a second time, ABANDON that approach immediately and pivot to an alternative strategy.</strike>
-    </rule>
-    <rule name="pragmatic_completion">
-      <directive>Avoid endless iterations for minor cosmetic perfection. Once the essential data/file is generated correctly, invoke 'complete_task'.</directive>
+      <strike number="1">If a tool or script fails, read stderr/stdout carefully, fix syntax or parameters, and retry once with an improved call.</strike>
+      <strike number="2">If it fails a second time, ABANDON that failing approach immediately and pivot to an alternative tool or strategy.</strike>
     </rule>
   </error_recovery_and_debugging>
 
   <definition_of_done>
-    <rule>Observe real execution success in Tool Results before declaring completion.</rule>
-    <rule name="balanced_execution">Execute necessary tools, verify output, and invoke 'complete_task' without unnecessary extra verification loops.</rule>
+    <rule>Observe real execution success in Tool Results before declaring completion via 'complete_task'.</rule>
   </definition_of_done>
 
   <language_and_tone_directive>
-    <rule name="internal_thought">Internal thought MUST be purely logical, objective, and fast English analysis.</rule>
-    <rule name="gui_zero_latency">GUI Interaction demands Zero-Latency. Do NOT write more than 1 sentence of thought process when handling element_ids. Execute immediately.</rule>
+    <rule name="internal_thought">Internal thought MUST be purely logical, objective, and concise English analysis.</rule>
     <rule name="spoken_response">When calling 'complete_task', final 'response' text MUST be in natural English/Hinglish (Roman script), clean Markdown format.</rule>
     <rule name="emotion_tags">Start the final 'complete_task' response with an emotion tag (e.g., [cheerful], [focused], [calm]).</rule>
   </language_and_tone_directive>
-
-  <gui_interaction_protocol>
-    <rule name="observe_first_mandatory">NEVER call any gui_controller click action without first calling gui_controller with action='observe'. The observe response is the ONLY source of truth for element locations.</rule>
-
-    <rule name="click_vs_click_by_id_strict">
-        There are TWO clicking paths. Choose based on whether the target appears in the numbered element list from observe:
-        - PATH A (PREFERRED, 99% of cases): action='click_by_id' + element_id=<number> + expected_text="<exact visible label>". Use whenever the target element exists in the numbered list (e.g., buttons, text fields, menu items, links, labels).
-        - PATH B (FALLBACK ONLY): action='click' + x=<int> + y=<int>. Use ONLY when the target is NOT in the numbered list (e.g., blank canvas, image pixel, custom-drawn region, game area).
-    </rule>
-
-    <rule name="expected_text_verification_mandatory">
-        When calling 'click_by_id', 'double_click_by_id', or 'right_click_by_id', you MUST include 'expected_text' matching the EXACT visible label from the observe list.
-        Example: For element "#7 [Button] \"7\"", pass element_id=7 and expected_text="7".
-        Example: For element "#27 [Button] \"Add\"", pass element_id=27 and expected_text="Add".
-        The system REJECTS the click if expected_text does not match the actual element's label. On rejection, you MUST re-run 'observe' and pick the correct element_id, OR correct your 'expected_text' to match exactly.
-        This is a critical safety check. NEVER guess element_id based on position without verifying the expected_text matches the label you see.
-    </rule>
-
-    <rule name="never_mix_paths">NEVER call action='click' with element_id. NEVER call action='click_by_id' with x,y. These are mutually exclusive. Mixing them causes immediate error.</rule>
-
-    <rule name="click_requires_all_params">
-        If you call action='click', you MUST provide BOTH 'x' and 'y' as integers. Omitting either triggers an error.
-        If you call action='click_by_id', you MUST provide BOTH 'element_id' (integer) AND 'expected_text' (string matching the label).
-    </rule>
-
-    <rule name="element_id_freshness">element_id values are valid ONLY for the MOST RECENT observe. If the UI has changed (click, scroll, timeout, tab switch), you MUST call observe again to refresh the ID mapping before clicking.</rule>
-
-    <rule name="dense_ui_discipline">
-        On dense UIs (Calculator, keypads, spreadsheets, keyboards), element labels repeat (many "1", "2", etc. appear as different IDs). You MUST:
-        1. Read the observe list carefully and match the exact label with the exact element_id.
-        2. ALWAYS pass expected_text so the system catches mismatches.
-        3. If your expected_text is rejected, DO NOT retry the same element_id — re-read the list, find the correct ID with the matching label, and retry.
-    </rule>
-
-    <rule name="verify_after_action">After every gui_controller action that modifies UI (click, type, hotkey, drag), call observe again to visually verify the UI changed as expected before proceeding.</rule>
-
-    <rule name="example_correct_flow">
-        CORRECT SEQUENCE for "click the Login button":
-        1. gui_controller(action='observe') -> returns numbered list. Spot "#5 [Button] 'Login' @(450,320)".
-        2. gui_controller(action='click_by_id', element_id=5, expected_text='Login') -> system verifies label matches, clicks (450,320).
-        3. gui_controller(action='observe') -> verify next screen.
-    </rule>
-
-    <rule name="example_wrong_flows">
-        WRONG: gui_controller(action='click') with no x,y and no element_id. -> ERROR.
-        WRONG: gui_controller(action='click', element_id=5). -> Invalid mix.
-        WRONG: gui_controller(action='click_by_id', x=450, y=320). -> Invalid mix.
-        WRONG: gui_controller(action='click_by_id', element_id=20) WITHOUT expected_text. -> Error, expected_text required.
-        WRONG: gui_controller(action='click_by_id', element_id=20, expected_text='7') when #20 is actually '3'. -> REJECTED by verification.
-        WRONG: Reusing element_id from 3 steps ago after UI changed. -> Stale, wrong click.
-    </rule>
-  </gui_interaction_protocol>
 
   <budget_aware_planning>
     <rule>Strict budget limit of {max_steps} Steps. Monitor [BUDGET TRACKER].</rule>
     <rule>If at Step {panic_step} (PANIC MODE): Synthesize best available data immediately and execute 'complete_task'.</rule>
   </budget_aware_planning>
 </agent_system_prompt>"""
+
 
 def get_native_tools():
     return [
@@ -244,7 +131,7 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "response": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="Your final natural response in English/Hinglish (Roman script) formatted with Markdown to speak/show to the user."
                             )
                         },
@@ -311,7 +198,7 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "web": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description=(
                                     "[Target: Google/Web Search] Use for general web queries, latest news, documentation, or tech benchmarks. "
                                     "DO NOT use if a specific URL is provided. "
@@ -319,28 +206,28 @@ def get_native_tools():
                                 )
                             ),
                             "arxiv": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description=(
                                     "[Target: Academic & Scientific Papers] Use ONLY when looking for published research papers, pre-prints, or deep scientific literature. "
                                     "Format: Technical search query with domain terms (e.g., 'transformer attention mechanism optimization')."
                                 )
                             ),
                             "youtube": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description=(
                                     "[Target: YouTube Video Transcripts] Use ONLY when the user asks to summarize, explain, or extract info from a YouTube video. "
                                     "Format: Must be an exact, valid HTTPS YouTube link."
                                 )
                             ),
                             "read_webpage": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description=(
                                     "[Target: Webpage Article Scraping] Use ONLY when the user provides a direct URL and wants to read, inspect, or summarize that specific page. "
                                     "DO NOT use for general search. Format: Must be a valid non-YouTube HTTPS URL."
                                 )
                             ),
                             "vault": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description=(
                                     "[Target: Personal Knowledge Index] Use when the user asks about their own saved notes, files, projects, or personal documents.\n"
                                     "[SCOPE]: Auto-includes the user's Documents folder. User may have added more folders via the Indexer Dashboard.\n"
@@ -435,11 +322,11 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "command": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="Exact Terminal command to execute. Ensure syntax matches Windows CMD/PowerShell."
                             ),
                             "timeout_seconds": types.Schema(
-                                type=types.Type.INTEGER, 
+                                type=types.Type.INTEGER,
                                 description="Optional. Default 30s. Set to 120-300 for heavy tasks (git clone, pip install, build tasks)."
                             )
                         },
@@ -457,7 +344,7 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "code_string": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="Complete, syntactically correct Python script. Always import required standard modules (os, json, sys, etc.)."
                             )
                         },
@@ -481,11 +368,11 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "device_id": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="ID of the target mobile device (e.g., 'vivo_t2_pro'). Check [EPHEMERAL] context for active devices."
                             ),
                             "termux_command": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="The exact Termux API command to execute on the phone."
                             )
                         },
@@ -503,11 +390,11 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "direction": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="Must be exactly 'pc_to_mobile' or 'mobile_to_pc'."
                             ),
                             "device_id": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="Target mobile device ID from the connected devices list."
                             ),
                             "file_paths": types.Schema(
@@ -590,31 +477,31 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "action": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="MANDATORY. Must be exactly 'send' or 'fetch'."
                             ),
                             "to": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="MANDATORY. Numeric phone number ONLY (e.g., '919876543210' or '9876543210'). NEVER pass a contact name."
                             ),
                             "message": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="[SEND MODE ONLY] Text message to send. Leave empty if only sending a file."
                             ),
                             "file_path": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="[SEND MODE ONLY] Exact absolute local file path to attach."
                             ),
                             "start_date": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="[FETCH MODE ONLY] Start date (YYYY-MM-DD)."
                             ),
                             "end_date": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="[FETCH MODE ONLY] End date (YYYY-MM-DD)."
                             )
                         },
-                        required=["action", "to"] 
+                        required=["action", "to"]
                     )
                 ),
                 types.FunctionDeclaration(
@@ -684,32 +571,32 @@ def get_native_tools():
                         type=types.Type.OBJECT,
                         properties={
                             "action": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="MANDATORY. Must be exactly 'send' or 'fetch'."
                             ),
                             "to": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="MANDATORY. Telegram username (e.g., 'durov') OR full phone number with country code."
                             ),
                             "message": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="[SEND MODE ONLY] Text message to send. Leave empty if only sending files."
                             ),
                             "file_paths": types.Schema(
-                                type=types.Type.ARRAY, 
+                                type=types.Type.ARRAY,
                                 items=types.Schema(type=types.Type.STRING),
                                 description="[SEND MODE ONLY] Array of exact absolute local file paths to attach."
                             ),
                             "start_date": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="[FETCH MODE ONLY] Start date (YYYY-MM-DD)."
                             ),
                             "end_date": types.Schema(
-                                type=types.Type.STRING, 
+                                type=types.Type.STRING,
                                 description="[FETCH MODE ONLY] End date (YYYY-MM-DD)."
                             )
                         },
-                        required=["action", "to"] 
+                        required=["action", "to"]
                     )
                 ),
                 types.FunctionDeclaration(
