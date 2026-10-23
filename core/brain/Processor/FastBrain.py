@@ -357,6 +357,9 @@ def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = No
             if isinstance(ephemeral, dict)
             else None
         )
+        if isinstance(active_domains, list):
+            filtered = [d for d in active_domains if d == "creator_identity"]
+            active_domains = filtered if filtered else ["general_none"]
         dynamic_fast_prompt = build_fast_system_prompt(
             base_system_prompt=SYSTEM_PROMPT,
             domains=active_domains,

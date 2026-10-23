@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from core.logger.logger import logger
 from core.utils.utils import resolve_pronouns
-from core.brain.Processor.FastBrain import fetch_from_groq, make_result
+from core.brain.Processor.FastBrain import fetch_from_groq, make_result, clean_json_string
 from core.brain.Processor.AgenticBrain import run_agentic_loop
 from core.brain.prompts import (
     VALID_PROMPT_DOMAINS,
@@ -41,7 +41,53 @@ class GenericSemanticRouter:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             })
-        self.timeout = 2.5
+        self.timeout = 5.0
+
+    @staticmethod
+    def _safe_parse_json(raw_text: str) -> Optional[dict]:
+        if not raw_text:
+            return None
+        text = clean_json_string(raw_text)
+        try:
+            return json.loads(text)
+        except Exception:
+            pass
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(text, return_objects=False)
+            if isinstance(repaired, str):
+                return json.loads(repaired)
+            if isinstance(repaired, dict):
+                return repaired
+        except Exception:
+            pass
+        try:
+            depth = 0
+            in_str = False
+            esc = False
+            for i, ch in enumerate(text):
+                if esc:
+                    esc = False
+                    continue
+                if ch == "\\":
+                    esc = True
+                    continue
+                if ch == '"':
+                    in_str = not in_str
+                    continue
+                if in_str:
+                    continue
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return json.loads(text[: i + 1])
+            if depth > 0:
+                text = text + ("}" * depth)
+            return json.loads(text)
+        except Exception:
+            return None
 
     @staticmethod
     def _parse_router_payload(data: dict, command: str) -> Dict[str, Any]:
@@ -70,7 +116,7 @@ class GenericSemanticRouter:
         if not self.api_key:
             return None
 
-        trimmed_history = history_context[-350:].strip() if history_context else "No recent history."
+        trimmed_history = history_context[-800:].strip() if history_context else "No recent history."
 
         system_prompt = (
             "You are an enterprise AI semantic router. Classify the CURRENT user command into strict JSON "
@@ -125,7 +171,7 @@ class GenericSemanticRouter:
                 {"role": "user", "content": user_content}
             ],
             "temperature": 0.0,
-            "max_tokens": 80,
+            "max_tokens": 200,
             "response_format": {"type": "json_object"}
         }
 
@@ -140,11 +186,16 @@ class GenericSemanticRouter:
 
             if response.status_code == 200:
                 raw_json = response.json()["choices"][0]["message"]["content"]
-                data = json.loads(raw_json)
+                data = self._safe_parse_json(raw_json)
+                if not data:
+                    logger.warning(f"Router Tier1 JSON unparseable | raw_preview='{str(raw_json)[:150]}'")
+                    raise ValueError("Tier1 router JSON parse failed")
                 parsed = self._parse_router_payload(data, command)
                 logger.info(
-                    f"Semantic Router [{latency_ms:.1f}ms] | Decision -> {parsed['route']} | "
-                    f"Domains -> {parsed['domains']} | Behavioral -> {parsed['domain']} | Eng -> '{parsed['english_query'][:45]}'"
+                    f"[ROUTER_TELEMETRY] source=tier1 | latency_ms={latency_ms:.1f} | "
+                    f"route={parsed['route']} | domains={parsed['domains']} | "
+                    f"behavioral={parsed['domain']} | eng='{parsed['english_query'][:60]}' | "
+                    f"cmd='{command[:80]}'"
                 )
                 return parsed
             else:
@@ -167,7 +218,7 @@ class GenericSemanticRouter:
                             {"role": "user", "content": user_content}
                         ],
                         "temperature": 0.0,
-                        "max_tokens": 80,
+                        "max_tokens": 200,
                         "response_format": {"type": "json_object"}
                     }
 
@@ -181,11 +232,16 @@ class GenericSemanticRouter:
 
                     if response_fb.status_code == 200:
                         raw_json_fb = response_fb.json()["choices"][0]["message"]["content"]
-                        data_fb = json.loads(raw_json_fb)
+                        data_fb = self._safe_parse_json(raw_json_fb)
+                        if not data_fb:
+                            logger.warning(f"Router Tier2 JSON unparseable | raw_preview='{str(raw_json_fb)[:150]}'")
+                            raise ValueError("Tier2 router JSON parse failed")
                         parsed_fb = self._parse_router_payload(data_fb, command)
                         logger.info(
-                            f"Tier 2 Semantic Router [{latency_ms_fb:.1f}ms] | Decision -> {parsed_fb['route']} | "
-                            f"Domains -> {parsed_fb['domains']}"
+                            f"[ROUTER_TELEMETRY] source=tier2 | latency_ms={latency_ms_fb:.1f} | "
+                            f"route={parsed_fb['route']} | domains={parsed_fb['domains']} | "
+                            f"behavioral={parsed_fb['domain']} | eng='{parsed_fb['english_query'][:60]}' | "
+                            f"cmd='{command[:80]}'"
                         )
                         return parsed_fb
                     else:
@@ -288,6 +344,10 @@ def get_route_decision(command: str, memory_instance=None) -> str:
 
     logger.info("Using Local Rule-Based Fallback Router...")
     fallback_route = get_local_fallback_route(command)
+    logger.info(
+        f"[ROUTER_TELEMETRY] source=regex | route={fallback_route} | "
+        f"cmd='{command[:80]}'"
+    )
     if memory_instance and hasattr(memory_instance, "ephemeral"):
         local_domains = normalize_domains(None, command)
         memory_instance.ephemeral["current_english_query"] = command
