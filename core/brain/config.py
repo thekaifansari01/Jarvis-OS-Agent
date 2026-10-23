@@ -120,9 +120,9 @@ MEMORY_SUMMARY_MAX_CATCHUP_DAYS = 15
 # AGENT LOOP CONFIG
 # ================================================================
 CONFIG = {
-    "AGENT_MAX_STEPS": 50,
-    "AGENT_TIMEOUT": 1800,
-    "AGENT_RETRY_LIMIT": 2,
-    "AGENT_SCRATCHPAD_MAX_CHARS": 500000,
+    "AGENT_MAX_STEPS": 300,
+    "AGENT_TIMEOUT": 14400,
+    "AGENT_RETRY_LIMIT": 4,
+    "AGENT_SCRATCHPAD_MAX_CHARS": 1000000,
     "LOG_FILE": str(Path(__file__).resolve().parents[2] / "Data" / "jarvis.log"),
 }
