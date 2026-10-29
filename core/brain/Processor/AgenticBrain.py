@@ -424,9 +424,10 @@ If the <Mission> is fully complete, call 'complete_task'.
                             {"role": "user", "content": prompt}
                         ]
 
-                    if any(name in current_provider.__class__.__name__.lower() for name in ["regolo", "openrouter", "custom"]):
+                    if any(name in current_provider.__class__.__name__.lower() for name in ["primary", "fallback", "custom"]):
                         thought_text = ""
                         content_text = ""
+                        tool_stream_text = ""
                         tool_calls = []
                         live_tokens = total_loop_tokens
                         chunk_counter = 0
@@ -447,9 +448,14 @@ If the <Mission> is fully complete, call 'complete_task'.
                             rc = chunk.get("reasoning_content", "")
                             if rc:
                                 thought_text += rc
-                                live_tokens += count_tokens(rc)
                                 chunk_counter += 1
                                 if not silent and chunk_counter % 4 == 0:
+                                    live_tokens = (
+                                        total_loop_tokens
+                                        + count_tokens(thought_text)
+                                        + count_tokens(content_text)
+                                        + count_tokens(tool_stream_text)
+                                    )
                                     update_agent_status(
                                         step=step + 1,
                                         total_steps=max_steps,
@@ -462,13 +468,38 @@ If the <Mission> is fully complete, call 'complete_task'.
                             ct = chunk.get("content", "")
                             if ct:
                                 content_text += ct
-                                live_tokens += count_tokens(ct)
                                 chunk_counter += 1
                                 if not silent and chunk_counter % 4 == 0:
+                                    live_tokens = (
+                                        total_loop_tokens
+                                        + count_tokens(thought_text)
+                                        + count_tokens(content_text)
+                                        + count_tokens(tool_stream_text)
+                                    )
                                     update_agent_status(
                                         step=step + 1,
                                         total_steps=max_steps,
-                                        thought=thought_text.strip() or "Thinking...",
+                                        thought=thought_text.strip() or content_text.strip() or "Thinking...",
+                                        action="THINKING",
+                                        action_detail="",
+                                        tokens=live_tokens,
+                                    )
+
+                            tcd = chunk.get("tool_calls_delta", "")
+                            if tcd:
+                                tool_stream_text += tcd
+                                chunk_counter += 1
+                                if not silent and chunk_counter % 4 == 0:
+                                    live_tokens = (
+                                        total_loop_tokens
+                                        + count_tokens(thought_text)
+                                        + count_tokens(content_text)
+                                        + count_tokens(tool_stream_text)
+                                    )
+                                    update_agent_status(
+                                        step=step + 1,
+                                        total_steps=max_steps,
+                                        thought=thought_text.strip() or content_text.strip() or "Thinking...",
                                         action="THINKING",
                                         action_detail="",
                                         tokens=live_tokens,
@@ -477,28 +508,21 @@ If the <Mission> is fully complete, call 'complete_task'.
                             tc = chunk.get("tool_calls", [])
                             if tc:
                                 tool_calls = tc
-                                tc_str = str(tc)
-                                live_tokens += max(1, len(tc_str) // 4)
-                                chunk_counter += 1
-                                if not silent and chunk_counter % 4 == 0:
-                                    update_agent_status(
-                                        step=step + 1,
-                                        total_steps=max_steps,
-                                        thought=thought_text.strip() or "Generating Tool Call...",
-                                        action="THINKING",
-                                        action_detail="",
-                                        tokens=live_tokens,
-                                    )
 
-                        if not thought_text:
-                            thought_text = content_text.strip() or "Analyzing context..."
-
+                        tool_tokens = (
+                            count_tokens(tool_stream_text)
+                            if tool_stream_text
+                            else (count_tokens(json.dumps(tool_calls)) if tool_calls else 0)
+                        )
                         output_tokens = (
                             count_tokens(thought_text)
                             + count_tokens(content_text)
-                            + count_tokens(json.dumps(tool_calls))
+                            + tool_tokens
                         )
                         total_loop_tokens += output_tokens
+
+                        if not thought_text:
+                            thought_text = content_text.strip() or "Analyzing context..."
 
                         response = {
                             "content": content_text,
