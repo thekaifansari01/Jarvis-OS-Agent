@@ -168,11 +168,11 @@ class GenericSemanticRouter:
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
+                {"role": "user", "content": user_content},
+                {"role": "assistant", "content": "{\"route\": "}
             ],
             "temperature": 0.0,
-            "max_tokens": 200,
-            "response_format": {"type": "json_object"}
+            "max_tokens": 600
         }
 
         try:
@@ -185,7 +185,10 @@ class GenericSemanticRouter:
             latency_ms = (time.perf_counter() - start_ts) * 1000
 
             if response.status_code == 200:
-                raw_json = response.json()["choices"][0]["message"]["content"]
+                message_obj = response.json()["choices"][0]["message"]
+                raw_json = message_obj.get("content") or ""
+                if not raw_json.strip():
+                    raw_json = message_obj.get("reasoning_content") or ""
                 data = self._safe_parse_json(raw_json)
                 if not data:
                     logger.warning(f"Router Tier1 JSON unparseable | raw_preview='{str(raw_json)[:150]}'")
@@ -215,11 +218,11 @@ class GenericSemanticRouter:
                         "model": FAST_BRAIN_MODEL,
                         "messages": [
                             {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_content}
+                            {"role": "user", "content": user_content},
+                            {"role": "assistant", "content": "{\"route\": "}
                         ],
                         "temperature": 0.0,
-                        "max_tokens": 200,
-                        "response_format": {"type": "json_object"}
+                        "max_tokens": 600
                     }
 
                     start_ts_fb = time.perf_counter()
@@ -231,7 +234,10 @@ class GenericSemanticRouter:
                     latency_ms_fb = (time.perf_counter() - start_ts_fb) * 1000
 
                     if response_fb.status_code == 200:
-                        raw_json_fb = response_fb.json()["choices"][0]["message"]["content"]
+                        message_obj_fb = response_fb.json()["choices"][0]["message"]
+                        raw_json_fb = message_obj_fb.get("content") or ""
+                        if not raw_json_fb.strip():
+                            raw_json_fb = message_obj_fb.get("reasoning_content") or ""
                         data_fb = self._safe_parse_json(raw_json_fb)
                         if not data_fb:
                             logger.warning(f"Router Tier2 JSON unparseable | raw_preview='{str(raw_json_fb)[:150]}'")
@@ -266,6 +272,19 @@ def infer_local_domain(command: str) -> str:
 
 def get_local_fallback_route(command: str) -> str:
     cmd_lower = command.lower().strip()
+
+    sensitive_patterns = [
+        r'\b(api\s*key|api_key|apikey)\b',
+        r'\b(password|passwd|passcode)\b',
+        r'\b(secret|token|credential|credentials)\b',
+        r'\b(meri|mera|my)\s+(key|token|password|secret|credential)\b',
+        r'\b(\.env|environment\s+variable)\b',
+        r'\b(vault|keychain|keyring)\s+(se|mein|from|me)\b',
+    ]
+
+    for pattern in sensitive_patterns:
+        if re.search(pattern, cmd_lower):
+            return "AGENTIC"
 
     absolute_fast_patterns = [
         r'\b(volume|awaaz|sound|brightness|screenshot|lock|sleep|mute)\b',

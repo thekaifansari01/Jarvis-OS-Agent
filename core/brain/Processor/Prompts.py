@@ -108,9 +108,10 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
     <rule name="emotion_tags">Start the final 'complete_task' response with an emotion tag (e.g., [cheerful], [focused], [calm]).</rule>
   </language_and_tone_directive>
 
-  <budget_aware_planning>
+   <budget_aware_planning>
     <rule>Strict budget limit of {max_steps} Steps. Monitor [BUDGET TRACKER].</rule>
     <rule>If at Step {panic_step} (PANIC MODE): Synthesize best available data immediately and execute 'complete_task'.</rule>
+    <rule priority="critical">If you have TWO consecutive steps with no tool call, you MUST call 'complete_task' on the next step with your best available answer. Thinking without action is a wasted step.</rule>
   </budget_aware_planning>
 </agent_system_prompt>"""
 

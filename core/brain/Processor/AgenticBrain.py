@@ -23,6 +23,32 @@ except Exception:
     TOKENIZER = None
 
 
+_SECRET_PATTERNS = [
+    (re.compile(r'\b(sk-[A-Za-z0-9_\-]{20,})'), 8, 4),
+    (re.compile(r'\b(gsk_[A-Za-z0-9_\-]{20,})'), 8, 4),
+    (re.compile(r'\b(sk_[A-Za-z0-9_\-]{20,})'), 8, 4),
+    (re.compile(r'\b(b10_[A-Za-z0-9._\-]{20,})'), 8, 4),
+    (re.compile(r'\b(tvly-dev-[A-Za-z0-9_\-]{20,})'), 12, 4),
+    (re.compile(r'\b(tvly-[A-Za-z0-9_\-]{20,})'), 8, 4),
+    (re.compile(r'\b(AQ\.[A-Za-z0-9_\-]{20,})'), 12, 4),
+    (re.compile(r'\b([A-Fa-f0-9]{40,})'), 8, 4),
+]
+
+
+def mask_secrets_in_text(text: str) -> str:
+    if not text:
+        return text
+    masked = text
+    for pattern, head_len, tail_len in _SECRET_PATTERNS:
+        def _mask(match, hl=head_len, tl=tail_len):
+            full = match.group(1)
+            if len(full) <= hl + tl + 3:
+                return "***REDACTED***"
+            return f"{full[:hl]}...{full[-tl:]}"
+        masked = pattern.sub(_mask, masked)
+    return masked
+
+
 def count_tokens(text: str) -> int:
     if not text:
         return 0
@@ -227,8 +253,16 @@ User Command: "{raw_command}"
 <Thought_Trail>
 """
 
-    max_steps = CONFIG.get("AGENT_MAX_STEPS", 10)
-    timeout_seconds = CONFIG.get("AGENT_TIMEOUT", 120)
+    _raw_max_steps = CONFIG.get("AGENT_MAX_STEPS", 50)
+    try:
+        _config_max_steps = int(_raw_max_steps)
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid AGENT_MAX_STEPS='{_raw_max_steps}', defaulting to 50.")
+        _config_max_steps = 50
+    max_steps = min(_config_max_steps, 100)
+    if _config_max_steps > 100:
+        logger.warning(f"AGENT_MAX_STEPS={_config_max_steps} exceeds safe limit. Capping to 100.")
+    timeout_seconds = CONFIG.get("AGENT_TIMEOUT", 300)
     retry_limit = CONFIG.get("AGENT_RETRY_LIMIT", 2)
     step = 0
     total_loop_tokens = 0
@@ -269,6 +303,9 @@ User Command: "{raw_command}"
         panic_step=panic_step,
     )
 
+    consecutive_provider_failures = 0
+    consecutive_no_tool_steps = 0
+
     while step < max_steps:
         elapsed = time.time() - start_time
         if elapsed > timeout_seconds:
@@ -282,7 +319,7 @@ User Command: "{raw_command}"
                     action_detail="",
                     tokens=total_loop_tokens,
                 )
-                timeout_msg = "Task was taking too long and timed out. Please try again or provide a simpler command."
+                timeout_msg = mask_secrets_in_text("Task was taking too long and timed out. Please try again or provide a simpler command.")
                 launch_popup()
                 update_typing_status("completed", timeout_msg)
                 send_telegram_update(final_response=timeout_msg)
@@ -447,7 +484,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                                     update_agent_status(
                                         step=step + 1,
                                         total_steps=max_steps,
-                                        thought=thought_text.strip(),
+                                        thought=mask_secrets_in_text(thought_text.strip()) or "Thinking...",
                                         action="THINKING",
                                         action_detail="",
                                         tokens=live_tokens,
@@ -462,7 +499,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                                     update_agent_status(
                                         step=step + 1,
                                         total_steps=max_steps,
-                                        thought=thought_text.strip() or "Thinking...",
+                                        thought=mask_secrets_in_text(thought_text.strip()) or "Thinking...",
                                         action="THINKING",
                                         action_detail="",
                                         tokens=live_tokens,
@@ -478,7 +515,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                                     update_agent_status(
                                         step=step + 1,
                                         total_steps=max_steps,
-                                        thought=thought_text.strip() or "Generating Tool Call...",
+                                        thought=mask_secrets_in_text(thought_text.strip()),
                                         action="THINKING",
                                         action_detail="",
                                         tokens=live_tokens,
@@ -616,42 +653,72 @@ If the <Mission> is fully complete, call 'complete_task'.
 
                 except Exception as api_err:
                     error_msg = str(api_err)
+                    error_lower = error_msg.lower()
+
                     is_quota_error = (
                         "429" in error_msg
                         or "RESOURCE_EXHAUSTED" in error_msg
-                        or "quota" in error_msg.lower()
+                        or "quota" in error_lower
+                        or "rate limit" in error_lower
                     )
 
-                    if is_quota_error and not provider_switched:
+                    is_permanent_failure = (
+                        "getaddrinfo failed" in error_lower
+                        or "name or service not known" in error_lower
+                        or "nodename nor servname" in error_lower
+                        or "temporary failure in name resolution" in error_lower
+                        or "name resolution" in error_lower
+                        or "connection refused" in error_lower
+                        or "invalid api key" in error_lower
+                        or "unauthorized" in error_lower
+                        or "model_not_found" in error_lower
+                        or " 401" in error_msg
+                        or " 403" in error_msg
+                        or " 404" in error_msg
+                    )
+
+                    should_switch_provider = (not provider_switched) and (
+                        is_quota_error or is_permanent_failure or attempt >= 2
+                    )
+                    should_abort = provider_switched and (is_quota_error or is_permanent_failure)
+
+                    if should_switch_provider:
+                        switch_reason = "quota limit" if is_quota_error else ("permanent failure" if is_permanent_failure else "repeated transient failures")
                         logger.warning(
-                            f"⚠️ Provider {current_provider.__class__.__name__} hit quota/rate limit. Switching to fallback..."
+                            f"Provider {current_provider.__class__.__name__} hit {switch_reason}. Switching to fallback..."
                         )
                         try:
                             current_provider = fallback_provider
                             provider_switched = True
                             logger.info(
-                                f"🔄 Switched to fallback provider: {current_provider.__class__.__name__}"
+                                f"Switched to fallback provider: {current_provider.__class__.__name__}"
                             )
                             continue
                         except Exception as switch_err:
-                            logger.error(
-                                f"❌ Failed to switch to fallback: {switch_err}"
-                            )
+                            logger.error(f"Failed to switch to fallback: {switch_err}")
                             raise api_err
+
+                    elif should_abort:
+                        logger.error(
+                            f"All providers failed with fatal errors. Last: {api_err}"
+                        )
+                        raise api_err
 
                     elif attempt < max_api_retries - 1:
                         logger.warning(
-                            f"⚠️ API Generation failed (Attempt {attempt + 1}/{max_api_retries}): {api_err}. Retrying in 2 seconds..."
+                            f"API Generation failed (Attempt {attempt + 1}/{max_api_retries}): {api_err}. Retrying in 2 seconds..."
                         )
                         time.sleep(2)
                     else:
                         logger.error(
-                            f"❌ API failed completely after {max_api_retries} attempts."
+                            f"API failed completely after {max_api_retries} attempts."
                         )
                         raise api_err
 
+            consecutive_provider_failures = 0
+
             logger.info(
-                f"🧠 Agent Thought: {ai_response.get('thought', 'Thinking...')}"
+                f"🧠 Agent Thought: {mask_secrets_in_text(ai_response.get('thought', 'Thinking...'))}"
             )
 
             if ai_response.get("_truncation_detected"):
@@ -678,7 +745,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                 )
                 scratchpad += f"""
 <Step number="{step+1}">
-  <Thought>{ai_response.get('thought', 'Output truncated by server.')}</Thought>
+  <Thought>{mask_secrets_in_text(ai_response.get('thought', 'Output truncated by server.'))}</Thought>
   <Executed_Tool>NONE (LLM output was truncated before tool call completed)</Executed_Tool>
   <Result>{truncation_observation}</Result>
 </Step>
@@ -778,20 +845,21 @@ If the <Mission> is fully complete, call 'complete_task'.
                 update_agent_status(
                     step=step + 1,
                     total_steps=max_steps,
-                    thought=ai_response.get("thought", ""),
+                    thought=mask_secrets_in_text(ai_response.get("thought", "")),
                     action=action_key,
-                    action_detail=action_detail,
+                    action_detail=mask_secrets_in_text(action_detail),
                     tokens=total_loop_tokens,
                 )
                 send_telegram_update(
                     step=f"{step + 1}/{max_steps}",
-                    thought=ai_response.get("thought", ""),
-                    action=f"{action_key} ({action_detail})" if action_key else "Thinking..."
+                    thought=mask_secrets_in_text(ai_response.get("thought", "")),
+                    action=mask_secrets_in_text(f"{action_key} ({action_detail})") if action_key else "Thinking..."
                 )
 
             if ai_response.get("is_task_complete"):
                 logger.info("✅ Agent declared task complete!")
                 final_text = ai_response.pop("response", "Task completed sir.")
+                final_text = mask_secrets_in_text(final_text)
 
                 if not silent:
                     update_agent_status(
@@ -818,6 +886,25 @@ If the <Mission> is fully complete, call 'complete_task'.
             observation = None
             for attempt in range(retry_limit):
                 try:
+                    if not executed_tools:
+                        consecutive_no_tool_steps += 1
+                        logger.info(f"Step {step+1}: No tool call issued. Agent is reasoning. (consecutive={consecutive_no_tool_steps})")
+                        if consecutive_no_tool_steps >= 2:
+                            observation = (
+                                "Observation: [CRITICAL — NO ACTION TAKEN]\n"
+                                f"You have spent {consecutive_no_tool_steps} consecutive steps thinking without calling any tool. "
+                                "This is UNACCEPTABLE. You have enough information to act.\n\n"
+                                "MANDATORY NEXT ACTION:\n"
+                                "1. If you have your answer or a partial answer — call 'complete_task' IMMEDIATELY with your best response.\n"
+                                "2. If you truly need more data — call exactly ONE tool (e.g., 'search_actions' or 'file_operations') this step.\n"
+                                "3. Do NOT think out loud anymore. Act now."
+                            )
+                        else:
+                            observation = (
+                                "Observation: Reasoning step detected. No tool was called. "
+                                "You must either call a tool or call 'complete_task' on next step."
+                            )
+                        break
                     if "memory_actions" in executed_tools:
                         mem_data = ai_response.get("memory_actions", {})
 
@@ -876,6 +963,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                         is_failure = _is_failure_prefix(str(observation))
 
                         if not is_failure:
+                            consecutive_no_tool_steps = 0
                             obs_text = str(observation)
                             is_user_cancelled = "[USER_CANCELLED]" in obs_text
                             is_user_edited = "[NOTE: User explicitly edited" in obs_text
@@ -979,12 +1067,13 @@ If the <Mission> is fully complete, call 'complete_task'.
                                     str(observation),
                                     flags=re.DOTALL,
                                 ).strip()[:200]
+                                clean_ui_obs = mask_secrets_in_text(clean_ui_obs)
                                 update_agent_status(
                                     step=step + 1,
                                     total_steps=max_steps,
-                                    thought=ai_response.get("thought", ""),
+                                    thought=mask_secrets_in_text(ai_response.get("thought", "")),
                                     action=action_key,
-                                    action_detail=action_detail,
+                                    action_detail=mask_secrets_in_text(action_detail),
                                     observation=clean_ui_obs,
                                     tokens=total_loop_tokens,
                                 )
@@ -1018,7 +1107,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                 )
                 observation = f"Observation: Tool failed after {retry_limit} retries. Try a different approach."
 
-            thought_str = ai_response.get("thought", "Thinking...")
+            thought_str = mask_secrets_in_text(ai_response.get("thought", "Thinking..."))
             action_str = (
                 f"{action_key} ({action_detail})"
                 if action_key
@@ -1040,12 +1129,41 @@ If the <Mission> is fully complete, call 'complete_task'.
         except Exception as e:
             had_system_failure = True
             error_msg = str(e)
-            if (
+            error_lower = error_msg.lower()
+
+            is_quota_error = (
                 "429" in error_msg
                 or "RESOURCE_EXHAUSTED" in error_msg
-                or "quota" in error_msg.lower()
-            ):
-                logger.error("❌ All providers exhausted or rate limited!")
+                or "quota" in error_lower
+                or "rate limit" in error_lower
+            )
+
+            is_permanent_failure = (
+                "getaddrinfo failed" in error_lower
+                or "name or service not known" in error_lower
+                or "nodename nor servname" in error_lower
+                or "temporary failure in name resolution" in error_lower
+                or "name resolution" in error_lower
+                or "connection refused" in error_lower
+                or "invalid api key" in error_lower
+                or "unauthorized" in error_lower
+                or "model_not_found" in error_lower
+                or " 401" in error_msg
+                or " 403" in error_msg
+                or " 404" in error_msg
+            )
+
+            consecutive_provider_failures += 1
+
+            if is_quota_error or is_permanent_failure or consecutive_provider_failures >= 3:
+                if is_quota_error:
+                    fail_msg = "Bhai, saare AI providers ki limit khatam ho gayi. Thoda ruko aur phir try karo."
+                elif is_permanent_failure:
+                    fail_msg = f"Bhai, AI provider se connect nahi ho pa raha. Internet check karo ya .env mein provider URL verify karo. Error: {error_msg[:150]}"
+                else:
+                    fail_msg = f"Bhai, provider baar baar fail ho raha hai. Last error: {error_msg[:150]}"
+
+                logger.error(f"Agent loop aborting: {fail_msg}")
                 if not silent:
                     update_agent_status(
                         step=0,
@@ -1055,26 +1173,21 @@ If the <Mission> is fully complete, call 'complete_task'.
                         action_detail="",
                         tokens=total_loop_tokens,
                     )
-                    limit_msg = "Bhai, saare AI providers ki limit khatam ho gayi. Thoda ruko aur phir try karo."
                     launch_popup()
-                    update_typing_status("completed", limit_msg)
-                    send_telegram_update(final_response=limit_msg)
+                    update_typing_status("completed", fail_msg)
+                    send_telegram_update(final_response=fail_msg)
                     clear_telegram_context()
-                else:
-                    limit_msg = "All providers exhausted."
-                
-                return make_result(
-                    limit_msg, priority="high", agent_executed=True
-                )
 
-            logger.error(f"❌ Agent Loop Error (API/Crash): {e}")
-            time.sleep(3)
+                return make_result(fail_msg, priority="high", agent_executed=True)
+
+            logger.error(f"Agent Loop Error (recoverable): {e}")
+            time.sleep(2)
 
             scratchpad += f"""
 <Step number="{step+1}">
-  <Thought>System crash handled.</Thought>
+  <Thought>Recoverable error occurred.</Thought>
   <Executed_Tool>System Error</Executed_Tool>
-  <Result>{e}. Skipping this step.</Result>
+  <Result>{str(e)[:500]}. Skipping this step and continuing.</Result>
 </Step>
 """
             step += 1
@@ -1088,7 +1201,7 @@ If the <Mission> is fully complete, call 'complete_task'.
             action_detail="",
             tokens=total_loop_tokens,
         )
-        limit_msg = f"I have reached the maximum steps ({max_steps}). The task has hit the loop limit. Please provide a simpler command."
+        limit_msg = mask_secrets_in_text(f"I have reached the maximum steps ({max_steps}). The task has hit the loop limit. Please provide a simpler command.")
         launch_popup()
         update_typing_status("completed", limit_msg)
         send_telegram_update(final_response=limit_msg)
