@@ -9,7 +9,8 @@
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 [![Low Spec](https://img.shields.io/badge/Runs%20On-4GB%20RAM%20%2F%20i5--3210M-critical?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![OpenAI Compatible](https://img.shields.io/badge/API-OpenAI%20Compatible-412991?style=for-the-badge&logo=openai&logoColor=white)](https://platform.openai.com)
-[![Multi-Provider](https://img.shields.io/badge/Providers-Regolo%20%7C%20Gemini%20%7C%20OpenRouter%20%7C%20Custom-FF6F00?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
+[![Multi-Provider](https://img.shields.io/badge/Providers-Primary%20%7C%20Fallback-FF6F00?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/thekaifansari01/badge.svg)](https://hub.xerj.org/contributors/thekaifansari01)
 [![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
 [![Voice Control](https://img.shields.io/badge/Voice-Deepgram%20Nova--2-00BFFF?style=for-the-badge&logo=deepgram&logoColor=white)](https://deepgram.com)
 [![Wake Word](https://img.shields.io/badge/Wake%20Word-Azure%20%7C%20Vosk-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white)](https://speech.microsoft.com)
@@ -598,7 +599,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | 🎙️ | **Dual-Engine Wake Word** | Primary wake word via **Azure Custom Keyword (on-device, 97%+ accurate)** backed by a real-time DSP audio conditioner (85Hz High-Pass IIR filter, Pre-Emphasis, Speech-Gated AGC) and a 5-gate acoustic verifier (Dual WebRTC VAD, SNR, ZCR, duration gating), with automatic fallback to **Vosk KWS**. Both run fully on-device with zero cloud round-trip. |
 | 🗣️ | **Voice-First Multimodal** | Deepgram Nova-2 STT supercharged by a self-healing LTM vocabulary cache (auto-syncing entities from `lifetime_graph.json` and chat history), 85Hz high-pass audio conditioning, multi-alternative confidence scoring, and `<1ms` phonetic/contextual transcript repair (`kaf/caf` → `Kaif`, `word` ↔ `world`). Low-latency Sarvam TTS + Edge TTS streaming pipeline with progressive first-clause micro-chunking, persistent HTTP connection pooling, generation-locked barge-in, 15-min quota circuit breaker, LRU audio cache, and Hinglish tech/phonetic normalization (`.py` → `"dot pie"`), plus multimodal OCR and image generation. |
 | 🖱️ | **Vision-Based GUI Automation** | Set-of-Mark vision overlay with OpenCV edge detection. Two click paths — `click_by_id` with `expected_text` verification (preferred) and raw `click(x, y)` fallback. |
-| 🔌 | **Multi-LLM Auto-Failover** | Regolo, Gemini, OpenRouter, or local providers (Ollama, LM Studio, vLLM). Primary provider failure routes to fallback automatically. Model-agnostic framework — the same loop drives any OpenAI-compatible provider. |
+| 🔌 | **Multi-LLM Auto-Failover** | Two fully generic OpenAI-compatible endpoints — `PrimaryProvider` and `FallbackProvider` — both configurable via `.env` (works with Groq, Regolo, OpenRouter, Gemini's OpenAI-compatible endpoint, Ollama, LM Studio, vLLM, or any OpenAI-schema API). Primary failure auto-routes to fallback. Model-agnostic — the same loop drives any OpenAI-compatible provider. |
 | 🎨 | **Reactive UI & Inline Comms Approval** | Bi-directional ZMQ-powered PyQt5 Agent Panel streaming live thoughts, actions, and observations, featuring an expandable glassmorphic preview card to inspect, edit inline, approve, or cancel outgoing Gmail, WhatsApp, and Telegram messages with ground-truth memory sync and loop-timeout pause. Markdown typing popup with async image preview. |
 | 🔒 | **Command-Level Security Guardrails** | `shlex` tokenization blocks destructive terminal commands. Local AES-encrypted tokens (`.enc`) for Gmail, Calendar, and Telegram sessions. |
 | ⚙️ | **ServiceWatchdog Resilience** | Monitors STT Popup, Baileys WhatsApp server, Mobile Bridge (`8090`), Telegram Remote Bot, and the Indexer Dashboard (`8080`). Auto-restarts crashed services with cooldown backoff and skips unauthenticated modules. |
@@ -722,13 +723,11 @@ flowchart TD
     LocalRouter --> FastBrain
 
     Router -->|Simple / Stateless| FastBrain["⚡ FastBrain<br/>Fast LLM - OpenAI compatible"]
-    Router -->|Complex / Stateful| AgenticBrain["🧠 AgenticBrain<br/>Regolo / Gemini / OpenRouter / Custom"]
+    Router -->|Complex / Stateful| AgenticBrain["🧠 AgenticBrain<br/>PrimaryProvider + FallbackProvider"]
 
     AgenticBrain --> Providers["🔌 Provider Abstraction Layer"]
-    Providers --> Regolo["Regolo"]
-    Providers --> Gemini["Gemini"]
-    Providers --> OpenRouter["OpenRouter<br/>Claude / o1 / DeepSeek"]
-    Providers --> Custom["Custom Provider<br/>Any OpenAI compatible endpoint<br/>including Ollama"]
+    Providers --> Primary["PrimaryProvider<br/>Any OpenAI-compatible endpoint"]
+    Providers --> Fallback["FallbackProvider<br/>Any OpenAI-compatible endpoint"]
 
     subgraph Memory["🧠 Memory Ecosystem"]
         LTM[("🗄️ Vector Semantic Graph LTM<br/>Weighted Graph + Subgraph + Decay")]
@@ -1056,7 +1055,7 @@ Facts are stored with weights that decay over time. Recent interests outrank sta
 
 ### Environment Variables (`.env`)
 
-Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM execution (Ollama, LM Studio), configure the Custom Provider block.
+Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM execution (Ollama, LM Studio), point `PRIMARY_BASE_URL` and `FALLBACK_BASE_URL` at your local OpenAI-compatible server (e.g. `http://localhost:11434/v1` for Ollama, `http://localhost:1234/v1` for LM Studio).
 
 | Variable | Purpose | Default |
 |---|---|---|
@@ -1081,9 +1080,15 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | `TTS_API_KEY` | TTS key | Optional (Edge TTS fallback) |
 | `TTS_MODEL` | TTS model | `canopylabs/orpheus-v1-english` |
 | `TTS_ENDPOINT` | TTS endpoint | `https://api.groq.com/openai/v1` |
-| `GEMINI_API_KEY` | Agentic fallback and embeddings | Optional |
-| `REGOLO_API_KEY` | Primary Agentic provider | Required for Regolo |
-| `OPENROUTER_API_KEY` | Fallback Agentic provider | Optional |
+| `PRIMARY_API_KEY` | PrimaryProvider API key | Required |
+| `PRIMARY_BASE_URL` | PrimaryProvider OpenAI-compatible endpoint | `https://api.openai.com/v1` |
+| `PRIMARY_MODEL` | PrimaryProvider model name | `gpt-4o-mini` |
+| `PRIMARY_THINKING_ENABLED` | Enable reasoning tokens on PrimaryProvider | `true` |
+| `FALLBACK_API_KEY` | FallbackProvider API key | Required |
+| `FALLBACK_BASE_URL` | FallbackProvider OpenAI-compatible endpoint | `https://api.openai.com/v1` |
+| `FALLBACK_MODEL` | FallbackProvider model name | `gpt-4o-mini` |
+| `FALLBACK_THINKING_ENABLED` | Enable reasoning tokens on FallbackProvider | `true` |
+| `GEMINI_API_KEY` | Embeddings for RAG engine (local model still primary) | Optional |
 | `TAVILY_API_KEY` | Real-time web search | Required |
 | `DEEPGRAM_API_KEY` | Speech-to-text | Required |
 | `AZURE_SPEECH_KEY` | Azure wake word + TTS (hardcoded in `stt.py` for on-device use) | `fake_key_for_ondevice` |
@@ -1092,9 +1097,6 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | `AZURE_TTS_VOICE` | Azure TTS voice name (used if Azure TTS enabled) | `hi-IN-MadhurNeural` |
 | `TELEGRAM_API_ID` | Telegram desktop client | Optional |
 | `TELEGRAM_API_HASH` | Telegram desktop client | Optional |
-| `CUSTOM_BASE_URL` | Local OpenAI-compatible endpoint | `http://localhost:11434/v1` |
-| `CUSTOM_MODEL` | Local model name | `llama3.2:3b` |
-| `CUSTOM_API_KEY` | Local provider key | `EMPTY_KEY` |
 
 ---
 
@@ -1113,7 +1115,7 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | `jarvis` not recognized globally | Run `python SetupRegistry.py` from the root with the virtual environment active, then open a new terminal |
 | Unwanted authentication popups on boot | Run `jarvis logout --service`. Listeners only start if valid credentials exist. |
 | Mobile SSH times out | Confirm Tailscale is connected on both devices and `sshd` is running in Termux |
-| Ollama provider fails | Ensure `CUSTOM_BASE_URL` ends with `/v1` and follows the OpenAI schema |
+| Primary / Fallback provider fails | Ensure `PRIMARY_BASE_URL` / `FALLBACK_BASE_URL` ends with `/v1` and follows the OpenAI schema. For Ollama → `http://localhost:11434/v1`, LM Studio → `http://localhost:1234/v1`. |
 | Knowledge graph feels stale | Delete `Data/jarvis_memory/lifetime_graph.json` and reboot — nodes, weights, and embeddings rebuild |
 | Hybrid RAG results poor | Open the dashboard at `127.0.0.1:8080` → Folders tab → **Reindex** on the affected folder. For a full rebuild: delete `Data/jarvis_memory/rag_chroma_db` and reboot. |
 | RAG index stuck or files not appearing after embedding-model change | The engine auto-detects embedding-model changes via chunk metadata and purges stale vectors. If you upgraded the model manually, delete `Data/jarvis_memory/rag_chroma_db/` and `Data/jarvis_memory/rag_hashes.json`, then reboot — Jarvis will re-index everything with the new model. |
@@ -1155,7 +1157,7 @@ No. Azure Custom Keyword detection runs fully on-device — the `.table` file is
 No. Both the LTM semantic graph and the RAG knowledge index use the same local `BAAI/bge-small-en-v1.5` model (33M params, ~130 MB). Embeddings are generated on CPU with zero cloud calls, zero quotas, and zero cost. The only API keys you need are for the LLM brains, voice, and communication channels.
 
 **Which LLM models does Jarvis work with?**
-Any OpenAI-compatible endpoint: Regolo, Gemini, OpenRouter, Groq, Ollama, LM Studio, vLLM, or a custom endpoint. The framework is model-agnostic — policy decisions are the model's, execution is the framework's. Swap providers via `.env` without touching code.
+Any OpenAI-compatible endpoint. Configure two providers via `.env` — `PRIMARY_*` and `FALLBACK_*` — and Jarvis auto-routes between them on failure. Works with Groq, Regolo, OpenRouter, Gemini's OpenAI-compatible endpoint, Ollama, LM Studio, vLLM, or any OpenAI-schema API. The framework is model-agnostic — policy decisions are the model's, execution is the framework's. Swap providers via `.env` without touching code.
 
 ---
 

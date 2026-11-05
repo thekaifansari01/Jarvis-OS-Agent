@@ -9,11 +9,7 @@ from core.brain.config import CONFIG
 from core.logger.logger import logger
 from core.brain.executor import execute_single_tool_sync
 from core.ui.agent_status import update_agent_status
-from core.brain.config import (
-    AGENT_PRIMARY_PROVIDER,
-    AGENT_FALLBACK_PROVIDER,
-)
-from core.brain.Providers import get_provider
+from core.brain.Providers import get_primary_provider, get_fallback_provider
 from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
 from core.brain.prompts import build_agentic_system_prompt
 from core.brain.Processor.FastBrain import make_result, clean_json_string
@@ -174,19 +170,17 @@ def update_confirmed_facts(
 def run_agentic_loop(
     raw_command: str, context: str, memory_instance=None, silent: bool = False
 ) -> Dict[str, any]:
-    logger.info(
-        f"🤖 AGENTIC LOOP INITIATED (Provider: {AGENT_PRIMARY_PROVIDER} | Fallback: {AGENT_FALLBACK_PROVIDER})..."
-    )
+    logger.info("🤖 AGENTIC LOOP INITIATED (Primary: PrimaryProvider | Fallback: FallbackProvider)...")
     try:
-        primary_provider = get_provider(AGENT_PRIMARY_PROVIDER)
-        fallback_provider = get_provider(AGENT_FALLBACK_PROVIDER)
+        primary_provider = get_primary_provider()
+        fallback_provider = get_fallback_provider()
         current_provider = primary_provider
-        logger.info(f"✅ Primary provider loaded: {AGENT_PRIMARY_PROVIDER}")
+        logger.info(f"✅ Primary provider loaded: {primary_provider.__class__.__name__}")
     except Exception as e:
         logger.error(f"❌ Failed to initialize primary provider: {e}")
         try:
-            current_provider = get_provider(AGENT_FALLBACK_PROVIDER)
-            logger.info(f"🔄 Using fallback provider: {AGENT_FALLBACK_PROVIDER}")
+            current_provider = get_fallback_provider()
+            logger.info(f"🔄 Using fallback provider: {current_provider.__class__.__name__}")
         except Exception as e2:
             logger.error(f"❌ All providers failed to initialize: {e2}")
             msg = "Bhai, AI provider start nahi ho pa raha. Check API keys."
@@ -424,7 +418,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                             {"role": "user", "content": prompt}
                         ]
 
-                    if any(name in current_provider.__class__.__name__.lower() for name in ["regolo", "openrouter", "custom"]):
+                    if any(name in current_provider.__class__.__name__.lower() for name in ["primary", "fallback"]):
                         thought_text = ""
                         content_text = ""
                         tool_calls = []
@@ -636,7 +630,7 @@ If the <Mission> is fully complete, call 'complete_task'.
                             current_provider = fallback_provider
                             provider_switched = True
                             logger.info(
-                                f"🔄 Switched to fallback provider: {AGENT_FALLBACK_PROVIDER}"
+                                f"🔄 Switched to fallback provider: {current_provider.__class__.__name__}"
                             )
                             continue
                         except Exception as switch_err:

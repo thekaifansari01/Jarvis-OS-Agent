@@ -38,29 +38,20 @@ def _env_float(key: str, default: float) -> float:
 
 
 GEMINI_API_KEY     = _env("GEMINI_API_KEY")
-REGOLO_API_KEY     = _env("REGOLO_API_KEY")
-OPENROUTER_API_KEY = _env("OPENROUTER_API_KEY")
 TOGETHER_API_KEY   = _env("TOGETHER_AI")
 TAVILY_API_KEY     = _env("TAVILY_API_KEY")
 
 
-AGENT_PRIMARY_PROVIDER  = _env("AGENT_PRIMARY_PROVIDER", "regolo").lower()
-AGENT_FALLBACK_PROVIDER = _env("AGENT_FALLBACK_PROVIDER", "gemini").lower()
+PRIMARY_API_KEY          = _env("PRIMARY_API_KEY")
+PRIMARY_BASE_URL         = _env("PRIMARY_BASE_URL", "https://api.openai.com/v1")
+PRIMARY_MODEL            = _env("PRIMARY_MODEL", "gpt-4o-mini")
+PRIMARY_THINKING_ENABLED = _env_bool("PRIMARY_THINKING_ENABLED", True)
 
-REGOLO_BASE_URL         = _env("REGOLO_BASE_URL", "https://api.regolo.ai/v1")
-REGOLO_MODEL            = _env("REGOLO_MODEL", "gpt-oss-120b")
-REGOLO_THINKING_ENABLED = _env_bool("REGOLO_THINKING_ENABLED", True)
+FALLBACK_API_KEY          = _env("FALLBACK_API_KEY")
+FALLBACK_BASE_URL         = _env("FALLBACK_BASE_URL", "https://api.openai.com/v1")
+FALLBACK_MODEL            = _env("FALLBACK_MODEL", "gpt-4o-mini")
+FALLBACK_THINKING_ENABLED = _env_bool("FALLBACK_THINKING_ENABLED", True)
 
-OPENROUTER_BASE_URL         = _env("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-OPENROUTER_MODEL            = _env("OPENROUTER_MODEL", "openai/gpt-oss-120b")
-OPENROUTER_THINKING_ENABLED = _env_bool("OPENROUTER_THINKING_ENABLED", True)
-
-CUSTOM_API_KEY          = _env("CUSTOM_API_KEY", "EMPTY_KEY")
-CUSTOM_BASE_URL         = _env("CUSTOM_BASE_URL", "http://localhost:11434/v1")
-CUSTOM_MODEL            = _env("CUSTOM_MODEL", "qwen2.5:14b")
-CUSTOM_THINKING_ENABLED = _env_bool("CUSTOM_THINKING_ENABLED", False)
-
-GEMINI_AGENT_MODEL     = _env("GEMINI_AGENT_MODEL", "gemini-2.5-flash")
 GEMINI_EMBEDDING_MODEL = _env("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 
 
@@ -143,29 +134,21 @@ def validate_config() -> list:
     if not MEMORY_SUMMARY_API_KEY:
         missing.append("MEMORY_SUMMARY_API_KEY (or LTM_EXTRACTION_API_KEY)")
 
-    provider_keys = {
-        "gemini":     ("GEMINI_API_KEY",     GEMINI_API_KEY),
-        "regolo":     ("REGOLO_API_KEY",     REGOLO_API_KEY),
-        "openrouter": ("OPENROUTER_API_KEY", OPENROUTER_API_KEY),
-    }
-    for name in (AGENT_PRIMARY_PROVIDER, AGENT_FALLBACK_PROVIDER):
-        if name in provider_keys:
-            key_name, key_value = provider_keys[name]
-            if not key_value and key_name not in missing:
-                missing.append(key_name)
+    if not PRIMARY_API_KEY:
+        missing.append("PRIMARY_API_KEY")
+    if not FALLBACK_API_KEY:
+        missing.append("FALLBACK_API_KEY")
 
     return missing
 
 
 __all__ = [
     "PROJECT_ROOT", "DATA_DIR",
-    "GEMINI_API_KEY", "REGOLO_API_KEY", "OPENROUTER_API_KEY",
+    "GEMINI_API_KEY",
     "TOGETHER_API_KEY", "TAVILY_API_KEY",
-    "AGENT_PRIMARY_PROVIDER", "AGENT_FALLBACK_PROVIDER",
-    "REGOLO_BASE_URL", "REGOLO_MODEL", "REGOLO_THINKING_ENABLED",
-    "OPENROUTER_BASE_URL", "OPENROUTER_MODEL", "OPENROUTER_THINKING_ENABLED",
-    "CUSTOM_API_KEY", "CUSTOM_BASE_URL", "CUSTOM_MODEL", "CUSTOM_THINKING_ENABLED",
-    "GEMINI_AGENT_MODEL", "GEMINI_EMBEDDING_MODEL",
+    "PRIMARY_API_KEY", "PRIMARY_BASE_URL", "PRIMARY_MODEL", "PRIMARY_THINKING_ENABLED",
+    "FALLBACK_API_KEY", "FALLBACK_BASE_URL", "FALLBACK_MODEL", "FALLBACK_THINKING_ENABLED",
+    "GEMINI_EMBEDDING_MODEL",
     "FAST_BRAIN_API_KEY", "FAST_BRAIN_MODEL", "FAST_BRAIN_ENDPOINT",
     "ROUTER_API_KEY", "ROUTER_MODEL", "ROUTER_ENDPOINT",
     "IMAGE_GEN_API_KEY", "IMAGE_GEN_MODEL", "IMAGE_GEN_ENDPOINT",

@@ -24,6 +24,7 @@ Data/jarvis_indexer/
 Data/Staging/
 Data/jarvis_memory/
 Data/Jarvis_Workspace/
+Data/tts_quota_state.json
 Data/model/
 Data/MediaVault/
 Data/RAG/
