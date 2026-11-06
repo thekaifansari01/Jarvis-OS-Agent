@@ -586,7 +586,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | Icon | Feature | What It Actually Does |
 |:---:|:---|:---|
 | 🔄 | **Live Mid-Execution Correction** | Agent loop is interruptible. User feedback injected mid-run is absorbed, plan is revised in-place, and completed steps stay intact. No full restart, no hallucination. |
-| 🔌 | **Plug-and-Play MCP Integration** | Dynamically connects external Model Context Protocol (MCP) servers over `stdio` or `HTTP/SSE`. Auto-discovers their tools at startup, converts their JSON schemas into Gemini-native declarations, and merges them into the Agentic Brain's tool list — tools named `mcp__<server>__<tool>` are dispatched transparently through a dedicated async event-loop bridge. Add any of 18,000+ community servers (GitHub, Brave Search, SQLite, Postgres, Notion, Slack, Docker, Puppeteer, and more) via a single JSON entry — no core code changes, no restarts after the first boot. |
+| 🔌 | **Plug-and-Play MCP Integration (Zero-Restart Hot-Reload)** | Dynamically connects external Model Context Protocol (MCP) servers over `stdio`, `SSE`, or `Streamable HTTP`. Features a Claude Code-style CLI (`jarvis mcp add/remove/enable/disable/list/test`), native Windows `npx` resolution (no `cmd /c` wrappers needed), full `$ref`/`$defs` JSON schema dereferencing, and live `mtime` hot-reloading — add, remove, or toggle any of 18,000+ community servers while Jarvis is running with zero restarts. |
 | 💻 | **Autonomous Software Engineering** | Explores codebases (`repo_map`), reads files (`view`), edits with exact block diffs (`replace_block`), runs Python scripts (`run_python_code`), and executes terminal commands. Iterates on failures using a two-strike debug loop. |
 | 🛡️ | **Line-Drift-Free Code Editing** | Uses exact `replace_block` search-and-replace instead of line numbers. Syntax errors are caught via AST lint and auto-corrected without human intervention. |
 | 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-backed property graph with bidirectional edges, confidence scores, and temporal decay. Workspace documents are indexed with smart chunk overlap and retrieved via **Hybrid search (BM25 + Vector + RRF)** with recency boost. |
@@ -941,33 +941,55 @@ When the LLM calls an MCP tool, the executor detects the `mcp__` prefix, forward
 | **HTTP** (streamable) | `url` | Remote hosted MCP servers |
 | **SSE** | `url` + `transport: "sse"` | Legacy server-sent-events servers |
 
-### Configuration (`Data/mcp_servers.json`)
+### One-Liner CLI Setup & Zero-Restart Hot-Reload
 
-MCP is **opt-in by design**. If the file is missing or contains an empty `mcpServers` object, MCP stays completely disabled — Jarvis boots identically to the pre-MCP version with zero overhead. To enable any server, add one entry:
+MCP is **opt-in by design** and supports **live hot-reloading**. You don't even need to edit JSON files manually or restart Jarvis — run `jarvis mcp` commands in a second terminal while Jarvis is running, and `MCPWatcher` will hot-load or unload the server within 2 seconds:
+
+```powershell
+# Add an NPX or Python MCP server (auto-injects -y and resolves npx natively on Windows)
+jarvis mcp add everything npx @modelcontextprotocol/server-everything
+
+# Add a server with environment variables (API keys / tokens)
+jarvis mcp add github npx @modelcontextprotocol/server-github -e GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxxxxxxxxxxx
+
+# Add a remote SSE / Streamable HTTP MCP server
+jarvis mcp add remote_docs https://example.com/mcp/sse
+
+# List all configured servers, test a server's tools, or toggle state live
+jarvis mcp list
+jarvis mcp test everything
+jarvis mcp disable everything
+jarvis mcp enable everything
+jarvis mcp remove everything
+```
+
+**Manual Configuration (`Data/mcp_servers.json`)**
+
+You can also edit `Data/mcp_servers.json` directly (changes are hot-reloaded automatically on save):
 
 ```json
 {
   "mcpServers": {
     "github": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-github"],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxxxxxxxxxxx" },
       "call_timeout": 60
     },
     "sqlite": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-sqlite", "C:/data/mydb.sqlite"]
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "C:/data/mydb.sqlite"]
     },
     "brave_search": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-brave-search"],
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
       "env": { "BRAVE_API_KEY": "BSAxxxxxxxxxx" }
     }
   }
 }
 ```
 
-Save → restart once → done. Startup logs will show:
+Startup or hot-reload logs will show:
 
 ```
 MCP: server 'github' connected (40 tools).
@@ -976,9 +998,9 @@ MCP: server 'brave_search' connected (3 tools).
 MCP: ready with 49 tools from 3 servers.
 ```
 
-### Windows Note — `cmd /c` wrapper
+**Native Windows npx Resolution**
 
-On Windows, `npx` is a `.cmd` shim that breaks stdio pipe propagation when spawned directly. Always wrap Node-based servers with `"command": "cmd", "args": ["/c", "npx", "-y", "..."]`. Python-based servers can be spawned directly via `"command": "python", "args": ["-m", "mcp_server_name"]`.
+Jarvis automatically resolves `npx` / `.cmd` shims on Windows directly to the underlying `node.exe` and `npx-cli.js` binary, injects `-y` for non-interactive package fetching, and inherits your full system environment — no manual `"cmd" /c` wrappers required.
 
 ### Popular Servers Worth Adding
 
@@ -1161,6 +1183,12 @@ Jarvis calls `mcp__github__list_issues` with the appropriate filters, summarizes
 | `jarvis logout --mail` | Revoke Gmail tokens |
 | `jarvis logout --calendar` | Revoke Calendar tokens |
 | `jarvis logout --all` | Revoke everything |
+| `jarvis mcp list` | List all configured MCP servers and their live status (works while Jarvis is ON) |
+| `jarvis mcp add <name> <cmd/url> [args...] [-e K=V]` | Add or update an MCP server with live zero-restart hot-reload |
+| `jarvis mcp remove <name>` | Remove an MCP server and unload its tools immediately |
+| `jarvis mcp enable <name>` | Enable a disabled MCP server live |
+| `jarvis mcp disable <name>` | Temporarily disable an MCP server without deleting its config |
+| `jarvis mcp test <name>` | Test connection to an MCP server and print all discovered tools |
 | `jarvis bot --activate` | Configure and activate the remote Telegram bot (Jarvis must be OFF) |
 | `jarvis bot --deactivate` | Revoke and offline the remote bot (Jarvis must be OFF) |
 | `jarvis bot --status` | Show live bot status |
@@ -1248,10 +1276,10 @@ MCP servers are configured separately in `Data/mcp_servers.json`, **not** in `.e
 | FastBrain key invalid | Verify `FAST_BRAIN_API_KEY`, endpoint, and model in `.env` |
 | Router API keeps timing out | Jarvis auto-falls back to Tier-2 (Fast Brain) then Tier-3 (Local Rule-Based Router). Check network / Regolo status. |
 | Live correction ignored | Make sure Jarvis is running in AgenticBrain mode (semantic router decision = AGENTIC). FastBrain is stateless and does not support mid-run re-planning. |
-| MCP tools not appearing at startup | Check logs for `MCP: ready with N tools`. If missing, confirm `pip install mcp` succeeded and `Data/mcp_servers.json` exists with valid JSON (`{"mcpServers": {...}}`). An empty `{}` disables MCP silently by design. |
-| MCP server logs `Connection closed` on Windows | `npx` is a `.cmd` shim that breaks stdio pipes. Wrap with `"command": "cmd", "args": ["/c", "npx", "-y", "..."]`. If it persists, run `npm install -g <package>` and point `"command": "node"` at the absolute `dist/index.js` path. |
-| MCP server shows `Attempted to exit cancel scope in a different task` | Update the `mcp` Python SDK (`pip install --upgrade "mcp>=2.1"`). The latest SDK correctly isolates the connection's async lifecycle in a single dedicated task. |
-| MCP tool call returns `Server not connected` mid-session | The server crashed. Service Watchdog auto-restarts it within 15–20s. Native tools continue to work throughout. |
+| MCP tools not appearing at startup | Run `jarvis mcp list` and `jarvis mcp test <name>` to verify the server configuration. Confirm `pip install mcp` succeeded and `Data/mcp_servers.json` contains at least one enabled server. |
+| MCP server logs `Connection closed` on Windows | Run `jarvis mcp test <name>` to inspect the captured `stderr` reason. Jarvis natively resolves `npx` on Windows and auto-passes `-y`; if a package fails to download, verify Node.js 18+ is installed and internet is active. |
+| MCP server shows `Attempted to exit cancel scope in a different task` | Handled automatically by Jarvis's `AsyncExitStack` task lifecycle isolation inside `MCPClient.py`. Ensure `pip install --upgrade mcp` is up to date. |
+| MCP tool call returns `Server not connected` mid-session | `MCPClient` automatically attempts an instant reconnect and retries the tool call once before reporting an error. |
 | Node-based MCP server needs Node.js 24+ | The official Anthropic servers (as of Oct 2026) require Node.js v24 or higher. Upgrade via `nodejs.org`. Python-based servers are unaffected. |
 | `mcp_servers.json` JSON parse error | Validate with `python -c "import json; json.load(open('Data/mcp_servers.json'))"`. Common causes: missing outer `{ }` wrapper, trailing commas, or single quotes instead of double quotes. |
 
@@ -1285,7 +1313,7 @@ No. Both the LTM semantic graph and the RAG knowledge index use the same local `
 Any OpenAI-compatible endpoint. Configure two providers via `.env` — `PRIMARY_*` and `FALLBACK_*` — and Jarvis auto-routes between them on failure. Works with Groq, Regolo, OpenRouter, Gemini's OpenAI-compatible endpoint, Ollama, LM Studio, vLLM, or any OpenAI-schema API. The framework is model-agnostic — policy decisions are the model's, execution is the framework's. Swap providers via `.env` without touching code.
 
 **Can I add new capabilities without editing code?**
-Yes — via **MCP (Model Context Protocol)**. Drop a JSON entry into `Data/mcp_servers.json`, restart once, and the server's tools appear in the Agentic Brain automatically — namespaced as `mcp__<server>__<tool>`. Over 18,000 pre-built community servers are available at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io), including GitHub, Brave Search, SQLite, Postgres, Notion, Slack, Docker, Puppeteer, Linear, and dozens more. Zero core code changes required.
+Yes — via **MCP (Model Context Protocol)**. Run `jarvis mcp add <name> <command_or_url> [args...]` in your terminal (or save `Data/mcp_servers.json`), and Jarvis hot-reloads the server live within 2 seconds without even restarting. Its tools appear in the Agentic Brain automatically as `mcp__<server>__<tool>`. Over 18,000 pre-built community servers are available at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io).
 
 **Does MCP require API keys?**
 Only if the specific server needs one. GitHub requires a Personal Access Token, Brave Search requires an API key, Notion requires an integration token — but SQLite, Filesystem, Fetch, Time, and many others run with zero authentication. All keys are supplied via the `env` field inside `Data/mcp_servers.json` — they never touch `.env` or the codebase, keeping secrets scoped to MCP servers only.

@@ -1,5 +1,17 @@
 {
   "mcpServers": {
-
+    "github": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+      },
+      "call_timeout": 120
+    }
   }
 }

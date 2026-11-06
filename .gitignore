@@ -22,6 +22,7 @@ Data/tts_status.json
 Data/jarvis.log
 Data/jarvis_indexer/
 Data/Staging/
+Data/*.json
 Data/jarvis_memory/
 Data/Jarvis_Workspace/
 Data/tts_quota_state.json
@@ -49,3 +50,4 @@ jarvis_cli.egg-info
 Thumbs.db
 
 signatures/
+"Data/mcp_servers.json" 

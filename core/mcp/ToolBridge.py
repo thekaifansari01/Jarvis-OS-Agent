@@ -48,6 +48,19 @@ def clear_tool_routes():
     with _ROUTE_LOCK:
         _TOOL_ROUTE_MAP.clear()
 
+def clear_server_tool_routes(server_name):
+    removed_names = set()
+    with _ROUTE_LOCK:
+        to_delete = [
+            full_name
+            for full_name, (srv, _) in _TOOL_ROUTE_MAP.items()
+            if srv == server_name
+        ]
+        for full_name in to_delete:
+            _TOOL_ROUTE_MAP.pop(full_name, None)
+            removed_names.add(full_name)
+    return removed_names
+
 
 def _deref_schema(node, defs, seen=None):
     if not isinstance(node, dict):

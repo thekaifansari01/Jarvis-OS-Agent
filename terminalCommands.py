@@ -492,6 +492,14 @@ USAGE:
     jarvis                     Start Jarvis AI Voice Assistant
     jarvis --help              Show this help menu
 
+MCP SERVER COMMANDS (Works Live with Zero-Restart Hot-Reload):
+    jarvis mcp list                                      List all MCP servers
+    jarvis mcp add <name> <cmd/url> [args...] [-e K=V]   Add or update an MCP server
+    jarvis mcp remove <name>                             Remove an MCP server
+    jarvis mcp enable <name>                             Enable a disabled MCP server
+    jarvis mcp disable <name>                            Temporarily disable an MCP server
+    jarvis mcp test <name>                               Test connection and list tools
+
 LOGIN COMMANDS (Jarvis must be OFF):
     jarvis login --whatsapp    Login to WhatsApp
     jarvis login --telegram    Login to Telegram
@@ -667,22 +675,289 @@ def _extract_target_services(args_list: list[str]) -> tuple[list[str], list[str]
     return valid_services, unknown_flags
 
 
+def _handle_mcp_command(raw_args: list[str]) -> None:
+    from core.mcp.MCPManager import MCPManager
+
+    mcp_idx = -1
+    for i, token in enumerate(raw_args):
+        if token.lower() == "mcp":
+            mcp_idx = i
+            break
+
+    tokens = raw_args[mcp_idx + 1 :] if mcp_idx >= 0 else []
+    action = tokens[0].lower().lstrip("-") if tokens else "list"
+    rest = tokens[1:] if len(tokens) > 1 else []
+
+    if action in ("list", "ls", "status"):
+        try:
+            data = MCPManager.load_raw_config()
+        except Exception as e:
+            logger.error(f"MCP config error: {e}")
+            return
+
+        servers = data.get("mcpServers", {})
+        if not servers:
+            logger.info("No MCP servers configured in Data/mcp_servers.json.")
+            logger.info("Add one using: jarvis mcp add <name> <command_or_url> [args...]")
+            return
+
+        print("\n" + "=" * 78)
+        print(f" {'SERVER NAME':<20} │ {'STATUS':<10} │ {'TYPE':<7} │ {'TARGET / COMMAND'}")
+        print("=" * 78)
+        for name, cfg in servers.items():
+            if not isinstance(cfg, dict):
+                continue
+            is_disabled = cfg.get("disabled") is True or cfg.get("enabled") is False
+            status_str = "DISABLED" if is_disabled else "ENABLED"
+            if cfg.get("url"):
+                srv_type = "URL"
+                target = str(cfg.get("url"))
+            else:
+                srv_type = "STDIO"
+                cmd = str(cfg.get("command", ""))
+                args_list = [str(x) for x in (cfg.get("args") or [])]
+                target = f"{cmd} {' '.join(args_list)}".strip()
+            env_count = len(cfg.get("env") or {}) if isinstance(cfg.get("env"), dict) else 0
+            if env_count > 0:
+                target = f"{target} [+{env_count} env]"
+            print(f" {name:<20} │ {status_str:<10} │ {srv_type:<7} │ {target}")
+        print("=" * 78 + "\n")
+        return
+
+    if action == "add":
+        if len(rest) < 2:
+            logger.warning(
+                "Usage: jarvis mcp add <name> <command_or_url> [args...] [-e KEY=VALUE]"
+            )
+            logger.info(
+                "Example: jarvis mcp add everything npx @modelcontextprotocol/server-everything"
+            )
+            return
+
+        server_name = rest[0].strip()
+        raw_tail = rest[1:]
+
+        env_vars = {}
+        headers = {}
+        cwd_val = None
+        timeout_val = None
+        cmd_tokens = []
+        after_double_dash = False
+
+        idx = 0
+        while idx < len(raw_tail):
+            tok = raw_tail[idx]
+            if tok == "--" and not after_double_dash:
+                after_double_dash = True
+                idx += 1
+                continue
+
+            if not after_double_dash:
+                if tok in ("-e", "--env") and idx + 1 < len(raw_tail):
+                    pair = raw_tail[idx + 1]
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        if k.strip():
+                            env_vars[k.strip()] = v.strip()
+                    idx += 2
+                    continue
+                if tok.startswith("--env="):
+                    pair = tok[len("--env=") :]
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        if k.strip():
+                            env_vars[k.strip()] = v.strip()
+                    idx += 1
+                    continue
+                if tok in ("-H", "--header") and idx + 1 < len(raw_tail):
+                    pair = raw_tail[idx + 1]
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        if k.strip():
+                            headers[k.strip()] = v.strip()
+                    elif ":" in pair:
+                        k, v = pair.split(":", 1)
+                        if k.strip():
+                            headers[k.strip()] = v.strip()
+                    idx += 2
+                    continue
+                if tok == "--cwd" and idx + 1 < len(raw_tail):
+                    cwd_val = raw_tail[idx + 1].strip()
+                    idx += 2
+                    continue
+                if tok == "--timeout" and idx + 1 < len(raw_tail):
+                    try:
+                        timeout_val = int(raw_tail[idx + 1])
+                    except ValueError:
+                        pass
+                    idx += 2
+                    continue
+
+            cmd_tokens.append(tok)
+            idx += 1
+
+        if not cmd_tokens:
+            logger.error("Missing command or URL for MCP server.")
+            return
+
+        first_target = cmd_tokens[0].strip()
+        entry = {}
+
+        if first_target.startswith("http://") or first_target.startswith("https://"):
+            entry["url"] = first_target
+            if headers:
+                entry["headers"] = headers
+        else:
+            entry["command"] = first_target
+            entry["args"] = cmd_tokens[1:]
+            if env_vars:
+                entry["env"] = env_vars
+            if cwd_val:
+                entry["cwd"] = cwd_val
+
+        if timeout_val is not None:
+            entry["timeout"] = timeout_val
+
+        try:
+            data = MCPManager.load_raw_config()
+            existed = server_name in data["mcpServers"]
+            data["mcpServers"][server_name] = entry
+            MCPManager.save_raw_config(data)
+            verb = "Updated" if existed else "Added"
+            logger.info(f"MCP: {verb} server '{server_name}' in Data/mcp_servers.json.")
+            if is_jarvis_running():
+                logger.info("Jarvis is running — hot-reloading server automatically in the background.")
+        except Exception as e:
+            logger.error(f"Failed to save MCP server '{server_name}': {e}")
+        return
+
+    if action in ("remove", "rm", "delete", "del", "uninstall"):
+        if not rest:
+            logger.warning("Usage: jarvis mcp remove <name>")
+            return
+        server_name = rest[0].strip()
+        try:
+            data = MCPManager.load_raw_config()
+            if server_name not in data["mcpServers"]:
+                logger.warning(f"MCP server '{server_name}' not found.")
+                return
+            del data["mcpServers"][server_name]
+            MCPManager.save_raw_config(data)
+            logger.info(f"MCP: Removed server '{server_name}'.")
+            if is_jarvis_running():
+                logger.info("Jarvis is running — unloading server automatically in the background.")
+        except Exception as e:
+            logger.error(f"Failed to remove MCP server '{server_name}': {e}")
+        return
+
+    if action in ("enable", "disable"):
+        if not rest:
+            logger.warning(f"Usage: jarvis mcp {action} <name>")
+            return
+        server_name = rest[0].strip()
+        disable_flag = action == "disable"
+        try:
+            data = MCPManager.load_raw_config()
+            if server_name not in data["mcpServers"]:
+                logger.warning(f"MCP server '{server_name}' not found.")
+                return
+            srv_cfg = data["mcpServers"][server_name]
+            if not isinstance(srv_cfg, dict):
+                srv_cfg = {}
+            srv_cfg.pop("enabled", None)
+            if disable_flag:
+                srv_cfg["disabled"] = True
+            else:
+                srv_cfg.pop("disabled", None)
+            data["mcpServers"][server_name] = srv_cfg
+            MCPManager.save_raw_config(data)
+            state_label = "disabled" if disable_flag else "enabled"
+            logger.info(f"MCP: Server '{server_name}' is now {state_label}.")
+            if is_jarvis_running():
+                logger.info("Jarvis is running — syncing server state automatically in the background.")
+        except Exception as e:
+            logger.error(f"Failed to update MCP server '{server_name}': {e}")
+        return
+
+    if action == "test":
+        if not rest:
+            logger.warning("Usage: jarvis mcp test <name>")
+            return
+        server_name = rest[0].strip()
+        try:
+            data = MCPManager.load_raw_config()
+        except Exception as e:
+            logger.error(f"MCP config error: {e}")
+            return
+
+        srv_cfg = data.get("mcpServers", {}).get(server_name)
+        if not isinstance(srv_cfg, dict):
+            logger.error(f"MCP server '{server_name}' not found in Data/mcp_servers.json.")
+            return
+
+        logger.info(f"Testing connection to MCP server '{server_name}'...")
+        from core.mcp.AsyncBridge import AsyncBridge
+        from core.mcp.MCPClient import MCPClient
+
+        bridge = AsyncBridge()
+        client = None
+        start_ts = time.perf_counter()
+        try:
+            bridge.start()
+            client = MCPClient(server_name, srv_cfg, bridge)
+            client.connect()
+            elapsed = time.perf_counter() - start_ts
+            tools = client.tools or []
+            logger.info(
+                f"SUCCESS: Server '{server_name}' connected in {elapsed:.2f}s ({len(tools)} tools discovered)."
+            )
+            for idx, t in enumerate(tools, 1):
+                t_name = getattr(t, "name", "?")
+                t_desc = (getattr(t, "description", "") or "").replace("\n", " ").strip()[:80]
+                print(f"  {idx:>2}. {t_name:<32} - {t_desc}")
+        except Exception as e:
+            logger.error(f"FAILED: Could not connect to '{server_name}': {e}")
+        finally:
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            try:
+                bridge.stop()
+            except Exception:
+                pass
+        return
+
+    logger.warning(
+        "Usage: jarvis mcp [list | add | remove | enable | disable | test]"
+    )
+
+
 def handle_cli_commands() -> bool:
-    args = [arg.strip().lower() for arg in sys.argv[1:] if arg.strip()]
+    raw_args = [arg.strip() for arg in sys.argv[1:] if arg.strip()]
+    args = [arg.lower() for arg in raw_args]
     if not args:
         return False
 
     dev_flags = {"test_jarvis", "no_wake"}
-    non_dev_args = [a for a in args if a not in dev_flags and not a.startswith("voice=")]
+    non_dev_raw = [
+        a for a in raw_args if a.lower() not in dev_flags and not a.lower().startswith("voice=")
+    ]
+    non_dev_args = [a.lower() for a in non_dev_raw]
 
     if not non_dev_args:
         return False
+
+    if non_dev_args[0] == "mcp":
+        _handle_mcp_command(non_dev_raw)
+        return True
 
     if any(h in non_dev_args for h in ("help", "--help", "-h")):
         show_help_menu()
         return True
 
-    subcommands = {"login", "logout", "memory", "reset", "bot"}
+    subcommands = {"login", "logout", "memory", "reset", "bot", "mcp"}
     matched_subcommands = [cmd for cmd in non_dev_args if cmd in subcommands]
 
     if not matched_subcommands:
@@ -714,6 +989,10 @@ def handle_cli_commands() -> bool:
 
     if primary_cmd == "bot":
         _handle_bot_command(non_dev_args)
+        return True
+
+    if primary_cmd == "mcp":
+        _handle_mcp_command(non_dev_raw)
         return True
 
     if is_jarvis_running():
