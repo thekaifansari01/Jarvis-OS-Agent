@@ -2,7 +2,7 @@
 
 > **An AI Operating System that autonomously controls your PC, Android phone, local files, and lifelong memory — not just your code.**
 
-> **Open-Source · Semantic Behavioral Pattern Engine · Live Mid-Execution Correction · Inline Comms Preview & Edit · Line-Drift-Free Editing · Lifelong Episodic Memory · Dual-Engine Voice · Proactive HITL · Android Termux Bridge · Telegram Remote Control · Hybrid RAG · PC System Monitoring**
+> **Open-Source · Semantic Behavioral Pattern Engine · Live Mid-Execution Correction · Inline Comms Preview & Edit · Line-Drift-Free Editing · Lifelong Episodic Memory · Dual-Engine Voice · Proactive HITL · Android Termux Bridge · Telegram Remote Control · Hybrid RAG · PC System Monitoring · Plug-and-Play MCP Support**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -12,6 +12,7 @@
 [![Multi-Provider](https://img.shields.io/badge/Providers-Primary%20%7C%20Fallback-FF6F00?style=for-the-badge)](https://github.com/thekaifansari01/Jarvis-OS-Agent)
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/thekaifansari01/badge.svg)](https://hub.xerj.org/contributors/thekaifansari01)
 [![Local Models](https://img.shields.io/badge/Local-Ollama%20%7C%20LM%20Studio-FF6B35?style=for-the-badge)](https://ollama.com)
+[![MCP Protocol](https://img.shields.io/badge/MCP-Protocol%20Support-8A2BE2?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Voice Control](https://img.shields.io/badge/Voice-Deepgram%20Nova--2-00BFFF?style=for-the-badge&logo=deepgram&logoColor=white)](https://deepgram.com)
 [![Wake Word](https://img.shields.io/badge/Wake%20Word-Azure%20%7C%20Vosk-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white)](https://speech.microsoft.com)
 [![Android SSH](https://img.shields.io/badge/Android-Termux%20SSH-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://termux.dev/)
@@ -43,6 +44,7 @@
 - [Lifelong Episodic Memory & Hybrid RAG](#-lifelong-episodic-memory--hybrid-rag)
 - [Android Mobile Control](#-android-mobile-control-via-termux--websocket-bridge)
 - [Integrated Tool Ecosystem](#️-integrated-tool-ecosystem)
+- [MCP Integration (Model Context Protocol)](#-mcp-integration-model-context-protocol)
 - [PC System Monitoring & Proactive Alerts](#-pc-system-monitoring--proactive-alerts)
 - [Installation](#-installation)
 - [Real-World Use Cases](#-real-world-use-cases)
@@ -584,6 +586,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | Icon | Feature | What It Actually Does |
 |:---:|:---|:---|
 | 🔄 | **Live Mid-Execution Correction** | Agent loop is interruptible. User feedback injected mid-run is absorbed, plan is revised in-place, and completed steps stay intact. No full restart, no hallucination. |
+| 🔌 | **Plug-and-Play MCP Integration** | Dynamically connects external Model Context Protocol (MCP) servers over `stdio` or `HTTP/SSE`. Auto-discovers their tools at startup, converts their JSON schemas into Gemini-native declarations, and merges them into the Agentic Brain's tool list — tools named `mcp__<server>__<tool>` are dispatched transparently through a dedicated async event-loop bridge. Add any of 18,000+ community servers (GitHub, Brave Search, SQLite, Postgres, Notion, Slack, Docker, Puppeteer, and more) via a single JSON entry — no core code changes, no restarts after the first boot. |
 | 💻 | **Autonomous Software Engineering** | Explores codebases (`repo_map`), reads files (`view`), edits with exact block diffs (`replace_block`), runs Python scripts (`run_python_code`), and executes terminal commands. Iterates on failures using a two-strike debug loop. |
 | 🛡️ | **Line-Drift-Free Code Editing** | Uses exact `replace_block` search-and-replace instead of line numbers. Syntax errors are caught via AST lint and auto-corrected without human intervention. |
 | 🧠 | **Lifelong Episodic LTM & Hybrid RAG** | Vector-backed property graph with bidirectional edges, confidence scores, and temporal decay. Workspace documents are indexed with smart chunk overlap and retrieved via **Hybrid search (BM25 + Vector + RRF)** with recency boost. |
@@ -602,7 +605,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | 🔌 | **Multi-LLM Auto-Failover** | Two fully generic OpenAI-compatible endpoints — `PrimaryProvider` and `FallbackProvider` — both configurable via `.env` (works with Groq, Regolo, OpenRouter, Gemini's OpenAI-compatible endpoint, Ollama, LM Studio, vLLM, or any OpenAI-schema API). Primary failure auto-routes to fallback. Model-agnostic — the same loop drives any OpenAI-compatible provider. |
 | 🎨 | **Reactive UI & Inline Comms Approval** | Bi-directional ZMQ-powered PyQt5 Agent Panel streaming live thoughts, actions, and observations, featuring an expandable glassmorphic preview card to inspect, edit inline, approve, or cancel outgoing Gmail, WhatsApp, and Telegram messages with ground-truth memory sync and loop-timeout pause. Markdown typing popup with async image preview. |
 | 🔒 | **Command-Level Security Guardrails** | `shlex` tokenization blocks destructive terminal commands. Local AES-encrypted tokens (`.enc`) for Gmail, Calendar, and Telegram sessions. |
-| ⚙️ | **ServiceWatchdog Resilience** | Monitors STT Popup, Baileys WhatsApp server, Mobile Bridge (`8090`), Telegram Remote Bot, and the Indexer Dashboard (`8080`). Auto-restarts crashed services with cooldown backoff and skips unauthenticated modules. |
+| ⚙️ | **ServiceWatchdog Resilience** | Monitors STT Popup, Baileys WhatsApp server, Mobile Bridge (`8090`), Telegram Remote Bot, the Indexer Dashboard (`8080`), and the MCP Manager. Auto-restarts crashed services with cooldown backoff and skips unauthenticated modules. |
 | 🪶 | **Runs on 4GB RAM** | Verified on an Intel i5-3210M (2012) with 4 GB RAM. Cloud LLM APIs + ONNX-based RapidOCR + `bge-small` embeddings keep the footprint tiny. |
 
 ---
@@ -626,6 +629,8 @@ Numbers from typical Windows 11 runs on a **4 GB RAM / Intel i5-3210M (2012)** m
 | RAG dashboard cold-start | ~3 s after main Jarvis boot |
 | Documents folder full index (1 file) | ~25 s (10 chunks) |
 | Documents folder incremental scan | ~2 s (hash check only) |
+| MCP server connect (single, cold `npx`) | ~5–15 s first run, <1 s cached |
+| MCP tool call (stdio) | ~50–100 ms overhead |
 | Peak RAM footprint | Under 4 GB (shared with Windows 11) |
 
 *Your mileage will vary based on provider latency, model choice, and machine specifications.*
@@ -646,7 +651,7 @@ There are no cloud VMs, no beefy workstations, no 32 GB rigs behind this project
 - **`BAAI/bge-small-en-v1.5`** — 33M param embedding model instead of 300M+ alternatives
 - **RapidOCR (ONNX)** — no PyTorch dependency for GUI grounding
 - **UIA-first detection** — OCR only fires when native accessibility APIs return too few elements
-- **Lazy service boot** — WhatsApp, Telegram, mobile bridges, and the indexer skip startup entirely if not authenticated or not needed
+- **Lazy service boot** — WhatsApp, Telegram, mobile bridges, MCP servers, and the indexer skip startup entirely if not authenticated or not configured
 
 > If you have a modern machine, Jarvis will fly. If you have an old one, Jarvis will still run.
 
@@ -695,6 +700,7 @@ A fair look at where Jarvis fits alongside popular alternatives:
 | Line-drift-free edits | ✅ Exact block diffs | ⚠️ Line-number based | ❌ Not focused on editing |
 | Lifelong memory | ✅ Weighted property graph | ❌ Session-only | ⚠️ Limited |
 | Native real-world tools (email, WhatsApp, calendar) | ✅ | ❌ | ⚠️ Via plugins |
+| Plug-and-play MCP support | ✅ Any MCP-compliant server | ⚠️ Limited | ❌ |
 | Voice-first interaction | ✅ Deepgram STT + Azure/Vosk dual wake word | ❌ | ❌ |
 | On-device wake word (no cloud round-trip) | ✅ Azure Custom Keyword + Vosk fallback | ❌ | ❌ |
 | Multi-tier router fallback | ✅ 3-tier with local fallback | ❌ | ❌ |
@@ -755,7 +761,18 @@ flowchart TD
         PC["💻 PC Monitor / System Health"]
     end
 
+    subgraph MCPLayer["🔌 MCP External Tool Layer"]
+        MCPManager["MCP Manager<br/>Config + Lifecycle + Watchdog"]
+        MCPBridge["Async Bridge<br/>Dedicated Event Loop"]
+        MCPClients["MCP Clients<br/>stdio / HTTP / SSE"]
+        MCPServers["External Servers<br/>GitHub · Brave · SQLite · Notion · Docker · ..."]
+        MCPManager --> MCPBridge
+        MCPBridge --> MCPClients
+        MCPClients --> MCPServers
+    end
+
     AgenticBrain --> Tools
+    AgenticBrain -.->|Auto-Discovered MCP Tools| MCPLayer
     FastBrain --> System
     FastBrain --> Search
 
@@ -812,6 +829,7 @@ Jarvis uses two brains to optimize for both speed and depth.
 | **Code Execution** | ❌ | ✅ `run_python_code`, `execute_terminal_command` |
 | **Memory Recall** | Rolling 10-turn history + `<System_Execution_Log>` + Ephemeral TTL artifacts + top-1 behavioral pattern | Full 15-day history + Lifetime vector-graph recall + Hybrid RAG + Ephemeral state + top-3 behavioral patterns |
 | **Live Mid-Execution Correction** | ❌ | ✅ Interruptible loop re-plans per step |
+| **MCP Tool Access** | ❌ | ✅ Auto-discovered `mcp__*` tools merged into the tool list |
 | **Wake Word Engine** | ✅ Azure Custom Keyword (on-device) with Vosk fallback | ✅ Same wake engine, plus multimodal vision |
 | **Multimodal Vision** | ❌ | ✅ Image and video analysis, OCR |
 | **Web Research** | Quick web search | Deep research, ArXiv, YouTube transcripts |
@@ -895,6 +913,92 @@ Control your Android phone natively from Windows using a persistent Async WebSoc
 | 💻 **PC Monitoring** | CPU / RAM / disk / battery / network / USB |
 | 👁️ **Multimodal Vision** | Screen and video analysis, object detection, OCR |
 | 🎨 **Image Generation** | Text-to-image, image-to-image editing |
+| 🔌 **MCP External Tools** | 18,000+ community servers — GitHub, Brave, SQLite, Postgres, Notion, Slack, Docker, Puppeteer, and more |
+
+---
+
+## 🔌 MCP Integration (Model Context Protocol)
+
+Jarvis supports the **Model Context Protocol (MCP)** — Anthropic's open standard for connecting AI applications to external tools, data sources, and services. Think of it as **"USB-C for AI tools"**: once the protocol is understood, any compliant server plugs in and works.
+
+### What It Enables
+
+Instead of hardcoding every tool inside `executor.py`, MCP lets Jarvis **discover tools at runtime** from external processes. When `Data/mcp_servers.json` contains a valid configuration, Jarvis:
+
+1. Spawns each configured MCP server (Node.js, Python, Go, Rust — language-agnostic)
+2. Performs a JSON-RPC handshake (`initialize` → `tools/list`)
+3. Converts every discovered tool's JSON schema into a native Gemini `FunctionDeclaration`
+4. Namespaces them as `mcp__<server>__<tool>` (guaranteed collision-free vs. native tools)
+5. Merges them into the Agentic Brain's tool list — the LLM sees no difference between a native `system_controller` and an MCP `mcp__github__list_repos`
+
+When the LLM calls an MCP tool, the executor detects the `mcp__` prefix, forwards the arguments to `MCPManager`, which routes them through a dedicated async event-loop bridge (`AsyncBridge`) to the correct server and returns the formatted result as an `Observation`.
+
+### Supported Transports
+
+| Transport | Config Key | Use Case |
+|---|---|---|
+| **stdio** | `command` + `args` | Local subprocess servers (GitHub, SQLite, Filesystem, Fetch, etc.) |
+| **HTTP** (streamable) | `url` | Remote hosted MCP servers |
+| **SSE** | `url` + `transport: "sse"` | Legacy server-sent-events servers |
+
+### Configuration (`Data/mcp_servers.json`)
+
+MCP is **opt-in by design**. If the file is missing or contains an empty `mcpServers` object, MCP stays completely disabled — Jarvis boots identically to the pre-MCP version with zero overhead. To enable any server, add one entry:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxxxxxxxxxxx" },
+      "call_timeout": 60
+    },
+    "sqlite": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-sqlite", "C:/data/mydb.sqlite"]
+    },
+    "brave_search": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-brave-search"],
+      "env": { "BRAVE_API_KEY": "BSAxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+Save → restart once → done. Startup logs will show:
+
+```
+MCP: server 'github' connected (40 tools).
+MCP: server 'sqlite' connected (6 tools).
+MCP: server 'brave_search' connected (3 tools).
+MCP: ready with 49 tools from 3 servers.
+```
+
+### Windows Note — `cmd /c` wrapper
+
+On Windows, `npx` is a `.cmd` shim that breaks stdio pipe propagation when spawned directly. Always wrap Node-based servers with `"command": "cmd", "args": ["/c", "npx", "-y", "..."]`. Python-based servers can be spawned directly via `"command": "python", "args": ["-m", "mcp_server_name"]`.
+
+### Popular Servers Worth Adding
+
+| Server | Capability | API Key |
+|---|---|---|
+| **GitHub** | Repos, issues, PRs, commits, code search, notifications | Personal Access Token |
+| **Brave Search** | Web, news, and local search | Free tier (2,000 queries/mo) |
+| **SQLite / Postgres** | Natural-language database queries | None |
+| **Notion / Slack / Linear** | Workspace ops from voice | Integration tokens |
+| **Docker** | Container lifecycle management | None |
+| **Fetch** | URL fetch + readability extraction | None |
+
+> 💡 **Skip redundant servers.** Filesystem MCP overlaps with the native `file_operations` tool; Memory MCP overlaps with the three-layer `LifetimeMemory` + `BehavioralEngine` + `ContextMemory` stack; Puppeteer/Playwright overlaps with `gui_controller`. Only add MCP servers that introduce **net-new capabilities**.
+
+### Resilience Model
+
+- **Failure isolation** — if an MCP server crashes, only its tools return `[ERROR] [MCP:server]` observations. The rest of Jarvis is unaffected.
+- **Watchdog recovery** — the `ServiceWatchdog` monitors the MCP Manager and auto-restarts disconnected servers after a 15-second cooldown.
+- **Graceful startup** — server connections run in parallel background threads, so Jarvis's banner, hotkeys, and native tools remain instantly responsive even while MCP servers are still handshaking.
+- **Safe rollback** — deleting `Data/mcp_servers.json` or resetting it to `{ "mcpServers": {} }` reverts Jarvis to its pre-MCP state on next boot. Zero code changes needed.
 
 ---
 
@@ -944,7 +1048,8 @@ Jarvis speaks or asks for consent
 
 - **Windows 10 or 11** (primary supported OS)
 - **Python 3.10+**
-- **Node.js 18+** (for the WhatsApp Baileys bridge)
+- **Node.js 18+** (Node.js 24+ recommended for latest MCP servers)
+- **npm** (bundled with Node.js)
 
 ### One-Block Setup
 
@@ -956,6 +1061,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+pip install mcp
 
 cd tools/Messanger/whatsapp/BaileysServer
 npm install
@@ -965,6 +1071,10 @@ python SetupRegistry.py
 ```
 
 > ⚠️ **Important:** Run `python SetupRegistry.py` from the root `Jarvis-OS-Agent/` directory with the virtual environment activated.
+
+### Enabling MCP (Optional)
+
+Create `Data/mcp_servers.json` with any MCP servers you want. If the file is missing or contains `{ "mcpServers": {} }`, MCP stays disabled and Jarvis boots normally. See the [MCP Integration](#-mcp-integration-model-context-protocol) section for configuration details.
 
 ### Knowledge Indexer Dashboard
 
@@ -1027,6 +1137,11 @@ Facts are stored with weights that decay over time. Recent interests outrank sta
 
 ### 💻 Proactive System Health
 > CPU hits 92% with Chrome as the top process. Scout evaluates the context, sees the user is not idle, and asks: *"CPU at 92% — the top process is Chrome. Want me to close unused tabs?"*
+
+### 🔌 External Service Integration via MCP
+> *"Bhai, mere GitHub ke open issues dikhao aur jo aaj assign hue hain unka summary banao."*
+
+Jarvis calls `mcp__github__list_issues` with the appropriate filters, summarizes the results, and speaks them back — no code changes, no custom tool needed. Adding support for any new service is a one-line JSON entry in `Data/mcp_servers.json`.
 
 ---
 
@@ -1098,6 +1213,10 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | `TELEGRAM_API_ID` | Telegram desktop client | Optional |
 | `TELEGRAM_API_HASH` | Telegram desktop client | Optional |
 
+### MCP Configuration (`Data/mcp_servers.json`)
+
+MCP servers are configured separately in `Data/mcp_servers.json`, **not** in `.env`. This keeps API keys scoped strictly to the MCP layer. See the [MCP Integration](#-mcp-integration-model-context-protocol) section for the full schema and examples.
+
 ---
 
 ## 🔧 Troubleshooting & FAQ
@@ -1129,6 +1248,12 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | FastBrain key invalid | Verify `FAST_BRAIN_API_KEY`, endpoint, and model in `.env` |
 | Router API keeps timing out | Jarvis auto-falls back to Tier-2 (Fast Brain) then Tier-3 (Local Rule-Based Router). Check network / Regolo status. |
 | Live correction ignored | Make sure Jarvis is running in AgenticBrain mode (semantic router decision = AGENTIC). FastBrain is stateless and does not support mid-run re-planning. |
+| MCP tools not appearing at startup | Check logs for `MCP: ready with N tools`. If missing, confirm `pip install mcp` succeeded and `Data/mcp_servers.json` exists with valid JSON (`{"mcpServers": {...}}`). An empty `{}` disables MCP silently by design. |
+| MCP server logs `Connection closed` on Windows | `npx` is a `.cmd` shim that breaks stdio pipes. Wrap with `"command": "cmd", "args": ["/c", "npx", "-y", "..."]`. If it persists, run `npm install -g <package>` and point `"command": "node"` at the absolute `dist/index.js` path. |
+| MCP server shows `Attempted to exit cancel scope in a different task` | Update the `mcp` Python SDK (`pip install --upgrade "mcp>=2.1"`). The latest SDK correctly isolates the connection's async lifecycle in a single dedicated task. |
+| MCP tool call returns `Server not connected` mid-session | The server crashed. Service Watchdog auto-restarts it within 15–20s. Native tools continue to work throughout. |
+| Node-based MCP server needs Node.js 24+ | The official Anthropic servers (as of Oct 2026) require Node.js v24 or higher. Upgrade via `nodejs.org`. Python-based servers are unaffected. |
+| `mcp_servers.json` JSON parse error | Validate with `python -c "import json; json.load(open('Data/mcp_servers.json'))"`. Common causes: missing outer `{ }` wrapper, trailing commas, or single quotes instead of double quotes. |
 
 ### FAQ
 
@@ -1158,6 +1283,15 @@ No. Both the LTM semantic graph and the RAG knowledge index use the same local `
 
 **Which LLM models does Jarvis work with?**
 Any OpenAI-compatible endpoint. Configure two providers via `.env` — `PRIMARY_*` and `FALLBACK_*` — and Jarvis auto-routes between them on failure. Works with Groq, Regolo, OpenRouter, Gemini's OpenAI-compatible endpoint, Ollama, LM Studio, vLLM, or any OpenAI-schema API. The framework is model-agnostic — policy decisions are the model's, execution is the framework's. Swap providers via `.env` without touching code.
+
+**Can I add new capabilities without editing code?**
+Yes — via **MCP (Model Context Protocol)**. Drop a JSON entry into `Data/mcp_servers.json`, restart once, and the server's tools appear in the Agentic Brain automatically — namespaced as `mcp__<server>__<tool>`. Over 18,000 pre-built community servers are available at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io), including GitHub, Brave Search, SQLite, Postgres, Notion, Slack, Docker, Puppeteer, Linear, and dozens more. Zero core code changes required.
+
+**Does MCP require API keys?**
+Only if the specific server needs one. GitHub requires a Personal Access Token, Brave Search requires an API key, Notion requires an integration token — but SQLite, Filesystem, Fetch, Time, and many others run with zero authentication. All keys are supplied via the `env` field inside `Data/mcp_servers.json` — they never touch `.env` or the codebase, keeping secrets scoped to MCP servers only.
+
+**Is MCP enabled by default?**
+No. MCP is strictly **opt-in** to preserve stability. If `Data/mcp_servers.json` is missing or contains an empty `mcpServers` object, Jarvis boots identically to the pre-MCP version with zero overhead, zero startup delay, and no MCP log lines. You enable it explicitly by adding your first server entry.
 
 ---
 

@@ -164,6 +164,14 @@ class GenericSemanticRouter:
             "If the user command requires a tool that depends on OAuth or API keys (email, calendar, telegram, whatsapp, Tavily-based search, image generation), STILL route to AGENTIC regardless of whether the service is currently connected. The Agentic Brain will surface any missing-auth message directly to the user."
         )
 
+        try:
+            from core.mcp.MCPManager import mcp_manager
+            mcp_hint = mcp_manager.get_router_hint()
+            if mcp_hint:
+                system_prompt += f"\n\n### LIVE MCP SERVERS\n{mcp_hint}"
+        except Exception:
+            pass
+
         user_content = f"[RECENT CONVERSATION HISTORY]\n{trimmed_history}\n\n[USER COMMAND]\n\"{command}\""
 
         payload = {
@@ -274,6 +282,13 @@ def infer_local_domain(command: str) -> str:
 
 def get_local_fallback_route(command: str) -> str:
     cmd_lower = command.lower().strip()
+
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        if mcp_manager.matches_command(cmd_lower):
+            return "AGENTIC"
+    except Exception:
+        pass
 
     sensitive_patterns = [
         r'\b(api\s*key|api_key|apikey)\b',

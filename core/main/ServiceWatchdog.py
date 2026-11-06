@@ -9,6 +9,7 @@ from core.main.BackgroundServices import (
     start_telegram_remote_service,
     start_indexer_dashboard,
     start_mobile_bridge,
+    start_mcp_service,
     is_baileys_running,
     is_stt_popup_running,
     is_telegram_remote_service_running,
@@ -16,7 +17,10 @@ from core.main.BackgroundServices import (
     is_mobile_bridge_running,
     is_rag_engine_init_started,
     is_telegram_remote_init_started,
-    is_stt_mic_available
+    is_stt_mic_available,
+    is_mcp_running,
+    is_mcp_ready,
+    is_mcp_enabled
 )
 
 class ServiceWatchdog:
@@ -73,6 +77,15 @@ class ServiceWatchdog:
                 "next_retry_time": 0,
                 "has_creds": lambda: True,
                 "ready_check": is_rag_engine_init_started
+            },
+            "mcp_manager": {
+                "is_running_check": is_mcp_running,
+                "start_func": start_mcp_service,
+                "retries": 0,
+                "last_restart": 0,
+                "next_retry_time": 0,
+                "has_creds": is_mcp_enabled,
+                "ready_check": is_mcp_ready
             }
         }
 

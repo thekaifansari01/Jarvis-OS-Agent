@@ -80,8 +80,8 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
   </intelligence_core_workflow>
 
   <tool_selection_hierarchy>
-    <rule level="1" type="native_tools">
-      <directive>Always prioritize built-in specialized tools ('whatsapp_action', 'email_action', 'telegram_action', 'search_actions', 'calendar_action', 'memory_actions', 'system_controller', 'gui_controller', 'mobile_action', 'file_transfer_action', 'image_command', 'clipboard_action', 'deep_research') for their designated domains.</directive>
+    <rule level="1" type="native_and_mcp_tools">
+      <directive>Always prioritize built-in specialized tools ('whatsapp_action', 'email_action', 'telegram_action', 'search_actions', 'calendar_action', 'memory_actions', 'system_controller', 'gui_controller', 'mobile_action', 'file_transfer_action', 'image_command', 'clipboard_action', 'deep_research') AND any dynamically connected MCP server tools (prefixed with 'mcp__') for their designated domains. Whenever a connected 'mcp__*' tool matches the user's intent, call it directly instead of writing Python or terminal workarounds.</directive>
     </rule>
     <rule level="2" type="file_operations">
       <directive>Use 'file_operations' for file CRUD, 'repo_map' inspection, inline image/text 'view', exact 'replace_block' edits, and 'create'. Always use full absolute file paths with forward slashes ('/').</directive>
@@ -709,3 +709,18 @@ def get_native_tools():
             ]
         )
     ]
+
+
+def get_all_tools():
+    tools = get_native_tools()
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        extra = mcp_manager.get_tool_declarations()
+        if extra:
+            for tool in tools:
+                decls = getattr(tool, "function_declarations", None)
+                if isinstance(decls, list):
+                    decls.extend(extra)
+    except Exception:
+        pass
+    return tools

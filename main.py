@@ -387,7 +387,8 @@ def run_jarvis():
             start_rag_engine,
             start_baileys_server,
             start_mobile_bridge,
-            start_telegram_remote_service
+            start_telegram_remote_service,
+            start_mcp_service
         )
         from core.main.CommandHandler import main_command_processor, is_jarvis_busy
         from core.main.HotKeyManager import setup_hotkeys
@@ -418,6 +419,7 @@ def run_jarvis():
     start_baileys_server()
     start_watchdog()
     start_mobile_bridge()
+    start_mcp_service()
 
     def start_gui_warmup_background():
         try:

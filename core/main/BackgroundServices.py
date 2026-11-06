@@ -312,6 +312,46 @@ def stop_telegram_remote_service():
 def is_telegram_remote_service_running() -> bool:
     return is_telegram_remote_running()
 
+def start_mcp_service():
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        mcp_manager.start()
+    except Exception as e:
+        logging.error(f"MCP service start failed: {e}")
+
+
+def stop_mcp_service():
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        mcp_manager.stop()
+    except Exception as e:
+        logging.error(f"MCP service stop failed: {e}")
+
+
+def is_mcp_enabled() -> bool:
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        return mcp_manager.is_enabled()
+    except Exception:
+        return False
+
+
+def is_mcp_running() -> bool:
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        return mcp_manager.is_alive()
+    except Exception:
+        return True
+
+
+def is_mcp_ready() -> bool:
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        return mcp_manager.is_ready()
+    except Exception:
+        return True
+
+
 def stop_all_services():
     logging.info("Initiating shutdown of all background services.")
     stop_tasks = [
@@ -320,7 +360,8 @@ def stop_all_services():
         stop_baileys_server,
         stop_mobile_bridge,
         stop_telegram_remote_service,
-        stop_rag_engine
+        stop_rag_engine,
+        stop_mcp_service
     ]
     threads = []
     for task in stop_tasks:

@@ -10,7 +10,7 @@ from core.logger.logger import logger
 from core.brain.executor import execute_single_tool_sync
 from core.ui.agent_status import update_agent_status
 from core.brain.Providers import get_primary_provider, get_fallback_provider
-from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools
+from core.brain.Processor.Prompts import AGENT_SYSTEM_PROMPT, get_native_tools, get_all_tools
 from core.brain.prompts import build_agentic_system_prompt
 from core.brain.Processor.FastBrain import make_result, clean_json_string
 from core.ui.typing_status import launch_popup, update_typing_status
@@ -218,6 +218,9 @@ def update_confirmed_facts(
     elif action_key in ("email_action", "whatsapp_action", "telegram_action"):
         clean_summary = obs_str.replace("Observation:", "").replace("\n", " ").strip()
         facts_ledger[f"Communication ({action_key} {action_detail[:25]})"] = clean_summary[:300]
+    elif action_key.startswith("mcp__"):
+        clean_mcp = obs_str.replace("Observation:", "").replace("\n", " ").strip()
+        facts_ledger[f"MCP ({action_key[:40]})"] = clean_mcp[:300]
 
 
 def run_agentic_loop(
@@ -315,7 +318,7 @@ User Command: "{raw_command}"
         memory_instance.ephemeral = {}
     ephemeral = memory_instance.ephemeral if memory_instance else {}
 
-    native_tools = get_native_tools()
+    native_tools = get_all_tools()
 
     panic_step = max_steps - 2
     active_domains = ephemeral.get("active_domains") or [
@@ -329,6 +332,13 @@ User Command: "{raw_command}"
         max_steps=max_steps,
         panic_step=panic_step,
     )
+    try:
+        from core.mcp.MCPManager import mcp_manager
+        mcp_summary = mcp_manager.get_prompt_summary()
+        if mcp_summary:
+            dynamic_agent_prompt = f"{dynamic_agent_prompt}\n\n{mcp_summary}"
+    except Exception:
+        pass
 
     consecutive_provider_failures = 0
     consecutive_no_tool_steps = 0
@@ -862,6 +872,12 @@ If the <Mission> is fully complete, call 'complete_task'.
                                 current_detail = "Scrolling"
                             else:
                                 current_detail = f"GUI: {gui_action}"
+                        elif key.startswith("mcp__"):
+                            parts = key.split("__", 2)
+                            if len(parts) == 3:
+                                current_detail = f"MCP [{parts[1]}]: {parts[2]}"
+                            else:
+                                current_detail = f"MCP: {key}"
                         
                         action_details_list.append(current_detail)
 

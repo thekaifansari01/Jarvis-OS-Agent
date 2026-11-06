@@ -913,11 +913,26 @@ TOOL_REGISTRY = {
     'file_transfer_action': handle_file_transfer
 }
 
+def _is_mcp_tool(tool_name):
+    return isinstance(tool_name, str) and tool_name.startswith("mcp__")
+
+
+def _dispatch_mcp(tool_name, arguments):
+    from core.mcp.MCPManager import mcp_manager
+    return mcp_manager.call_tool_from_full_name(tool_name, arguments)
+
+
 def execute_single_tool_sync(action_dict: Dict[str, any]) -> str:
     for tool_name, handler_func in TOOL_REGISTRY.items():
         if tool_data := action_dict.get(tool_name):
             if isinstance(tool_data, dict):
                 return handler_func(tool_data)
+    for tool_name, tool_data in action_dict.items():
+        if _is_mcp_tool(tool_name) and isinstance(tool_data, dict):
+            try:
+                return _dispatch_mcp(tool_name, tool_data)
+            except Exception as e:
+                return f"Observation: [ERROR] [MCP] dispatch failed: {e}"
     return "Observation: No valid action executed or tool not found in registry."
 
 from concurrent.futures import as_completed
@@ -927,6 +942,14 @@ def execute_tools_parallel(action_dict: Dict[str, any]):
     image_payload = None
     
     def run_tool(t_name, t_data):
+        if _is_mcp_tool(t_name):
+            try:
+                res = _dispatch_mcp(t_name, t_data)
+                if isinstance(res, dict):
+                    return res
+                return f"[{t_name} Result]:\n{res}"
+            except Exception as e:
+                return f"[{t_name} Result]:\nObservation: [ERROR] [MCP] dispatch failed: {e}"
         handler = TOOL_REGISTRY.get(t_name)
         if handler:
             res = handler(t_data)
@@ -938,7 +961,9 @@ def execute_tools_parallel(action_dict: Dict[str, any]):
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = []
         for tool_name, tool_data in action_dict.items():
-            if tool_name in TOOL_REGISTRY and isinstance(tool_data, dict):
+            if not isinstance(tool_data, dict):
+                continue
+            if tool_name in TOOL_REGISTRY or _is_mcp_tool(tool_name):
                 futures.append(executor.submit(run_tool, tool_name, tool_data))
         
         for future in as_completed(futures):
