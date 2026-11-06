@@ -11,27 +11,29 @@ logging.basicConfig(
 
 load_dotenv()
 
+_MISSING_KEY_MSG = "Observation: Error -> TAVILY_API_KEY missing in .env. ACTION_REQUIRED: User must add TAVILY_API_KEY to .env file. Get a free key from https://tavily.com. Do NOT retry this tool."
+
+
 def search_web(query, max_results=5):
-    """Pro-Level Web Search using Tavily (XML Format for AI Agents)"""
     try:
-        if not query: 
-            return "<error>Empty search query.</error>"
+        if not query:
+            return "Observation: Error -> Empty search query."
 
         api_key = os.getenv('TAVILY_API_KEY')
         if not api_key:
             logging.error("TAVILY_API_KEY not set in .env")
-            return "<error>TAVILY_API_KEY missing.</error>"
+            return _MISSING_KEY_MSG
 
         client = TavilyClient(api_key=api_key)
-        
+
         response = client.search(
             query=query,
             search_depth="advanced",
             max_results=max_results,
-            include_answer=False,        
-            include_raw_content=True     
+            include_answer=False,
+            include_raw_content=True
         )
-        
+
         results = response.get("results", [])
         if not results:
             return f'<web_search_results query="{query}"><message>No web results found.</message></web_search_results>'
@@ -42,14 +44,14 @@ def search_web(query, max_results=5):
         for i, r in enumerate(results, 1):
             title = r.get('title', 'N/A')
             url = r.get('url', 'N/A')
-            
+
             raw_content = r.get('raw_content', '')
             snippet = r.get('content', '')
-            
+
             content_to_use = raw_content if raw_content else snippet
-            
+
             clean_content = content_to_use.strip()[:20000]
-            
+
             xml_output += f'    <source id="{i}">\n'
             xml_output += f'      <title>{title}</title>\n'
             xml_output += f'      <url>{url}</url>\n'
@@ -63,37 +65,38 @@ def search_web(query, max_results=5):
 
     except Exception as e:
         logging.error(f"Error in Tavily search_web: {e}")
-        return f"<error>Web search failed: {e}</error>"
-    
+        return f"Observation: Error -> Web search failed: {str(e)}. Do NOT retry."
+
+
 def quick_snippet_search(query: str, max_results: int = 2) -> str:
     try:
         if not query:
-            return "No query provided."
+            return "Observation: Error -> No query provided."
 
         api_key = os.getenv('TAVILY_API_KEY')
         if not api_key:
-            return "Search API key missing."
+            return _MISSING_KEY_MSG
 
         client = TavilyClient(api_key=api_key)
-        
+
         response = client.search(
             query=query,
             search_depth="basic",
             max_results=max_results,
-            include_answer=True,         
-            include_raw_content=False    
+            include_answer=True,
+            include_raw_content=False
         )
-        
+
         direct_answer = response.get("answer", "")
         results = response.get("results", [])
-        
+
         if not results and not direct_answer:
-            return "No real-time facts found."
+            return "Observation: Info -> No real-time facts found for this query."
 
         output_lines = []
         if direct_answer:
             output_lines.append(f"Direct Answer: {direct_answer}")
-            
+
         for i, r in enumerate(results[:max_results], 1):
             title = r.get('title', 'N/A')
             snippet = r.get('content', '').strip().replace('\n', ' ')
@@ -103,4 +106,4 @@ def quick_snippet_search(query: str, max_results: int = 2) -> str:
 
     except Exception as e:
         logging.error(f"Quick search error: {e}")
-        return "Real-time search unavailable right now."
+        return f"Observation: Error -> Real-time search failed: {str(e)}. Do NOT retry."

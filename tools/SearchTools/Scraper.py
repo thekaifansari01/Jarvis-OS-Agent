@@ -17,7 +17,7 @@ def scrape_webpage(url: str) -> str:
     tavily_api_key = os.getenv("TAVILY_API_KEY")
     if not tavily_api_key:
         logger.warning("⚠️ TAVILY_API_KEY not found in .env.")
-        return "Observation: Error -> TAVILY_API_KEY missing in environment variables."
+        return "Observation: Error -> TAVILY_API_KEY missing in .env. ACTION_REQUIRED: User must add TAVILY_API_KEY to .env file. Get a free key from https://tavily.com. Do NOT retry this tool."
         
     try:
         client = TavilyClient(api_key=tavily_api_key)

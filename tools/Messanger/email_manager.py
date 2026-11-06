@@ -30,7 +30,7 @@ COOKIES_DIR.mkdir(parents=True, exist_ok=True)
 TOKEN_PATH = COOKIES_DIR / "token.enc"
 
 
-def authenticate_gmail(interactive: bool = True):
+def authenticate_gmail(interactive: bool = False):
     logger.info("🔐 Authenticating Gmail...")
     creds = None
     if TOKEN_PATH.exists():
@@ -92,7 +92,7 @@ def send_email(to_address, subject, body, attachment_path=None):
         return False
 
     try:
-        service = authenticate_gmail()
+        service = authenticate_gmail(interactive=False)
         if not service:
             return False
 
@@ -175,7 +175,7 @@ def fetch_emails_by_date(start_date, end_date=None, query=None, max_results=50, 
     if not service:
         return {
             "success": False,
-            "error": "Gmail authentication failed.",
+            "error": "Gmail not connected. ACTION_REQUIRED: User must run 'jarvis login --mail' in a new terminal after closing Jarvis, then restart Jarvis. Do NOT retry this tool.",
             "count": 0,
             "emails": [],
             "saved_attachments": []

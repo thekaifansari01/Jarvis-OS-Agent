@@ -42,7 +42,7 @@ def clear_calendar_cache():
         _service_cache = None
 
 
-def authenticate_calendar(interactive: bool = True):
+def authenticate_calendar(interactive: bool = False):
     global _service_cache
 
     with _service_lock:
@@ -105,10 +105,12 @@ def authenticate_calendar(interactive: bool = True):
             except Exception as e:
                 logger.error(f"❌ Calendar service build failed: {e}")
                 _service_cache = None
-                return None, f"Observation: Error -> Build failed: {e}"
+                return None, f"Observation: Error -> Calendar service build failed: {e}. Do NOT retry."
 
         logger.error("❌ Calendar authentication failed.")
-        return None, "Observation: Error -> Authentication timed out or failed."
+        if not interactive:
+            return None, "Observation: Error -> Google Calendar not connected. ACTION_REQUIRED: User must run 'jarvis login --calendar' in a new terminal after closing Jarvis, then restart Jarvis. Do NOT retry this tool."
+        return None, "Observation: Error -> Calendar OAuth timed out after 120 seconds. User must complete browser login and try again. Do NOT retry this tool."
 
 def create_event(summary: str, start_time: str, end_time: str, description: str = "") -> str:
     logger.info(f"📅 Creating calendar event: {summary}")

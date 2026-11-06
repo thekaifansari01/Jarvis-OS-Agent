@@ -117,12 +117,9 @@ def open_any_app(apps_to_open, silent=False):
         try:
             success_names = [n for n in opened if " (web)" not in n]
             if success_names:
-                msg = f"Sir, {', '.join(success_names)} khol diya."
-                logger.info(msg)
-
+                logger.info(f"Sir, {', '.join(success_names)} khol diya.")
             if failed:
-                fail_msg = f"Sir, {', '.join(failed)} nahi khul paaya."
-                logger.warning(fail_msg)
+                logger.warning(f"Sir, {', '.join(failed)} nahi khul paaya.")
         except Exception:
             pass
 

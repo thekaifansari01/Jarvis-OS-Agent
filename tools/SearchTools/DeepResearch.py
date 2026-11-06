@@ -45,7 +45,7 @@ AGENT_MODEL = _get_config_attr(
 FILENAME_MODEL = ROUTER_MODEL or AGENT_MODEL or "gemini-2.0-flash-lite"
 
 GEMINI_API_KEY = _get_config_attr("GEMINI_API_KEY", "GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-DEEP_RESEARCH_TIMEOUT = int(_get_config_attr("DEEP_RESEARCH_TIMEOUT", default=600))
+DEEP_RESEARCH_TIMEOUT = int(_get_config_attr("DEEP_RESEARCH_TIMEOUT", default=240))
 
 CREATIONS_DIR = Path.home() / "Documents" / "Jarvis" / "DeepResearch"
 CREATIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -64,7 +64,6 @@ Rules:
 - No spaces, no special characters except underscore
 - Max length: 50 characters
 - Must end with .md
-- Example: "solid_state_batteries_analysis.md" or "financial_crisis_2008.md"
 
 Return ONLY the filename, nothing else.
 """
@@ -111,7 +110,7 @@ def deep_research(topic, max_steps=None):
         tavily_api_key = os.getenv('TAVILY_API_KEY')
         if not tavily_api_key:
             logger.error("TAVILY_API_KEY missing in .env")
-            return "Error: TAVILY_API_KEY missing in .env", None
+            return "Observation: Error -> TAVILY_API_KEY missing in .env. ACTION_REQUIRED: User must add TAVILY_API_KEY to .env file. Get a free key from https://tavily.com. Do NOT retry this tool.", None
 
         tavily_client = TavilyClient(api_key=tavily_api_key)
 
@@ -121,12 +120,12 @@ def deep_research(topic, max_steps=None):
 
         if not request_id:
             logger.error(f"Task creation failed. Response: {response}")
-            return f"Error: Could not start research task. Response: {response}", None
+            return f"Observation: Error -> Could not start Tavily research task. Server response: {str(response)[:200]}. Do NOT retry.", None
 
         logger.info(f"Research Task created. Request ID: {request_id}")
 
         start_time = time.time()
-        timeout = DEEP_RESEARCH_TIMEOUT or 600
+        timeout = DEEP_RESEARCH_TIMEOUT or 240
         poll_interval = 10
 
         result_content = ""
@@ -136,7 +135,7 @@ def deep_research(topic, max_steps=None):
             elapsed_time = int(time.time() - start_time)
             if elapsed_time > timeout:
                 logger.warning("Timeout reached while polling Tavily")
-                return "Error: Research task timed out.", None
+                return f"Observation: Error -> Deep research timed out after {timeout} seconds. Tavily took too long. Do NOT retry immediately.", None
 
             time.sleep(poll_interval)
 
@@ -164,7 +163,7 @@ def deep_research(topic, max_steps=None):
                 break
             elif status == "failed":
                 logger.error("Tavily research task failed.")
-                return "Error: Tavily research task failed.", None
+                return "Observation: Error -> Tavily research task failed on server side. Reason unknown. Do NOT retry immediately.", None
 
         final_report = result_content
         if sources:
@@ -223,14 +222,12 @@ def deep_research(topic, max_steps=None):
             pass
 
         logger.info(f"Report saved to {filepath}")
-        logger.info(f"Report automatically saved as: {filepath.name}")
-        logger.info(f"Location: {CREATIONS_DIR.resolve()}")
 
         return final_report, str(filepath)
 
     except Exception as e:
         logger.error(f"Tavily Deep Research failed: {e}")
-        return f"Error: {str(e)}", None
+        return f"Observation: Error -> Deep research failed with unexpected error: {str(e)}. Do NOT retry.", None
 
 
 def deep_research_as_tool(topic: str) -> str:
@@ -242,12 +239,12 @@ def deep_research_as_tool(topic: str) -> str:
 
         filename = os.path.basename(filepath)
         return (
-            f"Deep research completed successfully. Report saved as '{filename}' "
+            f"Observation: Success -> Deep research completed and saved as '{filename}' "
             f"at absolute path: {os.path.abspath(filepath)}. "
             f"Report length: {len(report)} characters."
         )
     except Exception as e:
-        return f"Deep research failed: {str(e)}"
+        return f"Observation: Error -> Deep research tool crashed: {str(e)}. Do NOT retry."
 
 
 if __name__ == "__main__":

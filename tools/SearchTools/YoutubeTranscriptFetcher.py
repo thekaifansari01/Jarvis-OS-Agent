@@ -32,9 +32,7 @@ def fetch_youtube_transcript(video_url):
     try:
         video_id = _extract_video_id(video_url)
         if not video_id:
-            error_msg = f"Could not extract video ID from URL: {video_url}"
-            logger.error(f"❌ {error_msg}")
-            return error_msg
+            return f"Observation: Error -> Invalid YouTube URL. Could not extract video ID from '{video_url}'. Provide a valid full YouTube URL."
 
         logger.debug(f"Video ID: {video_id}")
         ytt_api = YouTubeTranscriptApi()
@@ -57,25 +55,19 @@ def fetch_youtube_transcript(video_url):
                 logger.error(f"❌ Fallback transcript listing failed: {fallback_err}")
 
         if not fetched_transcript:
-            error_msg = f"Could not fetch transcript for video ID: {video_id}. No transcript available."
-            logger.error(f"❌ {error_msg}")
-            return error_msg
+            return f"Observation: Error -> YouTube transcript unavailable for video {video_id}. Reason: Captions may be disabled, video is age-restricted, or region-blocked. Do NOT retry with same URL."
 
         full_text = " ".join([snippet.text.strip() for snippet in fetched_transcript if snippet.text])
         full_text = re.sub(r"\s+", " ", full_text).strip()
 
         if not full_text:
-            error_msg = f"Transcript fetched but empty for video ID: {video_id}"
-            logger.error(f"❌ {error_msg}")
-            return error_msg
+            return f"Observation: Error -> YouTube transcript is empty for video {video_id}. Do NOT retry."
 
         logger.info(f"✅ YouTube transcript fetched, length: {len(full_text)} chars")
-        return f"--- YouTube Transcript ---\n{full_text}"
+        return f"Observation: Success -> YouTube transcript fetched.\n--- YouTube Transcript ---\n{full_text}"
 
     except Exception as e:
-        error_msg = f"Could not fetch transcript: {e}"
-        logger.error(f"❌ {error_msg}")
-        return error_msg
+        return f"Observation: Error -> YouTube transcript fetch failed: {str(e)}. Do NOT retry with same URL."
 
 
 if __name__ == "__main__":

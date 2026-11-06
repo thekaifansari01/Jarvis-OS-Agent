@@ -67,6 +67,9 @@ def optimize_observation(text: str, max_chars: int = 10000) -> str:
     if len(text_str) <= max_chars:
         return text_str
 
+    if _is_failure_prefix(text_str) and len(text_str) <= 5000:
+        return text_str
+
     if "Vault Search Results" in text_str:
         lines = text_str.split('\n')
         metadata_lines = []
@@ -142,26 +145,50 @@ def _is_failure_prefix(text: str) -> bool:
     if payload.startswith("Observation:"):
         payload = payload[len("Observation:"):].strip()
 
-    head = payload[:200]
+    if not payload:
+        return True
+
+    lower_payload = payload.lower()
+    head_lower = lower_payload[:200]
+
+    if "action_required:" in head_lower or "do not retry" in head_lower:
+        return True
+
+    if payload.startswith("Error ->") or payload.startswith("Error:"):
+        return True
+
+    if lower_payload.startswith("<error>"):
+        return True
+
     failure_markers = (
-        "[ERROR]",
-        "[FAILED]",
-        "[CRITICAL SYNTAX ERROR",
-        "Traceback (most recent call last)",
-        "Error ->",
-        "Failed to ",
+        "[error]",
+        "[failed]",
+        "[critical syntax error",
+        "traceback (most recent call last)",
+        "error ->",
+        "failed to ",
+        "could not ",
+        "cannot ",
+        "can't ",
+        "unavailable",
+        "not connected",
+        "not found",
+        "not available",
+        "timed out",
+        "timeout",
+        "missing",
         "❌",
         "🚫",
-        "Python script failed",
-        "Python code blocked",
-        "Python script timed out",
-        "Python execution crashed",
-        "Terminal execution crashed",
-        "Terminal command timed out",
-        "SSH command timed out",
-        "SSH execution crashed",
+        "python script failed",
+        "python code blocked",
+        "python script timed out",
+        "python execution crashed",
+        "terminal execution crashed",
+        "terminal command timed out",
+        "ssh command timed out",
+        "ssh execution crashed",
     )
-    return head.startswith(failure_markers)
+    return head_lower.startswith(failure_markers)
 
 
 def update_confirmed_facts(
@@ -959,6 +986,22 @@ If the <Mission> is fully complete, call 'complete_task'.
                                     "image_url": {"url": f"data:{img['mime_type']};base64,{img['data']}"}
                                 })
                             observation = observation.get("observation", "Observation: [Media Loaded Inline] -> Images ready for inspection.")
+
+                        obs_full_str = str(observation)
+                        if "ACTION_REQUIRED:" in obs_full_str:
+                            obs_clean = obs_full_str
+                            if obs_clean.startswith("Observation:"):
+                                obs_clean = obs_clean[len("Observation:"):].strip()
+                            observation = (
+                                "Observation: [AUTH OR API BLOCKER — TOOL CANNOT COMPLETE] "
+                                f"{obs_clean} "
+                                "MANDATORY NEXT ACTION: Call 'complete_task' immediately with a clear Hinglish message. "
+                                "Explain to the user: (1) What is not connected or missing. "
+                                "(2) The exact command they must run in a NEW terminal after closing Jarvis. "
+                                "(3) Any URL where they can obtain the required API key. "
+                                "Do NOT retry this tool. Do NOT claim task completion."
+                            )
+                            logger.warning(f"🚨 AUTH/API BLOCKER detected: {obs_clean[:200]}")
 
                         is_failure = _is_failure_prefix(str(observation))
 

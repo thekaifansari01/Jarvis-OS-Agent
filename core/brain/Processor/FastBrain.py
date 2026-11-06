@@ -314,14 +314,14 @@ def _handle_escalate_to_agentic(tool_args_str: str, raw_command: str, memory_ins
             logger.info(f"✅ Escalation complete | agentic_response_chars={len(str(agentic_result.get('response', '')))}")
             return agentic_result
         logger.warning("⚠️ Agentic returned non-dict result during escalation. Falling back to error message.")
-        err_msg = "Bhai, Agentic Brain se response nahi mila. Please retry karo."
+        err_msg = "Bhai, Agentic Brain se response nahi mila. Command dubara bol ya thodi der baad try karo."
         update_typing_status("completed", err_msg)
         send_telegram_update(final_response=err_msg)
         clear_telegram_context()
         return make_result(err_msg, priority="high")
     except Exception as e:
         logger.error(f"❌ Escalation to Agentic failed: {e}\n{traceback.format_exc()}")
-        err_msg = "Bhai, Agentic Brain se connect nahi ho paya. Please retry karo."
+        err_msg = "Bhai, Agentic Brain se connect nahi ho paya. Internet check karo ya thodi der baad try karo."
         update_typing_status("completed", err_msg)
         send_telegram_update(final_response=err_msg)
         clear_telegram_context()
@@ -331,7 +331,11 @@ def _handle_escalate_to_agentic(tool_args_str: str, raw_command: str, memory_ins
 def fetch_from_groq(raw_command: str, memory_instance=None, ephemeral: dict = None) -> Optional[Dict[str, any]]:
     if not fast_client:
         logger.error("❌ Fast Brain client not initialized. Check FAST_BRAIN_API_KEY.")
-        return None
+        err_msg = "Bhai, FAST_BRAIN_API_KEY missing hai .env mein. ACTION_REQUIRED: Add FAST_BRAIN_API_KEY to .env file and restart Jarvis. Get a key from your provider dashboard."
+        update_typing_status("completed", err_msg)
+        send_telegram_update(final_response=err_msg)
+        clear_telegram_context()
+        return make_result(err_msg, priority="high")
 
     logger.info(f"⚡ Fast Brain invoked | command='{raw_command[:80]}'")
 

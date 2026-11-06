@@ -1,7 +1,40 @@
 import os
 import logging
 import requests
+from pathlib import Path
 from datetime import datetime
+
+
+def _find_whatsapp_creds():
+    try:
+        file_dir = Path(__file__).resolve().parent
+    except Exception:
+        file_dir = Path.cwd()
+    candidates = [
+        file_dir.parent.parent,
+        file_dir.parent,
+        file_dir,
+        Path.cwd(),
+    ]
+    seen = set()
+    for base in candidates:
+        try:
+            resolved = base.resolve()
+        except Exception:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        creds = resolved / "Data" / "SessionCookies" / "auth_info_baileys" / "creds.json"
+        if creds.exists():
+            return creds
+    return None
+
+
+def _check_whatsapp_ready():
+    if _find_whatsapp_creds() is None:
+        return "Observation: Error -> WhatsApp not connected. ACTION_REQUIRED: User must run 'jarvis login --whatsapp' in a new terminal after closing Jarvis, then restart Jarvis. Do NOT retry this tool."
+    return None
 
 
 def _sanitize_phone_number(raw_target: str):
@@ -40,6 +73,11 @@ def _sanitize_phone_number(raw_target: str):
 
 
 def send_whatsapp_message(to_target: str, message: str = "", attachment_path: str = None) -> str:
+    ready_err = _check_whatsapp_ready()
+    if ready_err:
+        logging.error(ready_err)
+        return ready_err
+
     target_number, err = _sanitize_phone_number(to_target)
     if err:
         logging.error(err)
@@ -88,11 +126,11 @@ def send_whatsapp_message(to_target: str, message: str = "", attachment_path: st
             return error_text
 
     except requests.exceptions.ConnectionError:
-        error_msg = "[ERROR] ❌ Node.js server is offline! Please start 'node baileys_service.js' in the BaileysServer directory first."
+        error_msg = "Observation: Error -> WhatsApp Baileys bridge is offline. ACTION_REQUIRED: User must run 'jarvis login --whatsapp' in a new terminal after closing Jarvis, then restart Jarvis. Do NOT retry this tool."
         logging.error(error_msg)
         return error_msg
     except requests.exceptions.Timeout:
-        error_msg = f"[ERROR] ❌ Timeout Error: Node.js server did not respond within {req_timeout} seconds."
+        error_msg = f"Observation: Error -> WhatsApp bridge timed out after {req_timeout} seconds. The Baileys service may be stuck. Do NOT retry immediately."
         logging.error(error_msg)
         return error_msg
     except requests.exceptions.RequestException as e:
@@ -106,8 +144,13 @@ def send_whatsapp_message(to_target: str, message: str = "", attachment_path: st
 
 
 def fetch_whatsapp_chats(to_target: str, start_date: str, end_date: str) -> str:
+    ready_err = _check_whatsapp_ready()
+    if ready_err:
+        logging.error(ready_err)
+        return ready_err
+
     if not to_target or not start_date or not end_date:
-        return "[ERROR] ❌ Target phone number, start_date, and end_date are all required."
+        return "Observation: Error -> Target phone number, start_date, and end_date are all required."
 
     target_number, err = _sanitize_phone_number(to_target)
     if err:
@@ -166,11 +209,11 @@ def fetch_whatsapp_chats(to_target: str, start_date: str, end_date: str) -> str:
             return error_text
 
     except requests.exceptions.ConnectionError:
-        error_msg = "[ERROR] ❌ Node.js server is offline! Please start 'node baileys_service.js' in the BaileysServer directory first."
+        error_msg = "Observation: Error -> WhatsApp Baileys bridge is offline. ACTION_REQUIRED: User must run 'jarvis login --whatsapp' in a new terminal after closing Jarvis, then restart Jarvis. Do NOT retry this tool."
         logging.error(error_msg)
         return error_msg
     except requests.exceptions.Timeout:
-        error_msg = "[ERROR] ❌ Timeout Error: Node.js server did not respond within 25 seconds."
+        error_msg = "Observation: Error -> WhatsApp bridge timed out after 25 seconds. The Baileys service may be stuck. Do NOT retry immediately."
         logging.error(error_msg)
         return error_msg
     except requests.exceptions.RequestException as e:

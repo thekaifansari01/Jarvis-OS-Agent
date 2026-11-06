@@ -1,6 +1,7 @@
 from AppOpener import close
 from core.logger.logger import logger
 
+
 def close_any_app(apps_to_close):
     closed = []
 
@@ -27,6 +28,7 @@ def close_any_app(apps_to_close):
                 logger.error(f"Unexpected error while closing '{name}': {e}")
 
     return closed
+
 
 if __name__ == "__main__":
     apps = ["calculator", "notepad", "whatsapp"]

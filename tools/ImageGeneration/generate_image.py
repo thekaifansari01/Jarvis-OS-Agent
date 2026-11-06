@@ -89,10 +89,10 @@ def enhance_image_prompt(raw_prompt: str) -> str:
     return clean_prompt
 
 
-def generate_image_openai(prompt: str, filename: str) -> str | None:
+def generate_image_openai(prompt: str, filename: str):
     if not IMAGE_GEN_API_KEY:
         logger.error("IMAGE_GEN_API_KEY not set. Cannot generate image.")
-        return None
+        return "Observation: Error -> IMAGE_GEN_API_KEY missing in .env. ACTION_REQUIRED: User must add IMAGE_GEN_API_KEY to .env file, then restart Jarvis."
 
     headers = {
         "Authorization": f"Bearer {IMAGE_GEN_API_KEY}",
@@ -139,10 +139,10 @@ def generate_image_openai(prompt: str, filename: str) -> str | None:
                 return str(save_path.resolve())
         else:
             logger.error("Image generation API error: %s - %s", response.status_code, response.text)
-            return None
+            return f"Observation: Error -> Primary image API rejected request (HTTP {response.status_code}). Trying fallback provider next."
     except Exception as e:
         logger.error("Image generation error: %s", e)
-        return None
+        return f"Observation: Error -> Primary image API exception: {str(e)}. Trying fallback provider next."
 
 
 def generate_image_horde(prompt: str, filename: str) -> str | None:
@@ -172,7 +172,7 @@ def generate_image_horde(prompt: str, filename: str) -> str | None:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code != 202:
             logger.error("AI Horde generation request rejected. Status: %s", response.status_code)
-            return None
+            return f"Observation: Error -> AI Horde fallback rejected request (HTTP {response.status_code}). Both image providers are unavailable right now. Do NOT retry immediately."
 
         task_id = response.json().get("id")
         status_url = f"https://aihorde.net/api/v2/generate/status/{task_id}"
@@ -213,7 +213,7 @@ def generate_image_horde(prompt: str, filename: str) -> str | None:
 
     except Exception as e:
         logger.error("AI Horde generation error: %s", e)
-        return None
+        return f"Observation: Error -> AI Horde fallback failed: {str(e)}. Both image providers are unavailable. Do NOT retry."
 
 
 def edit_via_horde(prompt: str, source_image_path: str, new_filename: str) -> str | None:
@@ -281,36 +281,41 @@ def edit_via_horde(prompt: str, source_image_path: str, new_filename: str) -> st
 
     except Exception as e:
         logger.error("Horde edit error: %s", e)
-        return None
+        return f"Observation: Error -> AI Horde edit failed: {str(e)}. Do NOT retry."
 
 
-def handle_image_command(action_type: str, prompt: str, filename: str = None, target_file: str = None) -> str | None:
+def handle_image_command(action_type: str, prompt: str, filename: str = None, target_file: str = None):
     if not filename:
         filename = f"image_{int(time.time())}"
 
     if action_type == "generate":
         enhanced_prompt = enhance_image_prompt(prompt)
         result = generate_image_openai(enhanced_prompt, filename)
-        if not result:
-            logger.warning("Primary image generation failed. Falling back to AI Horde.")
-            result = generate_image_horde(enhanced_prompt, filename)
-        return result
+        if isinstance(result, str) and result.startswith("Observation: Success"):
+            return result
+        primary_error = result
+        logger.warning("Primary image generation failed. Falling back to AI Horde.")
+        result = generate_image_horde(enhanced_prompt, filename)
+        if isinstance(result, str) and result.startswith("Observation: Success"):
+            return result
+        return f"Observation: Error -> Both image generation providers failed. Primary: {primary_error or 'unknown'}. Fallback: {result or 'unknown'}. Do NOT retry."
 
     if action_type == "edit":
         if not target_file:
             logger.warning("Edit command missing target file.")
-            speak("Sir, mujhe samajh nahi aaya ki konsi image edit karni hai. Kripya naam batayein.")
-            return None
+            return "Observation: Error -> Edit action requires 'target_file' parameter with the absolute path of the image to edit."
 
         safe_target = f"{target_file}.png" if not target_file.endswith(".png") else target_file
         source_path = Path(target_file) if os.path.exists(target_file) else CREATIONS_DIR / safe_target
 
         if not source_path.exists():
             logger.warning("Target image not found: %s", source_path)
-            speak(f"Sir, mujhe '{safe_target}' naam ki koi image nahi mili.")
-            return None
+            return f"Observation: Error -> Source image not found at '{safe_target}'. Provide a valid absolute path."
 
-        return edit_via_horde(prompt, source_path, filename)
+        result = edit_via_horde(prompt, source_path, filename)
+        if result is None:
+            return "Observation: Error -> AI Horde edit failed. Provider unavailable. Do NOT retry."
+        return result
 
     logger.error("Unknown image action: %s", action_type)
-    return None
+    return f"Observation: Error -> Unknown image action '{action_type}'. Use 'generate' or 'edit'."

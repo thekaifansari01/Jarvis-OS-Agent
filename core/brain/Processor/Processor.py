@@ -159,7 +159,9 @@ class GenericSemanticRouter:
             "User: 'Mera 7 din ka study plan banao' -> {\"route\": \"AGENTIC\", \"english_query\": \"create a 7 day study schedule plan\", \"domains\": [\"scheduling\"]}\n"
             "User: 'Jarvis, Kaif ko email bhej do ki main late aaunga' -> {\"route\": \"AGENTIC\", \"english_query\": \"send email to Kaif about being late\", \"domains\": [\"communication\"]}\n"
             "User: 'Mere liye ek portfolio dashboard banao' -> {\"route\": \"AGENTIC\", \"english_query\": \"build a portfolio web dashboard\", \"domains\": [\"ui_design\", \"coding\"]}\n"
-            "User: 'Mere father ka naam kya hai?' -> {\"route\": \"AGENTIC\", \"english_query\": \"what is my father name\", \"domains\": [\"research_memory\"]}"
+            "User: 'Mere father ka naam kya hai?' -> {\"route\": \"AGENTIC\", \"english_query\": \"what is my father name\", \"domains\": [\"research_memory\"]}\n\n"
+            "### AUTH-AWARE ROUTING\n"
+            "If the user command requires a tool that depends on OAuth or API keys (email, calendar, telegram, whatsapp, Tavily-based search, image generation), STILL route to AGENTIC regardless of whether the service is currently connected. The Agentic Brain will surface any missing-auth message directly to the user."
         )
 
         user_content = f"[RECENT CONVERSATION HISTORY]\n{trimmed_history}\n\n[USER COMMAND]\n\"{command}\""

@@ -445,6 +445,10 @@ def handle_file_transfer(transfer_cmd: dict) -> str:
 
 @with_observation
 def handle_email_action(email_action: dict) -> str:
+    from tools.Messanger.email_manager import authenticate_gmail
+    if not authenticate_gmail(interactive=False):
+        return "Observation: Error -> Gmail not connected. ACTION_REQUIRED: User must run 'jarvis login --mail' in a new terminal after closing Jarvis, then restart Jarvis. Do NOT retry this tool."
+
     action_type = str(email_action.get('action', 'send')).strip().lower()
 
     if action_type == 'fetch':
@@ -638,6 +642,7 @@ def handle_whatsapp_action(whatsapp_action: dict) -> str:
     wa_failed = (
         wa_result_str.startswith(("[ERROR]", "[FAILED]"))
         or wa_result_str.startswith("Error ->")
+        or wa_result_str.startswith("Observation: Error")
     )
     if wa_failed:
         logger.error(f"❌ WhatsApp message failed: {wa_result_str}")
@@ -686,6 +691,7 @@ def handle_telegram_action(telegram_action: dict) -> str:
     tg_failed = (
         tg_result_str.startswith(("[ERROR]", "[FAILED]"))
         or tg_result_str.startswith("Error ->")
+        or tg_result_str.startswith("Observation: Error")
     )
     if tg_failed:
         logger.error(f"❌ Telegram message failed: {tg_result_str}")
@@ -799,6 +805,9 @@ def handle_image_command_action(image_cmd: dict) -> str:
     logger.info(f"🤖 Agent executing image {action}: {prompt}")
     result_path = handle_image_command(action, prompt, filename, target_file)
 
+    if isinstance(result_path, str) and result_path.startswith("Observation: Error"):
+        logger.error(f"❌ Image {action} failed: {result_path[:200]}")
+        return result_path
     if result_path:
         logger.info(f"✅ Image {action} successful: {result_path}")
         return f"Image successfully {action}d at absolute path: {result_path}."
