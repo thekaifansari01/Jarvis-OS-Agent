@@ -197,7 +197,7 @@ def render_banner(mic_available=False, no_wake=False, state="ONLINE & READY"):
      ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝""")
     print("  " + "═" * 88)
     print(f"   STATUS : {state:<22} │ INPUT : {voice_mode:<18} │ HOTKEY : Ctrl+Shift+J")
-    print("   INDEXER: http://127.0.0.1:8080  │ MOBILE: http://127.0.0.1:8090  │ EXIT   : Ctrl+C / Close")
+    print("   PORTAL : http://127.0.0.1:8000  │ RAG: :8080  │ MOBILE: :8090  │ EXIT   : Ctrl+C / Close")
     print("  " + "═" * 88 + "\n")
 
 

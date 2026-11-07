@@ -24,6 +24,7 @@ _rag_engine_initialized = False
 _rag_dashboard_active = False
 _rag_engine_init_started = False
 _telegram_remote_init_started = False
+_portal_process = None
 
 def start_agent_panel():
     global _panel_process
@@ -73,7 +74,7 @@ def start_stt_popup():
     try:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         popup_script = os.path.join(base_dir, "core", "ui", "SttPopup", "SttPopup.py")
-        
+
         if os.path.exists(popup_script):
             creation_flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
 
@@ -207,6 +208,83 @@ def is_mobile_bridge_running() -> bool:
             return _mobile_bridge_process.poll() is None
         return False
 
+def start_unified_portal():
+    global _portal_process
+    import time
+
+    if is_unified_portal_running():
+        return
+
+    stop_unified_portal()
+
+    rag_port = None
+    deadline = time.time() + 20.0
+    while time.time() < deadline:
+        try:
+            from core.brain.Indexer.dashboard import get_dashboard_port
+            p = get_dashboard_port()
+            if p:
+                rag_port = p
+                break
+        except Exception:
+            pass
+        time.sleep(0.5)
+
+    if not rag_port:
+        logging.warning("Unified portal: RAG dashboard port unavailable — skipping start.")
+        return
+
+    mobile_port = 8090
+
+    try:
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        portal_module_file = os.path.join(base_dir, "core", "ui", "UnifiedPortal", "portal.py")
+        if not os.path.exists(portal_module_file):
+            logging.warning(f"Unified portal: portal.py not found at {portal_module_file}")
+            return
+
+        creation_flags = subprocess.CREATE_NO_WINDOW if platform.system() == 'Windows' else 0
+
+        _portal_process = proc_manager.spawn(
+            [
+                sys.executable, "-m", "core.ui.UnifiedPortal.portal",
+                "--rag-port", str(rag_port),
+                "--mobile-port", str(mobile_port),
+                "--portal-port", "8000",
+            ],
+            cwd=base_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creation_flags,
+        )
+        logging.info(f"Unified portal started at http://127.0.0.1:8000 (RAG: {rag_port}, Mobile: {mobile_port})")
+    except Exception as e:
+        logging.error(f"Unified portal start failed: {e}")
+
+def stop_unified_portal():
+    global _portal_process
+    if _portal_process:
+        try:
+            proc_manager.kill_process_tree(_portal_process.pid)
+            _portal_process.wait(timeout=2)
+            logging.info("Unified portal stopped successfully.")
+        except Exception as e:
+            logging.error(f"Error stopping Unified portal: {e}")
+        _portal_process = None
+
+def is_unified_portal_running() -> bool:
+    global _portal_process
+    if _portal_process is None:
+        return False
+    if _portal_process.poll() is not None:
+        return False
+    try:
+        import socket
+        with socket.create_connection(("127.0.0.1", 8000), timeout=1.5):
+            return True
+    except Exception:
+        return _portal_process.poll() is None
+
 def start_rag_engine():
     global _rag_engine_init_started, _rag_engine_initialized
     try:
@@ -215,6 +293,7 @@ def start_rag_engine():
         _rag_engine_init_started = True
         logging.info("RAG Engine initialized successfully.")
         start_indexer_dashboard()
+        start_unified_portal()
     except Exception as e:
         _rag_engine_init_started = False
         _rag_engine_initialized = False
@@ -319,14 +398,12 @@ def start_mcp_service():
     except Exception as e:
         logging.error(f"MCP service start failed: {e}")
 
-
 def stop_mcp_service():
     try:
         from core.mcp.MCPManager import mcp_manager
         mcp_manager.stop()
     except Exception as e:
         logging.error(f"MCP service stop failed: {e}")
-
 
 def is_mcp_enabled() -> bool:
     try:
@@ -335,14 +412,12 @@ def is_mcp_enabled() -> bool:
     except Exception:
         return False
 
-
 def is_mcp_running() -> bool:
     try:
         from core.mcp.MCPManager import mcp_manager
         return mcp_manager.is_alive()
     except Exception:
         return True
-
 
 def is_mcp_ready() -> bool:
     try:
@@ -351,10 +426,10 @@ def is_mcp_ready() -> bool:
     except Exception:
         return True
 
-
 def stop_all_services():
     logging.info("Initiating shutdown of all background services.")
     stop_tasks = [
+        stop_unified_portal,
         stop_agent_panel,
         stop_stt_popup,
         stop_baileys_server,

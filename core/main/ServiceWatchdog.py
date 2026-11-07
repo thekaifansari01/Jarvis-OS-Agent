@@ -10,11 +10,13 @@ from core.main.BackgroundServices import (
     start_indexer_dashboard,
     start_mobile_bridge,
     start_mcp_service,
+    start_unified_portal,
     is_baileys_running,
     is_stt_popup_running,
     is_telegram_remote_service_running,
     is_indexer_dashboard_running,
     is_mobile_bridge_running,
+    is_unified_portal_running,
     is_rag_engine_init_started,
     is_telegram_remote_init_started,
     is_stt_mic_available,
@@ -86,6 +88,15 @@ class ServiceWatchdog:
                 "next_retry_time": 0,
                 "has_creds": is_mcp_enabled,
                 "ready_check": is_mcp_ready
+            },
+            "unified_portal": {
+                "is_running_check": is_unified_portal_running,
+                "start_func": start_unified_portal,
+                "retries": 0,
+                "last_restart": 0,
+                "next_retry_time": 0,
+                "has_creds": lambda: is_indexer_dashboard_running() and is_mobile_bridge_running(),
+                "ready_check": is_rag_engine_init_started
             }
         }
 

@@ -12,7 +12,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response, StreamingResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import List, Optional
@@ -191,10 +191,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Jarvis Mobile Bridge", lifespan=lifespan)
-
-templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
-os.makedirs(templates_dir, exist_ok=True)
-templates = Jinja2Templates(directory=templates_dir)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
 
 
 class CommandRequest(BaseModel):
@@ -312,6 +315,11 @@ async def health_check():
         "port": PORT,
         "connected_devices": list(devices.keys()),
     }
+
+
+@app.get("/api/local_ip")
+async def local_ip_endpoint():
+    return {"ip": get_local_ip()}
 
 
 @app.post("/api/register_files")
@@ -727,16 +735,6 @@ async def trigger_quick_action(device_id: str, req: QuickActionRequest):
         return {"status": "success", "result": resp.get("result")}
 
     raise HTTPException(status_code=400, detail=f"Unknown quick action: {action}")
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-async def render_dashboard(request: Request):
-    ip_address = get_local_ip()
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={"ip_address": ip_address, "port": PORT},
-    )
 
 
 @app.get("/api/qr")
@@ -1488,4 +1486,4 @@ async def execute_command(req: CommandRequest):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="info")
