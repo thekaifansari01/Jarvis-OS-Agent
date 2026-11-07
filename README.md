@@ -85,51 +85,51 @@ Every section of the documentation has a direct deep link. Bookmark the ones you
 
 | Section | Direct Link |
 |---------|-------------|
-| Introduction | [/#introduction](https://jarvis-os-agent.vercel.app/documentation#introduction) |
-| Quick Start (5-min setup) | [/#quick-start](https://jarvis-os-agent.vercel.app/documentation#quick-start) |
-| Detailed Installation | [/#installation](https://jarvis-os-agent.vercel.app/documentation#installation) |
+| Introduction | [?section=introduction](https://jarvis-os-agent.vercel.app/documentation?section=introduction) |
+| Quick Start (5-min setup) | [?section=quick-start](https://jarvis-os-agent.vercel.app/documentation?section=quick-start) |
+| Detailed Installation | [?section=installation](https://jarvis-os-agent.vercel.app/documentation?section=installation) |
 
 #### Configuration
 
 | Section | Direct Link |
 |---------|-------------|
-| Environment Variables | [/#environment](https://jarvis-os-agent.vercel.app/documentation#environment) |
-| Voice Setup (Azure + Vosk) | [/#voice](https://jarvis-os-agent.vercel.app/documentation#voice) |
-| Memory & RAG | [/#memory](https://jarvis-os-agent.vercel.app/documentation#memory) |
+| Environment Variables | [?section=environment](https://jarvis-os-agent.vercel.app/documentation?section=environment) |
+| Voice Setup (Azure + Vosk) | [?section=voice](https://jarvis-os-agent.vercel.app/documentation?section=voice) |
+| Memory & RAG | [?section=memory](https://jarvis-os-agent.vercel.app/documentation?section=memory) |
 
 #### Integrations
 
 | Section | Direct Link |
 |---------|-------------|
-| MCP Servers | [/#mcp](https://jarvis-os-agent.vercel.app/documentation#mcp) |
-| Android Bridge | [/#android](https://jarvis-os-agent.vercel.app/documentation#android) |
-| Telegram Bot | [/#telegram](https://jarvis-os-agent.vercel.app/documentation#telegram) |
+| MCP Servers | [?section=mcp](https://jarvis-os-agent.vercel.app/documentation?section=mcp) |
+| Android Bridge | [?section=android](https://jarvis-os-agent.vercel.app/documentation?section=android) |
+| Telegram Bot | [?section=telegram](https://jarvis-os-agent.vercel.app/documentation?section=telegram) |
 
 #### Reference
 
 | Section | Direct Link |
 |---------|-------------|
-| CLI Commands | [/#cli](https://jarvis-os-agent.vercel.app/documentation#cli) |
-| Tools Reference | [/#tools](https://jarvis-os-agent.vercel.app/documentation#tools) |
-| Architecture | [/#architecture](https://jarvis-os-agent.vercel.app/documentation#architecture) |
+| CLI Commands | [?section=cli](https://jarvis-os-agent.vercel.app/documentation?section=cli) |
+| Tools Reference | [?section=tools](https://jarvis-os-agent.vercel.app/documentation?section=tools) |
+| Architecture | [?section=architecture](https://jarvis-os-agent.vercel.app/documentation?section=architecture) |
 
 #### UI Deep Dives
 
 | Component | Purpose | Direct Link |
 |-----------|---------|-------------|
-| 🖥️ **Agent Panel** | Live thought stream + HITL consent | [/#agent-panel](https://jarvis-os-agent.vercel.app/documentation#agent-panel) |
-| 📝 **Typing Popup** | Response streaming + TTS word sync | [/#typing-popup](https://jarvis-os-agent.vercel.app/documentation#typing-popup) |
-| 🗣️ **STT Popup** | Live voice input surface | [/#stt-popup](https://jarvis-os-agent.vercel.app/documentation#stt-popup) |
-| ⌨️ **Input Popup** | Keyboard command entry | [/#input-popup](https://jarvis-os-agent.vercel.app/documentation#input-popup) |
-| 🔀 **UI Comparison** | Side-by-side deep comparison | [/#ui-comparison](https://jarvis-os-agent.vercel.app/documentation#ui-comparison) |
+| 🖥️ **Agent Panel** | Live thought stream + HITL consent | [?section=agent-panel](https://jarvis-os-agent.vercel.app/documentation?section=agent-panel) |
+| 📝 **Typing Popup** | Response streaming + TTS word sync | [?section=typing-popup](https://jarvis-os-agent.vercel.app/documentation?section=typing-popup) |
+| 🗣️ **STT Popup** | Live voice input surface | [?section=stt-popup](https://jarvis-os-agent.vercel.app/documentation?section=stt-popup) |
+| ⌨️ **Input Popup** | Keyboard command entry | [?section=input-popup](https://jarvis-os-agent.vercel.app/documentation?section=input-popup) |
+| 🔀 **UI Comparison** | Side-by-side deep comparison | [?section=ui-comparison](https://jarvis-os-agent.vercel.app/documentation?section=ui-comparison) |
 
 #### System Internals
 
 | Section | Direct Link |
 |---------|-------------|
-| Lifecycle & Shutdown | [/#lifecycle-shutdown](https://jarvis-os-agent.vercel.app/documentation#lifecycle-shutdown) |
-| Troubleshooting | [/#troubleshooting](https://jarvis-os-agent.vercel.app/documentation#troubleshooting) |
-| FAQ | [/#faq](https://jarvis-os-agent.vercel.app/documentation#faq) |
+| Lifecycle & Shutdown | [?section=lifecycle-shutdown](https://jarvis-os-agent.vercel.app/documentation?section=lifecycle-shutdown) |
+| Troubleshooting | [?section=troubleshooting](https://jarvis-os-agent.vercel.app/documentation?section=troubleshooting) |
+| FAQ | [?section=faq](https://jarvis-os-agent.vercel.app/documentation?section=faq) |
 
 ---
 
@@ -150,24 +150,24 @@ Real screenshots from the running system — **not mockups, not renders**. Every
     <td align="center" width="50%">
       <img src="public/screenshots/ui/agent-panel-hero.png" alt="ZMQ Agent Panel streaming live thoughts" width="100%"/>
       <br/>
-      <sub><b>🧠 Agent Panel</b> — Real-time thought stream via ZMQ · <a href="https://jarvis-os-agent.vercel.app/documentation#agent-panel">Deep dive →</a></sub>
+      <sub><b>🧠 Agent Panel</b> — Real-time thought stream via ZMQ · <a href="https://jarvis-os-agent.vercel.app/documentation?section=agent-panel">Deep dive →</a></sub>
     </td>
     <td align="center" width="50%">
       <img src="public/screenshots/ui/typing-popup-hero.png" alt="Markdown typing popup with async image preview" width="100%"/>
       <br/>
-      <sub><b>📝 Typing Popup</b> — Markdown output with async rendering · <a href="https://jarvis-os-agent.vercel.app/documentation#typing-popup">Deep dive →</a></sub>
+      <sub><b>📝 Typing Popup</b> — Markdown output with async rendering · <a href="https://jarvis-os-agent.vercel.app/documentation?section=typing-popup">Deep dive →</a></sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="50%">
       <img src="public/screenshots/ui/stt-popup-hero.png" alt="STT status popup for voice input" width="100%"/>
       <br/>
-      <sub><b>🗣️ STT Status Popup</b> — Live voice input feedback · <a href="https://jarvis-os-agent.vercel.app/documentation#stt-popup">Deep dive →</a></sub>
+      <sub><b>🗣️ STT Status Popup</b> — Live voice input feedback · <a href="https://jarvis-os-agent.vercel.app/documentation?section=stt-popup">Deep dive →</a></sub>
     </td>
     <td align="center" width="50%">
       <img src="public/screenshots/ui/input-popup-hero.png" alt="Text input popup triggered by Ctrl+Shift+J" width="100%"/>
       <br/>
-      <sub><b>⌨️ Input Popup</b> — Summoned with <code>Ctrl+Shift+J</code> · <a href="https://jarvis-os-agent.vercel.app/documentation#input-popup">Deep dive →</a></sub>
+      <sub><b>⌨️ Input Popup</b> — Summoned with <code>Ctrl+Shift+J</code> · <a href="https://jarvis-os-agent.vercel.app/documentation?section=input-popup">Deep dive →</a></sub>
     </td>
   </tr>
 </table>
@@ -607,10 +607,10 @@ JARVIS ships with **four independently-processed premium UI components**. Each r
 
 | Component | Purpose | IPC Layer | Position | Deep Dive |
 |-----------|---------|-----------|----------|-----------|
-| 🖥️ **Agent Panel** | Live thought stream + HITL consent gates | ZMQ TCP (5555-5557) | Top center | [Read →](https://jarvis-os-agent.vercel.app/documentation#agent-panel) |
-| 📝 **Typing Popup** | Response streaming + TTS word sync + async previews | File JSON (`typing_status.json`) | Top center | [Read →](https://jarvis-os-agent.vercel.app/documentation#typing-popup) |
-| 🗣️ **STT Popup** | Live voice input surface with animated waveform | UDP socket (5556) | Bottom center | [Read →](https://jarvis-os-agent.vercel.app/documentation#stt-popup) |
-| ⌨️ **Input Popup** | Keyboard command entry via `Ctrl+Shift+J` | Subprocess stdout | Bottom center | [Read →](https://jarvis-os-agent.vercel.app/documentation#input-popup) |
+| 🖥️ **Agent Panel** | Live thought stream + HITL consent gates | ZMQ TCP (5555-5557) | Top center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=agent-panel) |
+| 📝 **Typing Popup** | Response streaming + TTS word sync + async previews | File JSON (`typing_status.json`) | Top center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=typing-popup) |
+| 🗣️ **STT Popup** | Live voice input surface with animated waveform | UDP socket (5556) | Bottom center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=stt-popup) |
+| ⌨️ **Input Popup** | Keyboard command entry via `Ctrl+Shift+J` | Subprocess stdout | Bottom center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=input-popup) |
 
 **Every panel is designed for real-time observability:**
 
@@ -619,7 +619,7 @@ JARVIS ships with **four independently-processed premium UI components**. Each r
 - The **STT Popup** is completely transparent to clicks — you can keep typing in your IDE while the waveform dances at the bottom of your screen.
 - The **Input Popup** is a premium modal command surface with pulse-on-type animation, auto-height growth, and Base64-safe subprocess IPC.
 
-See the [UI Comparison table](https://jarvis-os-agent.vercel.app/documentation#ui-comparison) for a full side-by-side breakdown of IPC, positioning, and lifecycle behavior.
+See the [UI Comparison table](https://jarvis-os-agent.vercel.app/documentation?section=ui-comparison) for a full side-by-side breakdown of IPC, positioning, and lifecycle behavior.
 
 ---
 
@@ -784,7 +784,7 @@ Jarvis ships with **two independent wake-word engines**, auto-selected at boot. 
 4. Download `.zip` → extract `.table` → save as `Data/model/azure/jarvis.table`
 5. Restart Jarvis — Azure engine activates automatically
 
-Full setup walkthrough: [docs · Voice Setup →](https://jarvis-os-agent.vercel.app/documentation#voice)
+Full setup walkthrough: [docs · Voice Setup →](https://jarvis-os-agent.vercel.app/documentation?section=voice)
 
 ---
 
@@ -914,7 +914,7 @@ flowchart TD
     LiveFix -.->|Re-plans mid-loop| AgenticBrain
 ```
 
-Deeper walkthrough: [docs · Architecture →](https://jarvis-os-agent.vercel.app/documentation#architecture) · [docs · Lifecycle & Shutdown →](https://jarvis-os-agent.vercel.app/documentation#lifecycle-shutdown)
+Deeper walkthrough: [docs · Architecture →](https://jarvis-os-agent.vercel.app/documentation?section=architecture) · [docs · Lifecycle & Shutdown →](https://jarvis-os-agent.vercel.app/documentation?section=lifecycle-shutdown)
 
 ---
 
@@ -981,7 +981,7 @@ Jarvis implements a **five-tier** zero-duplication memory architecture:
    - **Recency-Decay Scoring:** Patterns older than 180 days receive a linear score penalty (down to 0.5×) so stale routines naturally drop out of retrieval.
    - **Isolated from LTM:** Behavioral patterns never enter the graph DB; LTM facts never enter the JSONL. The agentic system prompt enforces strict mutual exclusion and silent contextual injection.
 
-Full memory deep dive: [docs · Memory & RAG →](https://jarvis-os-agent.vercel.app/documentation#memory)
+Full memory deep dive: [docs · Memory & RAG →](https://jarvis-os-agent.vercel.app/documentation?section=memory)
 
 ---
 
@@ -1002,7 +1002,7 @@ Control your Android phone natively from Windows using a persistent Async WebSoc
 2. Open the Jarvis Mobile Bridge dashboard at `http://127.0.0.1:8090`.
 3. Scan the QR code or copy the setup command into your Termux terminal. The bridge will auto-install, configure the Android Share menu, and connect instantly.
 
-Full setup walkthrough: [docs · Android Bridge →](https://jarvis-os-agent.vercel.app/documentation#android)
+Full setup walkthrough: [docs · Android Bridge →](https://jarvis-os-agent.vercel.app/documentation?section=android)
 
 ---
 
@@ -1023,7 +1023,7 @@ Full setup walkthrough: [docs · Android Bridge →](https://jarvis-os-agent.ver
 | 🎨 **Image Generation** | Text-to-image, image-to-image editing |
 | 🔌 **MCP External Tools** | 18,000+ community servers — GitHub, Brave, SQLite, Postgres, Notion, Slack, Docker, Puppeteer, and more |
 
-Full tool reference: [docs · Tools →](https://jarvis-os-agent.vercel.app/documentation#tools)
+Full tool reference: [docs · Tools →](https://jarvis-os-agent.vercel.app/documentation?section=tools)
 
 ---
 
@@ -1132,7 +1132,7 @@ Jarvis automatically resolves `npx` / `.cmd` shims on Windows directly to the un
 - **Graceful startup** — server connections run in parallel background threads, so Jarvis's banner, hotkeys, and native tools remain instantly responsive even while MCP servers are still handshaking.
 - **Safe rollback** — deleting `Data/mcp_servers.json` or resetting it to `{ "mcpServers": {} }` reverts Jarvis to its pre-MCP state on next boot. Zero code changes needed.
 
-Full MCP setup: [docs · MCP Servers →](https://jarvis-os-agent.vercel.app/documentation#mcp)
+Full MCP setup: [docs · MCP Servers →](https://jarvis-os-agent.vercel.app/documentation?section=mcp)
 
 ---
 
@@ -1227,7 +1227,7 @@ On first boot, the indexer automatically:
 
 > 📌 **Requirements:** `pip install flask` (included in `requirements.txt`). Dashboard binds to `127.0.0.1` only — never exposed to LAN or internet.
 
-Full install walkthrough: [docs · Installation →](https://jarvis-os-agent.vercel.app/documentation#installation) · [docs · Quick Start →](https://jarvis-os-agent.vercel.app/documentation#quick-start)
+Full install walkthrough: [docs · Installation →](https://jarvis-os-agent.vercel.app/documentation?section=installation) · [docs · Quick Start →](https://jarvis-os-agent.vercel.app/documentation?section=quick-start)
 
 ### Global Launch
 
@@ -1310,7 +1310,7 @@ Jarvis calls `mcp__github__list_issues` with the appropriate filters, summarizes
 | `jarvis reset --hard` | **FACTORY RESET** — wipes memory, vectors, sessions |
 | `jarvis --help` | Global help |
 
-Full CLI reference: [docs · CLI Commands →](https://jarvis-os-agent.vercel.app/documentation#cli)
+Full CLI reference: [docs · CLI Commands →](https://jarvis-os-agent.vercel.app/documentation?section=cli)
 
 ### Environment Variables (`.env`)
 
@@ -1357,7 +1357,7 @@ Copy `.env.example` to `.env` and populate your credentials. For 100% local LLM 
 | `TELEGRAM_API_ID` | Telegram desktop client | Optional |
 | `TELEGRAM_API_HASH` | Telegram desktop client | Optional |
 
-Full env var reference: [docs · Environment →](https://jarvis-os-agent.vercel.app/documentation#environment)
+Full env var reference: [docs · Environment →](https://jarvis-os-agent.vercel.app/documentation?section=environment)
 
 ### MCP Configuration (`Data/mcp_servers.json`)
 
@@ -1404,7 +1404,7 @@ MCP servers are configured separately in `Data/mcp_servers.json`, **not** in `.e
 | Zombie processes after crash | `os._exit()` didn't run — likely a hard `kill -9` / `taskkill /F`. Fix: `Get-Process python \| Stop-Process -Force` in PowerShell. |
 | JARVIS won't start — says "Already running" | Stale lock file from previous crash. Delete the lock file in repo root. Check Task Manager → `python.exe` → kill orphan. |
 
-Full troubleshooting guide: [docs · Troubleshooting →](https://jarvis-os-agent.vercel.app/documentation#troubleshooting)
+Full troubleshooting guide: [docs · Troubleshooting →](https://jarvis-os-agent.vercel.app/documentation?section=troubleshooting)
 
 ### FAQ
 
