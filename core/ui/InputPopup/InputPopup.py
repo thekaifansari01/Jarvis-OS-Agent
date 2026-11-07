@@ -15,6 +15,8 @@ if hasattr(sys.stderr, "reconfigure"):
 import os
 import math
 import base64
+import platform
+import ctypes
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QFrame, QTextEdit, QLabel, QWidget,
     QVBoxLayout, QHBoxLayout, QSizePolicy
@@ -46,9 +48,9 @@ qInstallMessageHandler(_input_qt_message_handler)
 
 
 class GlassContainer(QFrame):
-    def __init__(self, parent=None):
+    def __init__(self, initial_rgb=None, parent=None):
         super().__init__(parent)
-        self.rgb = [191.0, 90.0, 242.0]
+        self.rgb = list(initial_rgb) if initial_rgb else [191.0, 90.0, 242.0]
         self.phase = 0.0
         self._pulse = 0.0
         self.corner_radius = 28.0
@@ -94,8 +96,8 @@ class GlassContainer(QFrame):
             QPointF(island_rect.left() + island_rect.width() * 0.22, island_rect.top()),
             island_rect.width() * 0.6
         )
-        ambient.setColorAt(0.0, QColor(r, g, b, 36))
-        ambient.setColorAt(0.55, QColor(r, g, b, 12))
+        ambient.setColorAt(0.0, QColor(r, g, b, 38))
+        ambient.setColorAt(0.55, QColor(r, g, b, 14))
         ambient.setColorAt(1.0, QColor(r, g, b, 0))
         painter.setBrush(ambient)
         painter.drawRoundedRect(island_rect, radius, radius)
@@ -104,7 +106,7 @@ class GlassContainer(QFrame):
             QPointF(island_rect.center().x(), island_rect.bottom()),
             island_rect.width() * 0.55
         )
-        bloom.setColorAt(0.0, QColor(r, g, b, 26))
+        bloom.setColorAt(0.0, QColor(r, g, b, 28))
         bloom.setColorAt(1.0, QColor(r, g, b, 0))
         painter.setBrush(bloom)
         painter.drawRoundedRect(island_rect, radius, radius)
@@ -145,12 +147,46 @@ class GlassContainer(QFrame):
         painter.drawRect(shine_rect)
 
 
+class QuestionBanner(QFrame):
+    def __init__(self, initial_rgb=None, parent=None):
+        super().__init__(parent)
+        self.rgb = list(initial_rgb) if initial_rgb else [56.0, 189.0, 248.0]
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+    def set_visuals(self, rgb):
+        self.rgb = rgb
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        rect = QRectF(self.rect())
+        r, g, b = [max(0, min(255, int(c))) for c in self.rgb]
+        radius = 16.0
+
+        bg_grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        bg_grad.setColorAt(0.0, QColor(r, g, b, 24))
+        bg_grad.setColorAt(0.6, QColor(255, 255, 255, 8))
+        bg_grad.setColorAt(1.0, QColor(12, 14, 22, 160))
+        painter.setBrush(bg_grad)
+
+        border_pen = QPen(QColor(r, g, b, 75), 1.0)
+        painter.setPen(border_pen)
+        painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+
+        bar_rect = QRectF(rect.left() + 1.0, rect.top() + 10.0, 3.2, max(12.0, rect.height() - 20.0))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(r, g, b, 230))
+        painter.drawRoundedRect(bar_rect, 1.6, 1.6)
+
+
 class EnterIndicator(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, initial_rgb=None, parent=None):
         super().__init__(parent)
         self.setFixedSize(28, 28)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.rgb = [191.0, 90.0, 242.0]
+        self.rgb = list(initial_rgb) if initial_rgb else [191.0, 90.0, 242.0]
         self._opacity = 0.0
 
     @pyqtProperty(float)
@@ -234,6 +270,8 @@ class InputPopup(QDialog):
     WINDOW_BOTTOM_OFFSET = 160
     MIN_TEXT_HEIGHT = 30
     MAX_TEXT_HEIGHT = 180
+    MIN_QUESTION_HEIGHT = 24
+    MAX_QUESTION_HEIGHT = 135
     VERTICAL_OVERHEAD = 70
     GLOW_INTERVAL_MS = 36
     GLOW_PHASE_STEP = 0.045
@@ -243,20 +281,32 @@ class InputPopup(QDialog):
     EXIT_SLIDE_MS = 300
     RESIZE_MS = 340
     PULSE_PERIOD_MS = 1200
-    FOCUS_DELAY_MS = 150
+    FOCUS_DELAY_MS = 120
 
-    def __init__(self, parent=None):
+    def __init__(self, question_text="", placeholder_text="", parent=None):
         super().__init__(parent)
+
+        self.ask_question = (question_text or "").strip()
+        self.ask_placeholder = (placeholder_text or "").strip()
+        self.is_ask_mode = bool(self.ask_question)
 
         self.isClosing = False
         self.isTypingMode = False
         self.commandText = ""
         self.resizeAnimGroup = None
         self.outAnimGroup = None
+        self.question_overhead = 0
 
         self.gradient_phase = 0.0
-        self.current_rgb = [191.0, 90.0, 242.0]
-        self.target_rgb = [191.0, 90.0, 242.0]
+        if self.is_ask_mode:
+            self.idle_rgb = [56.0, 189.0, 248.0]
+            self.active_rgb = [103.0, 214.0, 255.0]
+        else:
+            self.idle_rgb = [191.0, 90.0, 242.0]
+            self.active_rgb = [200.0, 100.0, 252.0]
+
+        self.current_rgb = list(self.idle_rgb)
+        self.target_rgb = list(self.idle_rgb)
 
         self._load_fonts()
         self.initUI()
@@ -305,14 +355,94 @@ class InputPopup(QDialog):
         self.outer_layout.setContentsMargins(*self.OUTER_MARGINS)
         self.outer_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
-        self.container = GlassContainer(self)
+        self.container = GlassContainer(self.current_rgb, self)
         self.container.setObjectName("Island")
         self.container.setMinimumSize(0, 0)
 
-        container_layout = QHBoxLayout(self.container)
-        container_layout.setContentsMargins(*self.CONTAINER_MARGINS)
-        container_layout.setSpacing(self.CONTAINER_SPACING)
-        container_layout.setAlignment(Qt.AlignTop)
+        container_vlayout = QVBoxLayout(self.container)
+        container_vlayout.setContentsMargins(*self.CONTAINER_MARGINS)
+        container_vlayout.setSpacing(12 if self.is_ask_mode else 0)
+
+        self.question_banner = None
+        self.question_view = None
+
+        if self.is_ask_mode:
+            self.question_banner = QuestionBanner(self.current_rgb, self.container)
+            banner_layout = QVBoxLayout(self.question_banner)
+            banner_layout.setContentsMargins(16, 10, 14, 10)
+            banner_layout.setSpacing(4)
+
+            badge_row = QHBoxLayout()
+            badge_row.setContentsMargins(0, 0, 0, 0)
+            badge_row.setSpacing(6)
+
+            badge_dot = QLabel("●", self.question_banner)
+            badge_dot.setStyleSheet(
+                "color: rgba(56, 189, 248, 0.98); font-size: 9pt; background: transparent; border: none;"
+            )
+            badge_title = QLabel("JARVIS CLARIFICATION REQUEST", self.question_banner)
+            badge_title.setStyleSheet(f"""
+                color: rgba(125, 211, 252, 0.95);
+                font-family: "{self.font_eng.family()}", "Segoe UI", sans-serif;
+                font-size: 8.5pt;
+                font-weight: 700;
+                letter-spacing: 1.3px;
+                background: transparent;
+                border: none;
+            """)
+            badge_hint = QLabel("ESC to skip", self.question_banner)
+            badge_hint.setStyleSheet(f"""
+                color: rgba(255, 255, 255, 0.38);
+                font-family: "{self.font_eng.family()}", "Segoe UI", sans-serif;
+                font-size: 8pt;
+                background: transparent;
+                border: none;
+            """)
+
+            badge_row.addWidget(badge_dot, 0, Qt.AlignVCenter)
+            badge_row.addWidget(badge_title, 0, Qt.AlignVCenter)
+            badge_row.addStretch(1)
+            badge_row.addWidget(badge_hint, 0, Qt.AlignVCenter)
+            banner_layout.addLayout(badge_row)
+
+            self.question_view = QTextEdit(self.question_banner)
+            self.question_view.setReadOnly(True)
+            self.question_view.setFrameShape(QFrame.NoFrame)
+            self.question_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.question_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.question_view.setPlainText(self.ask_question)
+            self.question_view.setStyleSheet(f"""
+                QTextEdit {{
+                    background: transparent;
+                    color: rgba(241, 245, 249, 0.96);
+                    border: none;
+                    font-family: "{self.font_eng.family()}", "{self.font_hin.family()}", "Segoe UI", sans-serif;
+                    font-size: 11.5pt;
+                    selection-background-color: rgba(56, 189, 248, 0.38);
+                    selection-color: #FFFFFF;
+                }}
+                QScrollBar:vertical {{
+                    border: none;
+                    background: transparent;
+                    width: 5px;
+                    margin: 0px;
+                }}
+                QScrollBar::handle:vertical {{
+                    background: rgba(56, 189, 248, 0.35);
+                    border-radius: 2px;
+                    min-height: 16px;
+                }}
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                    height: 0px;
+                }}
+            """)
+            banner_layout.addWidget(self.question_view)
+            container_vlayout.addWidget(self.question_banner)
+
+        input_row = QHBoxLayout()
+        input_row.setContentsMargins(0, 0, 0, 0)
+        input_row.setSpacing(self.CONTAINER_SPACING)
+        input_row.setAlignment(Qt.AlignTop)
 
         self.icon_label = QLabel(self.container)
         self.icon_label.setFixedSize(28, 28)
@@ -329,16 +459,19 @@ class InputPopup(QDialog):
         else:
             self.icon_label.setText("J")
             self.icon_label.setFont(QFont(self.font_eng.family(), 18, QFont.Black))
+            accent_css = "rgba(56, 189, 248, 0.95)" if self.is_ask_mode else "rgba(191, 90, 242, 0.95)"
             self.icon_label.setStyleSheet(
-                "color: rgba(191, 90, 242, 0.95); "
-                "background: transparent; border: none;"
+                f"color: {accent_css}; background: transparent; border: none;"
             )
 
-        container_layout.addWidget(self.icon_label, 0, Qt.AlignTop)
+        input_row.addWidget(self.icon_label, 0, Qt.AlignTop)
 
         self.inputField = SmartInput(self, self.container)
         self.inputField.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.inputField.setPlaceholderText("What do you need?")
+        default_ph = "Type your answer for Jarvis..." if self.is_ask_mode else "What do you need?"
+        self.inputField.setPlaceholderText(self.ask_placeholder or default_ph)
+        sel_bg = "rgba(56, 189, 248, 0.42)" if self.is_ask_mode else "rgba(191, 90, 242, 0.45)"
+        scroll_hover = "rgba(56, 189, 248, 0.65)" if self.is_ask_mode else "rgba(191, 90, 242, 0.65)"
         self.inputField.setStyleSheet(f"""
             QTextEdit {{
                 background: transparent;
@@ -347,7 +480,7 @@ class InputPopup(QDialog):
                 font-family: "{self.font_eng.family()}", "{self.font_hin.family()}", "Segoe UI", sans-serif;
                 font-size: 13.5pt;
                 letter-spacing: 0.4px;
-                selection-background-color: rgba(191, 90, 242, 0.45);
+                selection-background-color: {sel_bg};
                 selection-color: #FFFFFF;
             }}
             QScrollBar:vertical {{
@@ -362,7 +495,7 @@ class InputPopup(QDialog):
                 min-height: 20px;
             }}
             QScrollBar::handle:vertical:hover {{
-                background: rgba(191, 90, 242, 0.65);
+                background: {scroll_hover};
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 border: none;
@@ -376,18 +509,20 @@ class InputPopup(QDialog):
 
         try:
             pal = self.inputField.palette()
-            pal.setColor(QPalette.PlaceholderText, QColor(255, 255, 255, 72))
+            pal.setColor(QPalette.PlaceholderText, QColor(255, 255, 255, 78))
             self.inputField.setPalette(pal)
         except AttributeError:
             pass
 
-        container_layout.addWidget(self.inputField, 1)
+        input_row.addWidget(self.inputField, 1)
 
-        self.enter_indicator = EnterIndicator(self.container)
+        self.enter_indicator = EnterIndicator(self.current_rgb, self.container)
         self.enter_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        container_layout.addWidget(self.enter_indicator, 0, Qt.AlignTop)
+        input_row.addWidget(self.enter_indicator, 0, Qt.AlignTop)
 
+        container_vlayout.addLayout(input_row)
         self.outer_layout.addWidget(self.container)
+
         self.inputField.textChanged.connect(self.onTextChanged)
 
         self.indicator_anim = QPropertyAnimation(
@@ -415,6 +550,7 @@ class InputPopup(QDialog):
         self.targetX = (screen.width() - self.width()) // 2
         self.baseBottomY = screen.height() - self.WINDOW_BOTTOM_OFFSET
 
+        self._computeQuestionGeometry()
         self.adjustHeight(False)
 
         self.entry_anim_group = QParallelAnimationGroup(self)
@@ -433,6 +569,31 @@ class InputPopup(QDialog):
         self.entry_anim_group.addAnimation(fade_in)
         self.entry_anim_group.addAnimation(slide_up)
         self.entry_anim_group.start(QAbstractAnimation.DeleteWhenStopped)
+
+    def _computeQuestionGeometry(self):
+        if not self.is_ask_mode or not self.question_view or not self.question_banner:
+            self.question_overhead = 0
+            return
+
+        avail_width = (
+            self.WIDTH
+            - self.OUTER_MARGINS[0] - self.OUTER_MARGINS[2]
+            - self.CONTAINER_MARGINS[0] - self.CONTAINER_MARGINS[2]
+            - 30
+        )
+        self.question_view.document().setTextWidth(avail_width)
+        q_doc_h = int(self.question_view.document().size().height()) + 4
+        clamped_q_h = max(self.MIN_QUESTION_HEIGHT, min(q_doc_h, self.MAX_QUESTION_HEIGHT))
+
+        if q_doc_h > self.MAX_QUESTION_HEIGHT:
+            self.question_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        else:
+            self.question_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        self.question_view.setFixedHeight(clamped_q_h)
+        banner_h = clamped_q_h + 42
+        self.question_banner.setFixedHeight(banner_h)
+        self.question_overhead = banner_h + 12
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -469,11 +630,29 @@ class InputPopup(QDialog):
 
         self.container.update_visuals(self.current_rgb, self.gradient_phase)
         self.enter_indicator.set_visuals(self.current_rgb)
+        if self.question_banner is not None:
+            self.question_banner.set_visuals(self.current_rgb)
 
     def forceFocus(self):
         if self.isClosing:
             return
         try:
+            if platform.system() == "Windows":
+                hwnd = int(self.winId())
+                user32 = ctypes.windll.user32
+                kernel32 = ctypes.windll.kernel32
+                fg_hwnd = user32.GetForegroundWindow()
+                fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+                cur_tid = kernel32.GetCurrentThreadId()
+                if fg_tid and fg_tid != cur_tid:
+                    user32.AttachThreadInput(fg_tid, cur_tid, True)
+                    user32.ShowWindow(hwnd, 9)
+                    user32.SetForegroundWindow(hwnd)
+                    user32.SetFocus(hwnd)
+                    user32.AttachThreadInput(fg_tid, cur_tid, False)
+                else:
+                    user32.ShowWindow(hwnd, 9)
+                    user32.SetForegroundWindow(hwnd)
             self.activateWindow()
             self.raise_()
             self.inputField.setFocus()
@@ -497,10 +676,10 @@ class InputPopup(QDialog):
             self.indicator_anim.start()
 
             if hasText:
-                self.target_rgb = [200.0, 100.0, 252.0]
+                self.target_rgb = list(self.active_rgb)
                 self.pulse_anim.start()
             else:
-                self.target_rgb = [191.0, 90.0, 242.0]
+                self.target_rgb = list(self.idle_rgb)
 
         self.adjustHeight(True)
 
@@ -514,7 +693,7 @@ class InputPopup(QDialog):
         else:
             self.inputField.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        new_window_height = new_text_height + self.VERTICAL_OVERHEAD
+        new_window_height = new_text_height + self.VERTICAL_OVERHEAD + self.question_overhead
 
         if self.height() == new_window_height:
             return
@@ -560,14 +739,18 @@ class InputPopup(QDialog):
     def triggerAccept(self):
         if self.isClosing:
             return
+        raw = self.inputField.toPlainText().strip()
+        if not raw and self.is_ask_mode:
+            return
         self.isClosing = True
-        self.commandText = self.inputField.toPlainText().strip()
+        self.commandText = raw
         self.fadeOutAndClose(True)
 
     def triggerReject(self):
         if self.isClosing:
             return
         self.isClosing = True
+        self.commandText = ""
         self.fadeOutAndClose(False)
 
     def fadeOutAndClose(self, is_accepting):
@@ -610,7 +793,12 @@ class InputPopup(QDialog):
 if __name__ == "__main__":
     try:
         app = QApplication(sys.argv)
-        popup = InputPopup()
+        question_env = os.environ.get("JARVIS_ASK_QUESTION", "").strip()
+        placeholder_env = os.environ.get("JARVIS_ASK_PLACEHOLDER", "").strip()
+        popup = InputPopup(
+            question_text=question_env,
+            placeholder_text=placeholder_env
+        )
         popup.exec_()
         command = popup.getCommandText()
         if command:

@@ -2,7 +2,7 @@
 
 > **An AI Operating System that autonomously controls your PC, Android phone, local files, and lifelong memory — not just your code.**
 
-> **Open-Source · Semantic Behavioral Pattern Engine · Live Mid-Execution Correction · Inline Comms Preview & Edit · Line-Drift-Free Editing · Lifelong Episodic Memory · Dual-Engine Voice · Proactive HITL · Android Termux Bridge · Telegram Remote Control · Hybrid RAG · PC System Monitoring · Unified Portal · Plug-and-Play MCP Support**
+> **Open-Source · Semantic Behavioral Pattern Engine · Live Mid-Execution Correction · Mid-Task Agent Clarification (`ask_user`) · Inline Comms Preview & Edit · Line-Drift-Free Editing · Lifelong Episodic Memory · Dual-Engine Voice · Proactive HITL · Android Termux Bridge · Telegram Remote Control · Hybrid RAG · PC System Monitoring · Unified Portal · Plug-and-Play MCP Support**
 
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -611,7 +611,7 @@ JARVIS ships with **four independently-processed premium desktop UI components**
 | 🖥️ **Agent Panel** | Live thought stream + HITL consent gates | ZMQ TCP (5555-5557) | Top center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=agent-panel) |
 | 📝 **Typing Popup** | Response streaming + TTS word sync + async previews | File JSON (`typing_status.json`) | Top center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=typing-popup) |
 | 🗣️ **STT Popup** | Live voice input surface with animated waveform | UDP socket (5556) | Bottom center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=stt-popup) |
-| ⌨️ **Input Popup** | Keyboard command entry via `Ctrl+Shift+J` | Subprocess stdout | Bottom center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=input-popup) |
+| ⌨️ **Input Popup** | Dual-mode glassmorphic surface (`Ctrl+Shift+J` command entry + Agent `ask_user` clarification card) | Env + Base64 stdout | Bottom center | [Read →](https://jarvis-os-agent.vercel.app/documentation?section=input-popup) |
 
 **Every panel is designed for real-time observability:**
 
@@ -619,7 +619,7 @@ JARVIS ships with **four independently-processed premium desktop UI components**
 - The **Agent Panel** shows exactly what the agent is thinking, which tool it's running, how many tokens it has consumed, and when it needs your permission before doing something irreversible.
 - The **Typing Popup** renders the agent's response in real-time with syntax-highlighted code, async image/link previews, and word-by-word TTS highlighting synchronized to actual audio playback.
 - The **STT Popup** is completely transparent to clicks — you can keep typing in your IDE while the waveform dances at the bottom of your screen.
-- The **Input Popup** is a premium modal command surface with pulse-on-type animation, auto-height growth, and Base64-safe subprocess IPC.
+- The **Input Popup** is a dual-mode glassmorphic island: summoned manually via `Ctrl+Shift+J` for instant text commands or mid-loop overrides, and automatically launched in **Clarification Mode** when the Agentic Brain calls `ask_user` — displaying the agent's question in a cyan-accented banner while pausing the loop timeout and muting background STT until you type your answer.
 
 See the [UI Comparison table](https://jarvis-os-agent.vercel.app/documentation?section=ui-comparison) for a full side-by-side breakdown of IPC, positioning, and lifecycle behavior.
 
@@ -687,6 +687,7 @@ If you want an AI that finishes what it starts, on the machine you actually work
 | Icon | Feature | What It Actually Does |
 |:---:|:---|:---|
 | 🔄 | **Live Mid-Execution Correction** | Agent loop is interruptible. User feedback injected mid-run is absorbed, plan is revised in-place, and completed steps stay intact. No full restart, no hallucination. |
+| ❓ | **Mid-Task Agent Clarification (`ask_user`)** | When critical parameters are missing mid-mission (e.g., an unknown contact number, ambiguous file target, or design choice), the Agentic Brain pauses on the current step and summons the glassmorphic `InputPopup` displaying its exact question. Background voice/STT is isolated, the loop timeout clock is paused while you type, and your reply is injected directly into the step `Observation` and `<Confirmed_Facts>` without restarting the loop. |
 | 🔌 | **Plug-and-Play MCP Integration (Zero-Restart Hot-Reload)** | Dynamically connects external Model Context Protocol (MCP) servers over `stdio`, `SSE`, or `Streamable HTTP`. Features a Claude Code-style CLI (`jarvis mcp add/remove/enable/disable/list/test`), native Windows `npx` resolution (no `cmd /c` wrappers needed), full `$ref`/`$defs` JSON schema dereferencing, and live `mtime` hot-reloading — add, remove, or toggle any of 18,000+ community servers while Jarvis is running with zero restarts. |
 | 💻 | **Autonomous Software Engineering** | Explores codebases (`repo_map`), reads files (`view`), edits with exact block diffs (`replace_block`), runs Python scripts (`run_python_code`), and executes terminal commands. Iterates on failures using a two-strike debug loop. |
 | 🛡️ | **Line-Drift-Free Code Editing** | Uses exact `replace_block` search-and-replace instead of line numbers. Syntax errors are caught via AST lint and auto-corrected without human intervention. |
@@ -892,6 +893,7 @@ flowchart TD
     end
 
     AgenticBrain <-->|ZMQ PUB / PUSH-PULL| AgentPanel
+    AgenticBrain <-->|ask_user Clarification| InputPopup
     FastBrain -->|typing_status.json| TypingPopup
     STT --> STTPopup
     InputPopup --> Router
@@ -939,6 +941,7 @@ Jarvis uses two brains to optimize for both speed and depth.
 | **Code Execution** | ❌ | ✅ `run_python_code`, `execute_terminal_command` |
 | **Memory Recall** | Rolling 10-turn history + `<System_Execution_Log>` + Ephemeral TTL artifacts + top-1 behavioral pattern | Full 15-day history + Lifetime vector-graph recall + Hybrid RAG + Ephemeral state + top-3 behavioral patterns |
 | **Live Mid-Execution Correction** | ❌ | ✅ Interruptible loop re-plans per step |
+| **Mid-Task User Clarification (`ask_user`)** | ❌ | ✅ Pauses loop, opens glassmorphic Question Popup & pins typed answer to `<Confirmed_Facts>` |
 | **MCP Tool Access** | ❌ | ✅ Auto-discovered `mcp__*` tools merged into the tool list |
 | **Wake Word Engine** | ✅ Azure Custom Keyword (on-device) with Vosk fallback | ✅ Same wake engine, plus multimodal vision |
 | **Multimodal Vision** | ❌ | ✅ Image and video analysis, OCR |

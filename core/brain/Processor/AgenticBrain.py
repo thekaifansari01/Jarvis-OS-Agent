@@ -218,6 +218,9 @@ def update_confirmed_facts(
     elif action_key in ("email_action", "whatsapp_action", "telegram_action"):
         clean_summary = obs_str.replace("Observation:", "").replace("\n", " ").strip()
         facts_ledger[f"Communication ({action_key} {action_detail[:25]})"] = clean_summary[:300]
+    elif action_key == "ask_user":
+        clean_ans = obs_str.replace("Observation:", "").replace("\n", " ").strip()
+        facts_ledger[f"User Clarified ({action_detail[:35]})"] = clean_ans[:350]
     elif action_key.startswith("mcp__"):
         clean_mcp = obs_str.replace("Observation:", "").replace("\n", " ").strip()
         facts_ledger[f"MCP ({action_key[:40]})"] = clean_mcp[:300]
@@ -872,6 +875,8 @@ If the <Mission> is fully complete, call 'complete_task'.
                                 current_detail = "Scrolling"
                             else:
                                 current_detail = f"GUI: {gui_action}"
+                        elif key == "ask_user" and isinstance(value, dict):
+                            current_detail = f"Asking User: {value.get('question', '')[:60]}"
                         elif key.startswith("mcp__"):
                             parts = key.split("__", 2)
                             if len(parts) == 3:
@@ -989,6 +994,11 @@ If the <Mission> is fully complete, call 'complete_task'.
                         else:
                             observation = "Observation: No valid memory target provided. Use 'recent_logs' or 'lifetime_recall'."
 
+                    elif "ask_user" in executed_tools and silent:
+                        observation = (
+                            "Observation: [SILENT/REMOTE MODE ACTIVE] Desktop input popup cannot be shown while running in background/remote mode. "
+                            "Call 'complete_task' to ask the user your question directly."
+                        )
                     elif executed_tools:
                         from core.brain.executor import execute_tools_parallel, consume_confirmation_wait_time
                         observation = execute_tools_parallel(ai_response)

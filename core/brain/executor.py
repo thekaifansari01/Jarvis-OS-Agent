@@ -895,6 +895,38 @@ def handle_clipboard_action(clipboard_cmd: dict) -> str:
         return "Failed to write text to OS clipboard."
     return "Unknown clipboard action."
 
+@with_observation
+def handle_ask_user(ask_cmd: dict) -> str:
+    global _TOTAL_CONFIRM_WAIT_SECONDS
+    question = str(ask_cmd.get('question', '')).strip()
+    placeholder = str(ask_cmd.get('placeholder', '')).strip()
+    if not question:
+        return "[ERROR] 'ask_user' missing required 'question' parameter."
+    if is_shutdown():
+        return "[USER_CANCELLED] Shutdown in progress."
+
+    logger.info(f"🤖 Agent asking user via InputPopup: {question}")
+    with _CONFIRM_LOCK:
+        wait_start = time.time()
+        try:
+            from core.main.HotKeyManager import ask_user_via_popup
+            user_reply = ask_user_via_popup(question=question, placeholder=placeholder)
+        finally:
+            waited = time.time() - wait_start
+            with _CONFIRM_WAIT_LOCK:
+                _TOTAL_CONFIRM_WAIT_SECONDS += waited
+
+    if user_reply and user_reply.strip():
+        clean_reply = user_reply.strip()
+        logger.info(f"✅ User answered ask_user prompt ({len(clean_reply)} chars)")
+        return f"User answered your question ('{question}') -> {clean_reply}"
+
+    logger.info("🛑 User closed/cancelled the ask_user InputPopup without answering.")
+    return (
+        f"[USER_CANCELLED] User closed the input popup without answering ('{question}'). "
+        "Do NOT call 'ask_user' again for this same question; either proceed with safe defaults or finish via 'complete_task'."
+    )
+
 TOOL_REGISTRY = {
     'search_actions': handle_search_actions,
     'execute_terminal_command': handle_terminal_command,
@@ -910,7 +942,8 @@ TOOL_REGISTRY = {
     'clipboard_action': handle_clipboard_action,
     'gui_controller': handle_gui_controller,
     'mobile_action': handle_mobile_action,
-    'file_transfer_action': handle_file_transfer
+    'file_transfer_action': handle_file_transfer,
+    'ask_user': handle_ask_user
 }
 
 def _is_mcp_tool(tool_name):

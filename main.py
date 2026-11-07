@@ -391,7 +391,7 @@ def run_jarvis():
             start_mcp_service
         )
         from core.main.CommandHandler import main_command_processor, is_jarvis_busy
-        from core.main.HotKeyManager import setup_hotkeys
+        from core.main.HotKeyManager import setup_hotkeys, is_popup_active
         from core.main.ServiceWatchdog import start_watchdog
         from core.main.TelegramRemoteBot import set_telegram_remote_context
     except ImportError as e:
@@ -510,9 +510,22 @@ def run_jarvis():
         else:
             while _is_running:
                 try:
+                    if is_popup_active():
+                        try:
+                            hide_stt_popup()
+                        except Exception:
+                            pass
+                        time.sleep(0.25)
+                        continue
                     command = stt.listen()
                     if not _is_running:
                         break
+                    if is_popup_active():
+                        try:
+                            hide_stt_popup()
+                        except Exception:
+                            pass
+                        continue
                     if not command:
                         continue
                     if command.strip().lower() in ["exit", "quit", "stop", "bye"]:

@@ -98,6 +98,12 @@ AGENT_SYSTEM_PROMPT = """<agent_system_prompt>
     </rule>
   </error_recovery_and_debugging>
 
+  <human_in_the_loop_directive>
+    <rule>When critical information, a missing parameter (e.g., phone number, email address, file choice, confirmation preference), or clarification is required and cannot be found via 'memory_actions' or 'search_actions', call 'ask_user' to ask the user directly mid-task instead of ending the loop with 'complete_task'.</rule>
+    <rule>Always invoke 'ask_user' ALONE as a single tool call in that step. Never combine 'ask_user' with other tools in the same turn.</rule>
+    <rule>Once the user's typed reply arrives in the Observation, treat it as verified ground truth and continue executing the remaining steps of the <Mission>.</rule>
+  </human_in_the_loop_directive>
+
   <definition_of_done>
     <rule>Observe real execution success in Tool Results before declaring completion via 'complete_task'.</rule>
   </definition_of_done>
@@ -130,9 +136,8 @@ def get_native_tools():
                 types.FunctionDeclaration(
                     name="complete_task",
                     description=(
-                        "[WHEN TO USE]: Call this tool ONLY when the entire user command/mission is 100% achieved, "
-                        "OR when required information is completely missing and you must ask the user a clarifying question.\n"
-                        "[WHEN NOT TO USE]: NEVER call this prematurely if you haven't verified tool results or completed the task.\n"
+                        "[WHEN TO USE]: Call this tool ONLY when the entire user command/mission is 100% achieved.\n"
+                        "[WHEN NOT TO USE]: NEVER call this prematurely if you haven't verified tool results, and NEVER use this to ask mid-task clarifying questions (use 'ask_user' instead so you can continue the task after getting the user's answer).\n"
                         "[RULE]: Your text in 'response' will be the final answer shown/spoken to the user."
                     ),
                     parameters=types.Schema(
@@ -144,6 +149,31 @@ def get_native_tools():
                             )
                         },
                         required=["response"]
+                    )
+                ),
+                types.FunctionDeclaration(
+                    name="ask_user",
+                    description=(
+                        "[WHEN TO USE]: Call this tool when you need a specific piece of missing information, clarification, or decision from the user in the middle of a task (e.g., missing phone number/email not found in memory, choosing between multiple files, or clarifying ambiguous requirements).\n"
+                        "[HOW IT WORKS]: Opens a dedicated text input popup on the user's screen displaying your question and waits for their typed reply. The loop pauses until the user responds, and their exact answer is returned to you as an Observation so you can continue the task seamlessly.\n"
+                        "[CRITICAL RULES]:\n"
+                        "1. Always check 'memory_actions' or 'search_actions' FIRST before asking the user.\n"
+                        "2. Call 'ask_user' ALONE in a step (do not call other tools in the same step).\n"
+                        "3. Keep 'question' clear, direct, and in natural Hinglish/English."
+                    ),
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "question": types.Schema(
+                                type=types.Type.STRING,
+                                description="The exact question you want to display to the user inside the input popup (in natural Hinglish/English)."
+                            ),
+                            "placeholder": types.Schema(
+                                type=types.Type.STRING,
+                                description="Optional short hint shown inside the text input field (e.g., 'Enter 10-digit WhatsApp number...', 'Type file name or path...')."
+                            )
+                        },
+                        required=["question"]
                     )
                 ),
                 types.FunctionDeclaration(
