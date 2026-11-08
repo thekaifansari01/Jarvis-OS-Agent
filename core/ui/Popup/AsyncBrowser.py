@@ -1,8 +1,10 @@
 import html as html_lib
 import json
+import math
 import os
 import re
 import time
+import base64
 import urllib.parse
 from collections import OrderedDict
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -14,6 +16,23 @@ from PyQt5.QtGui import (
     QFontMetrics, QLinearGradient, QTextBlockFormat, QTextCursor
 )
 from PyQt5.QtSvg import QSvgRenderer
+
+
+def _decode_resource_payload(encoded):
+    try:
+        s = str(encoded or "")
+        padded = s + ("=" * (-len(s) % 4))
+        return base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    except Exception:
+        return ""
+
+
+def _encode_resource_payload(url):
+    try:
+        raw = str(url or "").encode("utf-8")
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    except Exception:
+        return ""
 
 
 class AsyncTextBrowser(QTextBrowser):
@@ -53,6 +72,11 @@ class AsyncTextBrowser(QTextBrowser):
         self.scroll_fade_timer = QTimer(self)
         self.scroll_fade_timer.setInterval(25)
         self.scroll_fade_timer.timeout.connect(self._tick_scroll_indicator)
+
+        self._revealing_images = {}
+        self._reveal_timer = QTimer(self)
+        self._reveal_timer.setInterval(16)
+        self._reveal_timer.timeout.connect(self._tick_reveal)
 
         self.verticalScrollBar().valueChanged.connect(self._on_scroll_activity)
 
@@ -151,7 +175,7 @@ class AsyncTextBrowser(QTextBrowser):
                 fmt.setLineHeight(1.0, QTextBlockFormat.FixedHeight)
                 cursor = QTextCursor(last_block)
                 cursor.setBlockFormat(fmt)
-                char_fmt = cursor. blockCharFormat()
+                char_fmt = cursor.blockCharFormat()
                 char_fmt.setFontPointSize(1.0)
                 cursor.setBlockCharFormat(char_fmt)
             else:
@@ -173,6 +197,23 @@ class AsyncTextBrowser(QTextBrowser):
         img.setDevicePixelRatio(dpr)
         img.fill(Qt.transparent)
         return img, dpr
+
+    def _smooth_downscale(self, img, target_w, target_h, mode=Qt.KeepAspectRatioByExpanding):
+        tw = int(round(target_w))
+        th = int(round(target_h))
+        if tw <= 0 or th <= 0:
+            return img
+        cur = img
+        safety = 0
+        while (cur.width() > tw * 2 or cur.height() > th * 2) and safety < 8:
+            cur = cur.scaled(
+                max(tw, cur.width() // 2),
+                max(th, cur.height() // 2),
+                Qt.IgnoreAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            safety += 1
+        return cur.scaled(tw, th, mode, Qt.SmoothTransformation)
 
     def _store_raw_image(self, key, raw_image):
         if raw_image is None or raw_image.isNull():
@@ -196,17 +237,18 @@ class AsyncTextBrowser(QTextBrowser):
                 pass
             return
 
-        if url_str.startswith("imgpreview://"):
-            target_url = url_str[len("imgpreview://"):]
+        if url_str.startswith("imgpreview:"):
+            encoded = url_str[len("imgpreview:"):]
+            target_url = _decode_resource_payload(encoded)
             raw_img = (
                 self.raw_image_cache.get(target_url)
-                or self.raw_image_cache.get("img://" + target_url)
-                or self.raw_image_cache.get("preview://" + target_url)
+                or self.raw_image_cache.get("img:" + _encode_resource_payload(target_url))
             )
             if raw_img is not None and not raw_img.isNull() and hasattr(self.parent_popup, "open_image_preview"):
                 self.parent_popup.open_image_preview(raw_img, target_url)
                 return
-            QDesktopServices.openUrl(QUrl(target_url))
+            if target_url:
+                QDesktopServices.openUrl(QUrl(target_url))
             return
         QDesktopServices.openUrl(url)
 
@@ -279,7 +321,10 @@ class AsyncTextBrowser(QTextBrowser):
         if phase >= 0.0:
             sweep_span = w * 0.65
             cx = -sweep_span + (w + sweep_span * 2.0) * phase
-            shimmer_grad = QLinearGradient(QPointF(cx - sweep_span * 0.5, 0.0), QPointF(cx + sweep_span * 0.5, h * 0.35))
+            shimmer_grad = QLinearGradient(
+                QPointF(cx - sweep_span * 0.5, 0.0),
+                QPointF(cx + sweep_span * 0.5, h * 0.35),
+            )
             shimmer_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
             shimmer_grad.setColorAt(0.45, QColor(196, 138, 249, 18))
             shimmer_grad.setColorAt(0.5, QColor(255, 255, 255, 32))
@@ -314,6 +359,11 @@ class AsyncTextBrowser(QTextBrowser):
                 b"Accept",
                 b"image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
             )
+        else:
+            req.setRawHeader(
+                b"Accept",
+                b"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            )
         if hasattr(QNetworkRequest, "FollowRedirectsAttribute"):
             req.setAttribute(QNetworkRequest.FollowRedirectsAttribute, True)
         if hasattr(QNetworkRequest, "RedirectPolicyAttribute") and hasattr(
@@ -344,6 +394,30 @@ class AsyncTextBrowser(QTextBrowser):
         except Exception:
             pass
 
+    def _is_transient_error(self, reply):
+        try:
+            err = reply.error()
+            candidates = []
+            for name in ("TimeoutError", "TemporaryNetworkFailureError", "ConnectionRefusedError"):
+                if hasattr(QNetworkReply, name):
+                    candidates.append(getattr(QNetworkReply, name))
+            return err in candidates
+        except Exception:
+            return False
+
+    def _retry_image(self, url, original_url, meta_data, is_preview, retry_count):
+        if not url:
+            return
+        req = self._build_request(url, accept_images=True)
+        self._send_get(
+            req,
+            is_preview_img=is_preview,
+            original_url=original_url,
+            actual_url=url,
+            meta_data=meta_data,
+            retry_count=retry_count,
+        )
+
     def _decode_image_bytes(self, raw_bytes):
         if not raw_bytes:
             return QImage()
@@ -352,20 +426,28 @@ class AsyncTextBrowser(QTextBrowser):
             return img
         try:
             renderer = QSvgRenderer(QByteArray(raw_bytes))
-            if renderer.isValid():
-                default_size = renderer.defaultSize()
-                w = max(self.IMG_W, default_size.width() if default_size.width() > 0 else self.IMG_W)
-                h = max(self.IMG_H, default_size.height() if default_size.height() > 0 else self.IMG_H)
-                svg_img = QImage(w, h, QImage.Format_ARGB32_Premultiplied)
-                svg_img.fill(Qt.transparent)
-                p = QPainter(svg_img)
-                p.setRenderHint(QPainter.Antialiasing, True)
-                renderer.render(p, QRectF(0, 0, w, h))
-                p.end()
-                return svg_img
+            if not renderer.isValid():
+                return QImage()
+            size = renderer.defaultSize()
+            dw = max(1, size.width())
+            dh = max(1, size.height())
+            aspect = dw / float(dh)
+            if self.IMG_W / float(self.IMG_H) > aspect:
+                target_h = self.IMG_H
+                target_w = max(self.IMG_W, int(target_h * aspect))
+            else:
+                target_w = self.IMG_W
+                target_h = max(self.IMG_H, int(target_w / aspect))
+            svg_img = QImage(target_w, target_h, QImage.Format_ARGB32_Premultiplied)
+            svg_img.fill(Qt.transparent)
+            p = QPainter(svg_img)
+            p.setRenderHint(QPainter.Antialiasing, True)
+            p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            renderer.render(p, QRectF(0, 0, target_w, target_h))
+            p.end()
+            return svg_img
         except Exception:
-            pass
-        return QImage()
+            return QImage()
 
     def _load_local_image(self, local_path):
         img = QImage(local_path)
@@ -379,6 +461,74 @@ class AsyncTextBrowser(QTextBrowser):
                 pass
         return QImage()
 
+    def _create_reveal_frame(self, img, progress):
+        dpr = img.devicePixelRatio()
+        if dpr <= 0:
+            dpr = 1.0
+        logical_w = img.width() / dpr
+        logical_h = img.height() / dpr
+
+        p = max(0.0, min(1.0, progress))
+        eased = p * p * (3.0 - 2.0 * p)
+
+        canvas = QImage(img.width(), img.height(), QImage.Format_ARGB32_Premultiplied)
+        canvas.setDevicePixelRatio(dpr)
+        canvas.fill(Qt.transparent)
+
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+        scale = 0.92 + 0.08 * eased
+        slide_y = (1.0 - eased) * 8.0
+        opacity = 0.55 + 0.45 * eased
+
+        ccx = logical_w / 2.0
+        ccy = logical_h / 2.0
+        painter.translate(ccx, ccy + slide_y)
+        painter.scale(scale, scale)
+        painter.translate(-ccx, -ccy)
+
+        painter.setOpacity(opacity)
+        painter.drawImage(0, 0, img)
+
+        painter.end()
+        return canvas
+
+    def _tick_reveal(self):
+        if not self._revealing_images:
+            self._reveal_timer.stop()
+            return
+
+        doc = self.document()
+        if doc is None:
+            self._revealing_images.clear()
+            self._reveal_timer.stop()
+            return
+
+        for url in list(self._revealing_images.keys()):
+            data = self._revealing_images[url]
+            data["progress"] = min(1.0, data["progress"] + 0.05)
+            p = data["progress"]
+            final_img = data["final"]
+
+            if p >= 1.0:
+                if len(self.image_cache) >= self.MAX_CACHE_SIZE:
+                    self.image_cache.popitem(last=False)
+                self.image_cache[url] = final_img
+                doc.addResource(QTextDocument.ImageResource, QUrl(url), final_img)
+                del self._revealing_images[url]
+            else:
+                revealed = self._create_reveal_frame(final_img, p)
+                doc.addResource(QTextDocument.ImageResource, QUrl(url), revealed)
+
+        doc.markContentsDirty(0, max(1, doc.characterCount()))
+        self.viewport().update()
+
+        if not self._revealing_images:
+            self._reveal_timer.stop()
+            self._trigger_debounced_reflow()
+
     def loadResource(self, type, name):
         if type == QTextDocument.ImageResource:
             url = name.toString()
@@ -389,17 +539,21 @@ class AsyncTextBrowser(QTextBrowser):
             if url == "loading://preview":
                 return self._register_placeholder(url, "Loading Preview...", self.CARD_W, self.CARD_H, True, True)
 
+            if url in self._revealing_images:
+                data = self._revealing_images[url]
+                return self._create_reveal_frame(data["final"], data["progress"])
+
             if url in self.image_cache:
                 self.image_cache.move_to_end(url)
                 return self.image_cache[url]
 
-            is_preview_scheme = url.startswith("preview://")
-            is_img_scheme = url.startswith("img://")
+            is_preview_scheme = url.startswith("preview:")
+            is_img_scheme = url.startswith("img:")
 
             if url in self.failed_urls:
                 if current_time - self.failed_urls[url] < self.CACHE_TTL:
                     if is_preview_scheme:
-                        actual_url = url[10:]
+                        actual_url = _decode_resource_payload(url[8:])
                         meta = {
                             "title": actual_url,
                             "description": "Click to open link in browser",
@@ -416,7 +570,11 @@ class AsyncTextBrowser(QTextBrowser):
                 return self._register_placeholder(url, "Loading Media...", self.IMG_W, self.IMG_H, False, True)
 
             if is_preview_scheme:
-                actual_url = url[10:]
+                actual_url = _decode_resource_payload(url[8:])
+                if not actual_url:
+                    self.failed_urls[url] = current_time
+                    return self._register_placeholder(url, "Invalid Preview", self.CARD_W, self.CARD_H, True, False)
+
                 if actual_url in self.meta_cache:
                     meta = self.meta_cache[actual_url]
                     img_url = meta.get("img_url")
@@ -426,11 +584,13 @@ class AsyncTextBrowser(QTextBrowser):
                         return self._register_placeholder(url, "Loading Link Preview...", self.CARD_W, self.CARD_H, True, True)
                     else:
                         styled = self._draw_card(None, url, meta)
-                        self._cache_and_update(url, styled)
-                        return styled
+                        return self._cache_and_update(url, styled, animate=False)
 
                 self.pending_requests.add(url)
-                api_url = f"https://api.microlink.io?url={urllib.parse.quote(actual_url, safe='')}"
+                api_url = (
+                    f"https://api.microlink.io?url={urllib.parse.quote(actual_url, safe='')}"
+                    f"&screenshot=true&meta=true&colorScheme=dark"
+                )
                 req = self._build_request(api_url, accept_images=False)
                 self._send_get(
                     req,
@@ -440,31 +600,37 @@ class AsyncTextBrowser(QTextBrowser):
                 )
                 return self._register_placeholder(url, "Loading Link Preview...", self.CARD_W, self.CARD_H, True, True)
 
-            actual_media_url = url[6:] if is_img_scheme else url
-
-            if actual_media_url.startswith("file://"):
-                local_path = QUrl(actual_media_url).toLocalFile()
-                raw_image = self._load_local_image(local_path)
-                if not raw_image.isNull():
-                    self._store_raw_image(actual_media_url, raw_image)
-                    self._store_raw_image(url, raw_image)
-                    styled_img = self._style_simple_image(raw_image, actual_media_url)
-                    self._cache_and_update(url, styled_img)
-                    return styled_img
-                else:
+            if is_img_scheme:
+                actual_media_url = _decode_resource_payload(url[4:])
+                if not actual_media_url:
                     self.failed_urls[url] = current_time
-                    return self._register_placeholder(url, "Local Image Not Found", self.IMG_W, self.IMG_H, False, False)
+                    return self._register_placeholder(url, "Invalid Image", self.IMG_W, self.IMG_H, False, False)
 
-            if actual_media_url.startswith(("http://", "https://")):
-                self.pending_requests.add(url)
-                req = self._build_request(actual_media_url, accept_images=True)
-                self._send_get(
-                    req,
-                    is_direct_image=True,
-                    original_url=url,
-                    actual_url=actual_media_url,
-                )
-                return self._register_placeholder(url, "Loading Media...", self.IMG_W, self.IMG_H, False, True)
+                if actual_media_url.startswith("file://"):
+                    local_path = QUrl(actual_media_url).toLocalFile()
+                    raw_image = self._load_local_image(local_path)
+                    if not raw_image.isNull():
+                        self._store_raw_image(actual_media_url, raw_image)
+                        self._store_raw_image(url, raw_image)
+                        styled_img = self._style_simple_image(raw_image, actual_media_url)
+                        return self._cache_and_update(url, styled_img, animate=True)
+                    else:
+                        self.failed_urls[url] = current_time
+                        return self._register_placeholder(url, "Local Image Not Found", self.IMG_W, self.IMG_H, False, False)
+
+                if actual_media_url.startswith(("http://", "https://")):
+                    self.pending_requests.add(url)
+                    req = self._build_request(actual_media_url, accept_images=True)
+                    self._send_get(
+                        req,
+                        is_direct_image=True,
+                        original_url=url,
+                        actual_url=actual_media_url,
+                    )
+                    return self._register_placeholder(url, "Loading Media...", self.IMG_W, self.IMG_H, False, True)
+
+                self.failed_urls[url] = current_time
+                return self._register_placeholder(url, "Image Unavailable", self.IMG_W, self.IMG_H, False, False)
 
         return super().loadResource(type, name)
 
@@ -474,27 +640,53 @@ class AsyncTextBrowser(QTextBrowser):
             req,
             is_preview_img=True,
             original_url=original_url,
+            actual_url=img_url,
             meta_data=meta_data,
         )
 
-    def _cache_and_update(self, url, img):
+    def _cache_and_update(self, url, img, animate=True):
         self.active_placeholders.pop(url, None)
+        self.pending_requests.discard(url)
         if not self.active_placeholders and self.shimmer_timer.isActive():
             self.shimmer_timer.stop()
 
         if url in self.image_cache:
             self.image_cache.move_to_end(url)
-        elif len(self.image_cache) >= self.MAX_CACHE_SIZE:
-            self.image_cache.popitem(last=False)
-        self.image_cache[url] = img
+            doc = self.document()
+            if doc is not None:
+                doc.addResource(QTextDocument.ImageResource, QUrl(url), img)
+                self.normalize_document_layout()
+                doc.markContentsDirty(0, max(1, doc.characterCount()))
+            self.viewport().update()
+            self._trigger_debounced_reflow()
+            return img
 
+        if not animate:
+            if len(self.image_cache) >= self.MAX_CACHE_SIZE:
+                self.image_cache.popitem(last=False)
+            self.image_cache[url] = img
+            doc = self.document()
+            if doc is not None:
+                doc.addResource(QTextDocument.ImageResource, QUrl(url), img)
+                self.normalize_document_layout()
+                doc.markContentsDirty(0, max(1, doc.characterCount()))
+            self.viewport().update()
+            self._trigger_debounced_reflow()
+            return img
+
+        self._revealing_images[url] = {"final": img, "progress": 0.05}
+        if not self._reveal_timer.isActive():
+            self._reveal_timer.start()
+
+        initial = self._create_reveal_frame(img, 0.05)
         doc = self.document()
         if doc is not None:
-            doc.addResource(QTextDocument.ImageResource, QUrl(url), img)
+            doc.addResource(QTextDocument.ImageResource, QUrl(url), initial)
             self.normalize_document_layout()
             doc.markContentsDirty(0, max(1, doc.characterCount()))
         self.viewport().update()
         self._trigger_debounced_reflow()
+        return initial
 
     def _create_smooth_blurred_backdrop(self, raw_image, target_w, target_h):
         s1 = raw_image.scaled(128, 72, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
@@ -523,11 +715,11 @@ class AsyncTextBrowser(QTextBrowser):
         is_yt = "img.youtube.com" in url
 
         if is_yt or (1.52 <= img_ratio <= 2.35 and orig_w >= 320):
-            scaled_fill = raw_image.scaled(
-                int(round(w * dpr)),
-                int(round(h * dpr)),
+            scaled_fill = self._smooth_downscale(
+                raw_image,
+                w * dpr,
+                h * dpr,
                 Qt.KeepAspectRatioByExpanding,
-                Qt.SmoothTransformation,
             )
             sw = scaled_fill.width() / dpr
             sh = scaled_fill.height() / dpr
@@ -545,11 +737,11 @@ class AsyncTextBrowser(QTextBrowser):
 
             avail_w = w - 28.0
             avail_h = h - 24.0
-            scaled_fit = raw_image.scaled(
-                int(round(avail_w * dpr)),
-                int(round(avail_h * dpr)),
+            scaled_fit = self._smooth_downscale(
+                raw_image,
+                avail_w * dpr,
+                avail_h * dpr,
                 Qt.KeepAspectRatio,
-                Qt.SmoothTransformation,
             )
             fw = scaled_fit.width() / dpr
             fh = scaled_fit.height() / dpr
@@ -636,6 +828,7 @@ class AsyncTextBrowser(QTextBrowser):
     def _draw_card(self, raw_image, url, meta):
         w, h = self.CARD_W, self.CARD_H
         img_h = 222
+        meta = meta or {}
         styled_img, dpr = self._new_canvas(w, h)
 
         painter = QPainter(styled_img)
@@ -654,18 +847,18 @@ class AsyncTextBrowser(QTextBrowser):
             hero_grad.setColorAt(1.0, QColor(21, 22, 31))
             painter.fillRect(QRectF(0.0, 0.0, float(w), float(img_h)), hero_grad)
 
-            domain_label = (meta.get("domain") or "WEB").upper()
+            domain_label = str(meta.get("domain") or "WEB").upper()
             eng_font = getattr(self.parent_popup, "eng_font", "Segoe UI")
             watermark_font = QFont(eng_font, 15, QFont.Bold)
             painter.setFont(watermark_font)
             painter.setPen(QColor(196, 138, 249, 90))
             painter.drawText(QRectF(0.0, 0.0, float(w), float(img_h)), Qt.AlignCenter, domain_label)
         else:
-            scaled_hero = raw_image.scaled(
-                int(round(w * dpr)),
-                int(round(img_h * dpr)),
+            scaled_hero = self._smooth_downscale(
+                raw_image,
+                w * dpr,
+                img_h * dpr,
                 Qt.KeepAspectRatioByExpanding,
-                Qt.SmoothTransformation,
             )
             sw = scaled_hero.width() / dpr
             sh = scaled_hero.height() / dpr
@@ -718,8 +911,32 @@ class AsyncTextBrowser(QTextBrowser):
         painter.end()
         return styled_img
 
+    def _draw_thinking_indicator(self, painter):
+        phase = getattr(self.parent_popup, "glow_phase", 0.0)
+        vp = self.viewport()
+        cx = vp.width() / 2.0
+        cy = vp.height() / 2.0
+
+        for i in range(3):
+            offset = phase * 1.6 + i * 0.7
+            alpha_f = (math.sin(offset) + 1.0) * 0.5
+            alpha = int(55 + 165 * alpha_f)
+            dot_x = cx - 26.0 + i * 26.0
+            radius = 4.2 + alpha_f * 1.8
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(191, 90, 242, alpha))
+            painter.drawEllipse(QPointF(dot_x, cy), radius, radius)
+
     def paintEvent(self, event):
         super().paintEvent(event)
+
+        if self.parent_popup is not None:
+            status = getattr(self.parent_popup, "status", "")
+            if status == "typing" and not self.toPlainText().strip():
+                painter = QPainter(self.viewport())
+                painter.setRenderHint(QPainter.Antialiasing, True)
+                self._draw_thinking_indicator(painter)
+                painter.end()
 
         scrollbar = self.verticalScrollBar()
         max_v = scrollbar.maximum()
@@ -793,7 +1010,7 @@ class AsyncTextBrowser(QTextBrowser):
         if content_length and int(content_length) > 12 * 1024 * 1024:
             self.pending_requests.discard(target_cleanup_url)
             self.failed_urls[target_cleanup_url] = current_time
-            is_card = target_cleanup_url.startswith("preview://")
+            is_card = target_cleanup_url.startswith("preview:")
             ph = self._create_placeholder(
                 "Media File Too Large",
                 w=self.CARD_W if is_card else self.IMG_W,
@@ -801,13 +1018,31 @@ class AsyncTextBrowser(QTextBrowser):
                 is_card=is_card,
                 phase=-1.0,
             )
-            self._cache_and_update(target_cleanup_url, ph)
+            self._cache_and_update(target_cleanup_url, ph, animate=False)
             reply.deleteLater()
             return
 
         if reply.error() != QNetworkReply.NoError:
+            retry_count = int(reply.property("retry_count") or 0)
+            if (
+                not is_microlink
+                and not is_fallback
+                and retry_count < 2
+                and self._is_transient_error(reply)
+                and (actual_url or url)
+            ):
+                delay = 500 if retry_count == 0 else 1500
+                retry_url = actual_url or url
+                QTimer.singleShot(
+                    delay,
+                    lambda u=retry_url, o=original_url, m=meta_data, p=is_preview_img, r=retry_count + 1:
+                        self._retry_image(u, o, m, p, r),
+                )
+                reply.deleteLater()
+                return
+
             if is_microlink and actual_url:
-                req = self._build_request(actual_url, accept_images=True)
+                req = self._build_request(actual_url, accept_images=False)
                 self._send_get(
                     req,
                     is_fallback=True,
@@ -818,13 +1053,14 @@ class AsyncTextBrowser(QTextBrowser):
                 return
             elif is_fallback:
                 self.pending_requests.discard(target_cleanup_url)
+                self.failed_urls[target_cleanup_url] = current_time
                 meta = {
                     "title": actual_url,
                     "description": "Click to open link in browser",
                     "domain": urllib.parse.urlparse(actual_url).netloc or "Web Link",
                 }
                 styled = self._draw_card(None, original_url, meta)
-                self._cache_and_update(original_url, styled)
+                self._cache_and_update(original_url, styled, animate=False)
                 reply.deleteLater()
                 return
             elif "maxresdefault.jpg" in url:
@@ -841,13 +1077,13 @@ class AsyncTextBrowser(QTextBrowser):
             elif is_preview_img and meta_data:
                 self.pending_requests.discard(target_cleanup_url)
                 styled = self._draw_card(None, target_cleanup_url, meta_data)
-                self._cache_and_update(target_cleanup_url, styled)
+                self._cache_and_update(target_cleanup_url, styled, animate=False)
                 reply.deleteLater()
                 return
             else:
                 self.pending_requests.discard(target_cleanup_url)
                 self.failed_urls[target_cleanup_url] = current_time
-                is_card = target_cleanup_url.startswith("preview://")
+                is_card = target_cleanup_url.startswith("preview:")
                 ph = self._create_placeholder(
                     "Preview Unavailable",
                     w=self.CARD_W if is_card else self.IMG_W,
@@ -855,7 +1091,7 @@ class AsyncTextBrowser(QTextBrowser):
                     is_card=is_card,
                     phase=-1.0,
                 )
-                self._cache_and_update(target_cleanup_url, ph)
+                self._cache_and_update(target_cleanup_url, ph, animate=False)
                 reply.deleteLater()
                 return
 
@@ -866,11 +1102,17 @@ class AsyncTextBrowser(QTextBrowser):
                 if data.get("status") != "success":
                     raise ValueError("Microlink non-success")
                 payload = data.get("data") or {}
+
+                screenshot_obj = payload.get("screenshot")
+                screenshot_url = screenshot_obj.get("url") if isinstance(screenshot_obj, dict) else None
+
                 img_obj = payload.get("image")
-                img_url = img_obj.get("url") if isinstance(img_obj, dict) else None
-                if not img_url:
-                    logo_obj = payload.get("logo")
-                    img_url = logo_obj.get("url") if isinstance(logo_obj, dict) else None
+                og_img_url = img_obj.get("url") if isinstance(img_obj, dict) else None
+
+                logo_obj = payload.get("logo")
+                logo_url = logo_obj.get("url") if isinstance(logo_obj, dict) else None
+
+                best_img_url = screenshot_url or og_img_url or logo_url
 
                 title = payload.get("title")
                 desc = payload.get("description")
@@ -880,19 +1122,21 @@ class AsyncTextBrowser(QTextBrowser):
                     "title": title or actual_url,
                     "description": desc or "",
                     "domain": domain,
-                    "img_url": img_url,
+                    "img_url": best_img_url,
                 }
                 self.meta_cache[actual_url] = meta
                 self.save_meta_cache()
 
-                if img_url:
-                    self._request_image(img_url, original_url, meta)
+                if best_img_url:
+                    self._request_image(best_img_url, original_url, meta)
                 else:
                     self.pending_requests.discard(original_url)
                     styled = self._draw_card(None, original_url, meta)
-                    self._cache_and_update(original_url, styled)
+                    self._cache_and_update(original_url, styled, animate=False)
             except Exception:
-                req = self._build_request(actual_url, accept_images=True)
+                self.pending_requests.discard(original_url)
+                self.failed_urls[original_url] = current_time
+                req = self._build_request(actual_url, accept_images=False)
                 self._send_get(
                     req,
                     is_fallback=True,
@@ -919,7 +1163,7 @@ class AsyncTextBrowser(QTextBrowser):
                         "img_url": actual_url,
                     }
                     styled = self._draw_card(raw_img, original_url, meta)
-                    self._cache_and_update(original_url, styled)
+                    self._cache_and_update(original_url, styled, animate=False)
                     reply.deleteLater()
                     return
 
@@ -950,7 +1194,7 @@ class AsyncTextBrowser(QTextBrowser):
             else:
                 self.pending_requests.discard(original_url)
                 styled = self._draw_card(None, original_url, meta)
-                self._cache_and_update(original_url, styled)
+                self._cache_and_update(original_url, styled, animate=False)
             reply.deleteLater()
             return
 
@@ -963,7 +1207,7 @@ class AsyncTextBrowser(QTextBrowser):
         if raw_image.isNull():
             if is_preview_img and meta_data:
                 styled = self._draw_card(None, target_url, meta_data)
-                self._cache_and_update(target_url, styled)
+                self._cache_and_update(target_url, styled, animate=False)
             else:
                 self.failed_urls[target_url] = current_time
                 ph = self._create_placeholder(
@@ -973,17 +1217,18 @@ class AsyncTextBrowser(QTextBrowser):
                     is_card=False,
                     phase=-1.0,
                 )
-                self._cache_and_update(target_url, ph)
+                self._cache_and_update(target_url, ph, animate=False)
             reply.deleteLater()
             return
 
         if is_preview_img and meta_data:
             styled_img = self._draw_card(raw_image, target_url, meta_data)
+            self._cache_and_update(target_url, styled_img, animate=False)
         else:
-            media_key = actual_url or (target_url[6:] if target_url.startswith("img://") else target_url)
+            media_key = actual_url or ""
             self._store_raw_image(media_key, raw_image)
             self._store_raw_image(target_url, raw_image)
             styled_img = self._style_simple_image(raw_image, media_key)
+            self._cache_and_update(target_url, styled_img, animate=True)
 
-        self._cache_and_update(target_url, styled_img)
         reply.deleteLater()

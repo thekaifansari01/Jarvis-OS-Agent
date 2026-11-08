@@ -1,4 +1,5 @@
 import re
+import base64
 import urllib.parse
 import pygments.util
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -6,6 +7,14 @@ from markdown2 import markdown
 from pygments import highlight
 from pygments.lexers import get_lexer_by_name
 from pygments.formatters import HtmlFormatter
+
+
+def _encode_resource_payload(url):
+    try:
+        raw = str(url or "").encode("utf-8")
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    except Exception:
+        return ""
 
 
 class ParserWorker(QThread):
@@ -83,6 +92,8 @@ class ParserWorker(QThread):
 
     def build_image_card_html(self, img_url, alt="img_preview", caption_text="", caption_url=""):
         safe_url = self.format_local_or_web_url(img_url)
+        encoded = _encode_resource_payload(safe_url)
+        encoded_preview = _encode_resource_payload(safe_url)
         header_html = ""
         if caption_text and caption_url:
             header_html = (
@@ -93,8 +104,25 @@ class ParserWorker(QThread):
         card_html = (
             f'{header_html}'
             f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
-            f'<a href="imgpreview://{safe_url}" style="text-decoration:none;">'
-            f'<img src="img://{safe_url}" width="{self.IMG_W}" height="{self.IMG_H}" alt="{alt}"></a></p>'
+            f'<a href="imgpreview:{encoded_preview}" style="text-decoration:none;">'
+            f'<img src="img:{encoded}" width="{self.IMG_W}" height="{self.IMG_H}" alt="{alt}"></a></p>'
+        )
+        return self.protect_block(card_html)
+
+    def build_preview_card_html(self, url, caption_text=""):
+        encoded = _encode_resource_payload(url)
+        header_html = ""
+        if caption_text:
+            header_html = (
+                f'<p style="margin-top: 8px; margin-bottom: 4px; line-height: 1.35;">'
+                f'<a href="{url}" style="text-decoration:none; color:#C48AF9; '
+                f'font-weight:600;">{caption_text} ↗</a></p>'
+            )
+        card_html = (
+            f'{header_html}'
+            f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
+            f'<a href="{url}" style="text-decoration:none;">'
+            f'<img src="preview:{encoded}" width="{self.CARD_W}" height="{self.CARD_H}" alt="link_preview"></a></p>'
         )
         return self.protect_block(card_html)
 
@@ -167,24 +195,18 @@ class ParserWorker(QThread):
 
             highlighted = highlight(raw_code, lexer, formatter)
             html = (
-                f'<table width="100%" cellspacing="0" cellpadding="1" bgcolor="#2A2B36" '
-                f'style="margin-top: 8px; margin-bottom: 10px;">'
-                f'<tr><td>'
-                f'<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#121318">'
-                f'<tr><td bgcolor="#1C1D26" style="padding: 7px 14px;">'
+                f'<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#121318" '
+                f'style="margin-top: 10px; margin-bottom: 12px;">'
+                f'<tr><td bgcolor="#1C1D26" style="padding: 8px 14px;">'
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0; border:none;">'
                 f'<tr>'
                 f'<td align="left" style="border:none; padding:0;">'
-                f'<span style="color:#FF5F56; font-size:12px;">●</span>&nbsp;'
-                f'<span style="color:#FFBD2E; font-size:12px;">●</span>&nbsp;'
-                f'<span style="color:#27C93F; font-size:12px;">●</span>'
-                f'&nbsp;&nbsp;&nbsp;<span style="color: #9496A6; font-size: 9pt; font-weight: 700; '
-                f'font-family: \'{self.eng_font}\', sans-serif; letter-spacing: 0.8px;">{lang.upper()}</span>'
+                f'<span style="color: #9496A6; font-size: 8.5pt; font-weight: 700; '
+                f'font-family: \'{self.eng_font}\', sans-serif; letter-spacing: 1.2px;">{lang.upper()}</span>'
                 f'</td>'
                 f'<td align="right" style="border:none; padding:0;">'
                 f'<a href="copycode://{code_idx}" style="color: #B4B6C8; text-decoration: none; '
-                f'font-size: 8.5pt; font-weight: 600; font-family: \'{self.eng_font}\', sans-serif;">'
-                f'Copy Code</a>'
+                f'font-size: 8.5pt; font-weight: 600; font-family: \'{self.eng_font}\', sans-serif;">Copy</a>'
                 f'</td>'
                 f'</tr></table>'
                 f'</td></tr>'
@@ -192,7 +214,6 @@ class ParserWorker(QThread):
                 f'<pre style="margin: 0; font-family: \'Cascadia Code\', Consolas, monospace; '
                 f'font-size: 10.2pt; line-height: 1.45; color: #E5E5EA; white-space: pre-wrap; word-wrap: break-word;">'
                 f'{highlighted}</pre>'
-                f'</td></tr></table>'
                 f'</td></tr></table>'
             )
             return self.protect_block(html)
@@ -215,6 +236,7 @@ class ParserWorker(QThread):
         def replacer(match):
             display_text, url = match.groups()
             url = url.strip().strip("\"'")
+
             if "<jarvis-token-" in display_text:
                 return self.protect_block(
                     f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;"><a href="{url}">{display_text}</a></p>'
@@ -229,7 +251,7 @@ class ParserWorker(QThread):
                         f'<a href="{url}" style="text-decoration:none; color:#C48AF9; font-weight:600;">{display_text} ↗</a></p>'
                         f'<p style="margin-top: 4px; margin-bottom: 6px; line-height: 100%;">'
                         f'<a href="{url}" style="text-decoration:none;">'
-                        f'<img src="https://img.youtube.com/vi/{vid_id}/maxresdefault.jpg" width="{self.IMG_W}" height="{self.IMG_H}" alt="yt_preview"></a></p>'
+                        f'<img src="img:{_encode_resource_payload(f"https://img.youtube.com/vi/{vid_id}/maxresdefault.jpg")}" width="{self.IMG_W}" height="{self.IMG_H}" alt="yt_preview"></a></p>'
                     )
 
             clean_disp = display_text.strip()
@@ -238,12 +260,10 @@ class ParserWorker(QThread):
                     return self.build_image_card_html(url, alt="img_preview")
                 return self.build_image_card_html(url, alt=clean_disp, caption_text=clean_disp, caption_url=url)
 
-            if clean_disp == url or clean_disp.startswith(("http://", "https://")):
-                return self.protect_block(
-                    f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
-                    f'<a href="{url}" style="text-decoration:none;">'
-                    f'<img src="preview://{url}" width="{self.CARD_W}" height="{self.CARD_H}" alt="link_preview"></a></p>'
-                )
+            if url.startswith(("http://", "https://")):
+                if clean_disp == url or clean_disp.startswith(("http://", "https://")):
+                    return self.build_preview_card_html(url)
+                return self.build_preview_card_html(url, caption_text=clean_disp)
 
             return self.protect_inline(
                 f'<a href="{url}" style="color: #C48AF9; text-decoration: none; font-weight: 600;">{display_text} ↗</a>'
@@ -281,7 +301,7 @@ class ParserWorker(QThread):
             lambda m: self.protect_block(
                 f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
                 f'<a href="{m.group(1)}" style="text-decoration:none;">'
-                f'<img src="https://img.youtube.com/vi/{m.group(2)}/maxresdefault.jpg" width="{self.IMG_W}" height="{self.IMG_H}" alt="yt_preview"></a></p>'
+                f'<img src="img:{_encode_resource_payload(f"https://img.youtube.com/vi/{m.group(2)}/maxresdefault.jpg")}" width="{self.IMG_W}" height="{self.IMG_H}" alt="yt_preview"></a></p>'
             ),
             text,
         )
@@ -293,13 +313,23 @@ class ParserWorker(QThread):
             url = match.group(1).rstrip(".,;)")
             if self.is_image_url(url):
                 return self.build_image_card_html(url, alt="img_preview")
-            return self.protect_block(
-                f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
-                f'<a href="{url}" style="text-decoration:none;">'
-                f'<img src="preview://{url}" width="{self.CARD_W}" height="{self.CARD_H}" alt="link_preview"></a></p>'
-            )
+            return self.build_preview_card_html(url)
 
         return re.sub(pattern, replacer, text)
+
+    def promote_first_paragraph(self, md_html):
+        match = re.search(r"<p(\s[^>]*)?>", md_html)
+        if not match:
+            return md_html
+        inline_style = (
+            'style="font-size: 13.2pt; color: #FFFFFF; font-weight: 500; '
+            'line-height: 1.5; margin-bottom: 10px;"'
+        )
+        if match.group(1):
+            replacement = f"<p{match.group(1)} {inline_style}>"
+        else:
+            replacement = f"<p {inline_style}>"
+        return md_html[:match.start()] + replacement + md_html[match.end():]
 
     def get_styled_html(self, content):
         return f"""
@@ -317,7 +347,7 @@ class ParserWorker(QThread):
                 font-size: 16.5pt;
                 color: #FFFFFF;
                 font-weight: 700;
-                margin-top: 10px;
+                margin-top: 18px;
                 margin-bottom: 8px;
                 border-bottom: 1px solid rgba(255,255,255,0.08);
                 padding-bottom: 5px;
@@ -326,14 +356,14 @@ class ParserWorker(QThread):
                 font-size: 14.2pt;
                 color: #F7F7FC;
                 font-weight: 700;
-                margin-top: 10px;
+                margin-top: 14px;
                 margin-bottom: 6px;
             }}
             h3 {{
                 font-size: 12.6pt;
                 color: #E2E2F0;
                 font-weight: 600;
-                margin-top: 8px;
+                margin-top: 10px;
                 margin-bottom: 5px;
             }}
             p {{
@@ -436,6 +466,7 @@ class ParserWorker(QThread):
             md_html = md_html.replace(token, value)
 
         md_html = re.sub(r"(?:<p>\s*</p>\s*)+$", "", md_html.strip())
+        md_html = self.promote_first_paragraph(md_html)
 
         if self.is_cancelled:
             return
