@@ -9,7 +9,7 @@ os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false;qt.text.font.db=false;defa
 from PyQt5.QtCore import (
     Qt, QTimer, QPropertyAnimation, QPoint, QPointF,
     QParallelAnimationGroup, QEasingCurve, QFileSystemWatcher,
-    QRect, QRectF, QSize, qInstallMessageHandler, QByteArray, QUrl
+    QRectF, QSize, qInstallMessageHandler, QByteArray, QUrl
 )
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QFrame, QPushButton,
@@ -124,10 +124,10 @@ class StatusOrb(QWidget):
         pulse = (math.sin(self.phase * 2.2) + 1.0) * 0.5
         center = QPointF(12.0, 12.0)
 
-        halo_radius = 8.0 + (pulse * 3.4)
+        halo_radius = (7.2 if self.mode == "completed" else 8.0) + (pulse * (1.4 if self.mode == "completed" else 3.4))
         halo = QRadialGradient(center, halo_radius)
-        halo.setColorAt(0.0, QColor(r, g, b, int(120 + pulse * 70)))
-        halo.setColorAt(0.65, QColor(r, g, b, int(38 + pulse * 25)))
+        halo.setColorAt(0.0, QColor(r, g, b, int(105 + pulse * 60)))
+        halo.setColorAt(0.65, QColor(r, g, b, int(32 + pulse * 20)))
         halo.setColorAt(1.0, QColor(r, g, b, 0))
         painter.setPen(Qt.NoPen)
         painter.setBrush(halo)
@@ -135,9 +135,9 @@ class StatusOrb(QWidget):
 
         if self.mode == "completed":
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(50, 215, 75, 235))
-            painter.drawEllipse(center, 6.6, 6.6)
-            check_pen = QPen(QColor(255, 255, 255, 255), 1.9, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            painter.setBrush(QColor(50, 215, 75, 240))
+            painter.drawEllipse(center, 6.5, 6.5)
+            check_pen = QPen(QColor(255, 255, 255, 255), 1.85, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
             painter.setPen(check_pen)
             path = QPainterPath()
             path.moveTo(8.8, 12.2)
@@ -163,16 +163,20 @@ class IslandContainer(QFrame):
         super().__init__(parent)
         self.rgb = [191.0, 90.0, 242.0]
         self.phase = 0.0
-        self.corner_radius = 26.0
+        self.border_energy = 1.0
+        self.dismiss_progress = 0.0
+        self.corner_radius = 24.0
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumSize(0, 0)
 
     def minimumSizeHint(self):
         return QSize(0, 0)
 
-    def update_visuals(self, rgb, phase):
+    def update_visuals(self, rgb, phase, border_energy=1.0, dismiss_progress=0.0):
         self.rgb = rgb
         self.phase = phase
+        self.border_energy = max(0.0, min(1.0, float(border_energy)))
+        self.dismiss_progress = max(0.0, min(1.0, float(dismiss_progress)))
         self.update()
 
     def paintEvent(self, event):
@@ -183,64 +187,85 @@ class IslandContainer(QFrame):
         r, g, b = [max(0, min(255, int(c))) for c in self.rgb]
 
         shadow_steps = [
-            (1.0, 4.0, 28.0, QColor(0, 0, 0, 18)),
-            (2.5, 4.0, 27.5, QColor(0, 0, 0, 34)),
-            (4.5, 3.0, 27.0, QColor(0, 0, 0, 52)),
-            (6.5, 2.0, 26.5, QColor(r, g, b, 20)),
-            (8.0, 1.0, 26.0, QColor(0, 0, 0, 82)),
+            (0.5, 4.5, 27.5, QColor(0, 0, 0, 12)),
+            (2.0, 4.0, 27.0, QColor(0, 0, 0, 22)),
+            (4.0, 3.2, 26.2, QColor(0, 0, 0, 36)),
+            (6.0, 2.4, 25.4, QColor(0, 0, 0, 54)),
+            (7.5, 1.5, 24.8, QColor(r, g, b, int(14 + 14 * self.border_energy))),
+            (9.0, 0.8, 24.2, QColor(0, 0, 0, 88)),
         ]
         painter.setPen(Qt.NoPen)
         for inset, y_offset, rad, col in shadow_steps:
-            s_rect = rect.adjusted(inset, inset + y_offset * 0.4, -inset, -inset + y_offset * 0.6)
+            s_rect = rect.adjusted(inset, inset + y_offset * 0.35, -inset, -inset + y_offset * 0.65)
             painter.setBrush(col)
             painter.drawRoundedRect(s_rect, rad, rad)
 
-        island_rect = rect.adjusted(9.0, 7.0, -9.0, -11.0)
+        island_rect = rect.adjusted(10.0, 8.0, -10.0, -12.0)
         radius = self.corner_radius
 
         bg_grad = QLinearGradient(island_rect.topLeft(), island_rect.bottomLeft())
-        bg_grad.setColorAt(0.0, QColor(28, 29, 36, 248))
-        bg_grad.setColorAt(0.45, QColor(17, 18, 23, 252))
-        bg_grad.setColorAt(1.0, QColor(10, 10, 14, 254))
+        bg_grad.setColorAt(0.0, QColor(27, 28, 36, 250))
+        bg_grad.setColorAt(0.42, QColor(17, 18, 24, 253))
+        bg_grad.setColorAt(1.0, QColor(11, 12, 16, 255))
 
         painter.setBrush(bg_grad)
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(island_rect, radius, radius)
 
         ambient_glow = QRadialGradient(
-            QPointF(island_rect.left() + island_rect.width() * 0.2, island_rect.top()),
-            island_rect.width() * 0.55
+            QPointF(island_rect.left() + island_rect.width() * 0.18, island_rect.top()),
+            island_rect.width() * 0.52
         )
-        ambient_glow.setColorAt(0.0, QColor(r, g, b, 26))
+        ambient_glow.setColorAt(0.0, QColor(r, g, b, int(14 + 16 * self.border_energy)))
         ambient_glow.setColorAt(1.0, QColor(r, g, b, 0))
         painter.setBrush(ambient_glow)
         painter.drawRoundedRect(island_rect, radius, radius)
 
+        inner_rim = island_rect.adjusted(1.2, 1.2, -1.2, -1.2)
+        inner_grad = QLinearGradient(inner_rim.topLeft(), inner_rim.bottomLeft())
+        inner_grad.setColorAt(0.0, QColor(255, 255, 255, 20))
+        inner_grad.setColorAt(0.3, QColor(255, 255, 255, 6))
+        inner_grad.setColorAt(1.0, QColor(255, 255, 255, 3))
+        painter.setPen(QPen(inner_grad, 0.8))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(inner_rim, radius - 1.0, radius - 1.0)
+
         cx = island_rect.center().x()
         cy = island_rect.center().y()
         span = max(island_rect.width(), island_rect.height()) * 0.65
-        dx = math.cos(self.phase) * span
-        dy = math.sin(self.phase) * span
+        dx = math.cos(self.phase) * span * self.border_energy
+        dy = math.sin(self.phase) * span * self.border_energy + span * (1.0 - self.border_energy) * 0.55
 
         border_grad = QLinearGradient(QPointF(cx - dx, cy - dy), QPointF(cx + dx, cy + dy))
-        border_grad.setColorAt(0.0, QColor(255, 255, 255, 95))
-        border_grad.setColorAt(0.35, QColor(255, 255, 255, 22))
-        border_grad.setColorAt(0.72, QColor(r, g, b, 175))
-        border_grad.setColorAt(1.0, QColor(255, 255, 255, 55))
+        top_alpha = int(78 + 22 * self.border_energy)
+        accent_alpha = int(42 + 138 * self.border_energy)
+        border_grad.setColorAt(0.0, QColor(255, 255, 255, top_alpha))
+        border_grad.setColorAt(0.38, QColor(255, 255, 255, 24))
+        border_grad.setColorAt(0.74, QColor(r, g, b, accent_alpha))
+        border_grad.setColorAt(1.0, QColor(255, 255, 255, 38))
 
-        border_pen = QPen(border_grad, 1.25)
+        border_pen = QPen(border_grad, 1.15)
         painter.setPen(border_pen)
         painter.setBrush(Qt.NoBrush)
-        painter.drawRoundedRect(island_rect.adjusted(0.6, 0.6, -0.6, -0.6), radius, radius)
+        painter.drawRoundedRect(island_rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
 
-        shine_rect = island_rect.adjusted(16.0, 1.2, -16.0, -(island_rect.height() - 2.2))
+        shine_rect = island_rect.adjusted(22.0, 1.0, -22.0, -(island_rect.height() - 2.0))
         shine_grad = QLinearGradient(shine_rect.topLeft(), shine_rect.topRight())
         shine_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
-        shine_grad.setColorAt(0.5, QColor(255, 255, 255, 62))
+        shine_grad.setColorAt(0.5, QColor(255, 255, 255, 58))
         shine_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
         painter.setPen(Qt.NoPen)
         painter.setBrush(shine_grad)
         painter.drawRect(shine_rect)
+
+        if self.dismiss_progress > 0.01:
+            rem = 1.0 - self.dismiss_progress
+            bar_max_w = island_rect.width() - 56.0
+            bar_w = max(0.0, bar_max_w * rem)
+            bar_x = island_rect.center().x() - bar_w * 0.5
+            bar_rect = QRectF(bar_x, island_rect.bottom() - 2.6, bar_w, 1.8)
+            painter.setBrush(QColor(r, g, b, 155))
+            painter.drawRoundedRect(bar_rect, 0.9, 0.9)
 
 
 class PremiumCopyButton(QPushButton):
@@ -527,7 +552,15 @@ class ImagePreviewOverlay(QWidget):
         self.source_url = ""
         self.open_btn_rect = QRectF()
         self.close_btn_rect = QRectF()
-        self.setCursor(Qt.PointingHandCursor)
+        self.hover_open = False
+        self.hover_close = False
+        self.anim_progress = 0.0
+        self.anim_target = 0.0
+        self.anim_timer = QTimer(self)
+        self.anim_timer.setInterval(16)
+        self.anim_timer.timeout.connect(self._tick_anim)
+        self.setMouseTracking(True)
+        self.setCursor(Qt.ArrowCursor)
         self.hide()
 
     def show_preview(self, raw_image, source_url):
@@ -535,15 +568,44 @@ class ImagePreviewOverlay(QWidget):
         self.source_url = str(source_url or "")
         if self.parentWidget() is not None:
             self.setGeometry(self.parentWidget().rect())
+        self.anim_progress = 0.05
+        self.anim_target = 1.0
         self.show()
         self.raise_()
+        if not self.anim_timer.isActive():
+            self.anim_timer.start()
         self.update()
 
     def close_preview(self):
         if self.isVisible():
-            self.hide()
-            if callable(self.on_close_callback):
-                self.on_close_callback()
+            self.anim_target = 0.0
+            if not self.anim_timer.isActive():
+                self.anim_timer.start()
+
+    def _tick_anim(self):
+        diff = self.anim_target - self.anim_progress
+        if abs(diff) < 0.035:
+            self.anim_progress = self.anim_target
+            self.anim_timer.stop()
+            if self.anim_target == 0.0:
+                self.hide()
+                if callable(self.on_close_callback):
+                    self.on_close_callback()
+                return
+        else:
+            self.anim_progress += diff * 0.28
+        self.update()
+
+    def mouseMoveEvent(self, event):
+        pos = QPointF(event.pos())
+        ho = self.open_btn_rect.contains(pos)
+        hc = self.close_btn_rect.contains(pos)
+        if ho != self.hover_open or hc != self.hover_close:
+            self.hover_open = ho
+            self.hover_close = hc
+            self.setCursor(Qt.PointingHandCursor if (ho or hc) else Qt.ArrowCursor)
+            self.update()
+        super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -565,10 +627,13 @@ class ImagePreviewOverlay(QWidget):
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
+        t = max(0.0, min(1.0, self.anim_progress))
+        painter.setOpacity(t)
+
         full_rect = QRectF(self.rect())
         bg_path = QPainterPath()
-        bg_path.addRoundedRect(full_rect, 24.0, 24.0)
-        painter.fillPath(bg_path, QColor(10, 11, 16, 244))
+        bg_path.addRoundedRect(full_rect, 23.0, 23.0)
+        painter.fillPath(bg_path, QColor(10, 11, 16, 246))
 
         pad_x = 24.0
         top_bar_h = 46.0
@@ -579,9 +644,10 @@ class ImagePreviewOverlay(QWidget):
         screen = QApplication.primaryScreen()
         dpr = max(1.0, float(screen.devicePixelRatio() if screen else 1.0))
 
+        scale_factor = 0.94 + 0.06 * t
         scaled = self.raw_image.scaled(
-            int(round(avail_w * dpr)),
-            int(round(avail_h * dpr)),
+            int(round(avail_w * scale_factor * dpr)),
+            int(round(avail_h * scale_factor * dpr)),
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
@@ -604,7 +670,7 @@ class ImagePreviewOverlay(QWidget):
 
         res_text = f"{self.raw_image.width()} × {self.raw_image.height()} px"
         painter.setFont(QFont(self.eng_font, 9, QFont.DemiBold))
-        painter.setPen(QColor(210, 212, 225, 220))
+        painter.setPen(QColor(210, 212, 225, 225))
         painter.drawText(
             QRectF(24.0, 12.0, 260.0, 26.0),
             Qt.AlignLeft | Qt.AlignVCenter,
@@ -614,18 +680,22 @@ class ImagePreviewOverlay(QWidget):
         self.close_btn_rect = QRectF(full_rect.width() - 50.0, 11.0, 28.0, 28.0)
         close_path = QPainterPath()
         close_path.addRoundedRect(self.close_btn_rect, 14.0, 14.0)
-        painter.fillPath(close_path, QColor(255, 255, 255, 24))
-        painter.setPen(QPen(QColor(255, 255, 255, 45), 1.0))
+        if self.hover_close:
+            painter.fillPath(close_path, QColor(255, 69, 58, 210))
+            painter.setPen(QPen(QColor(255, 105, 97, 230), 1.0))
+        else:
+            painter.fillPath(close_path, QColor(255, 255, 255, 24))
+            painter.setPen(QPen(QColor(255, 255, 255, 45), 1.0))
         painter.drawPath(close_path)
 
         cx = self.close_btn_rect.center().x()
         cy = self.close_btn_rect.center().y()
         d = 4.2
-        painter.setPen(QPen(QColor(255, 255, 255, 230), 1.6, Qt.SolidLine, Qt.RoundCap))
+        painter.setPen(QPen(QColor(255, 255, 255, 240), 1.6, Qt.SolidLine, Qt.RoundCap))
         painter.drawLine(QPointF(cx - d, cy - d), QPointF(cx + d, cy + d))
         painter.drawLine(QPointF(cx + d, cy - d), QPointF(cx - d, cy + d))
 
-        btn_w, btn_h = 152.0, 30.0
+        btn_w, btn_h = 156.0, 30.0
         self.open_btn_rect = QRectF(
             (full_rect.width() - btn_w) / 2.0,
             full_rect.height() - bot_bar_h + 10.0,
@@ -634,12 +704,16 @@ class ImagePreviewOverlay(QWidget):
         )
         btn_path = QPainterPath()
         btn_path.addRoundedRect(self.open_btn_rect, 9.0, 9.0)
-        painter.fillPath(btn_path, QColor(191, 90, 242, 48))
-        painter.setPen(QPen(QColor(196, 138, 249, 140), 1.0))
+        if self.hover_open:
+            painter.fillPath(btn_path, QColor(191, 90, 242, 85))
+            painter.setPen(QPen(QColor(210, 160, 255, 195), 1.0))
+        else:
+            painter.fillPath(btn_path, QColor(191, 90, 242, 48))
+            painter.setPen(QPen(QColor(196, 138, 249, 140), 1.0))
         painter.drawPath(btn_path)
 
         painter.setFont(QFont(self.eng_font, 9, QFont.Bold))
-        painter.setPen(QColor(245, 235, 255, 245))
+        painter.setPen(QColor(245, 235, 255, 248))
         painter.drawText(self.open_btn_rect, Qt.AlignCenter, "Open Original ↗")
 
 
@@ -649,19 +723,22 @@ class TypingPopup(QWidget):
         qInstallMessageHandler(_popup_qt_message_handler)
 
         self.max_width = max_width
-        self.chrome_height = 138
-        self.padding_h = 148
+        self.chrome_height = 131
+        self.padding_h = 116
         self.target_height = self.padding_h
         self.current_height = float(self.padding_h)
+        self._height_velocity = 0.0
         self.max_allowed_height = 820
 
         self.glow_phase = 0.0
+        self.border_energy = 1.0
         self.current_rgb = [191.0, 90.0, 242.0]
         self.target_rgb = [191.0, 90.0, 242.0]
         self._last_mtime = 0.0
         self._poll_tick_counter = 0
         self._smooth_scroll_y = 0.0
         self._last_rendered_html = ""
+        self._has_rich_media_or_code = False
 
         self.master_timer = QTimer(self)
         self.master_timer.timeout.connect(self.master_tick)
@@ -739,7 +816,7 @@ class TypingPopup(QWidget):
         self.setStyleSheet("background: transparent; border: none; outline: none;")
 
         self.outer_layout = QVBoxLayout(self)
-        self.outer_layout.setContentsMargins(16, 12, 16, 14)
+        self.outer_layout.setContentsMargins(16, 12, 16, 16)
         self.outer_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
         self.container = IslandContainer(self)
@@ -747,7 +824,7 @@ class TypingPopup(QWidget):
         self.container.setMinimumSize(0, 0)
 
         self.wrapper_layout = QVBoxLayout(self.container)
-        self.wrapper_layout.setContentsMargins(9, 7, 9, 11)
+        self.wrapper_layout.setContentsMargins(10, 8, 10, 12)
         self.wrapper_layout.setSpacing(0)
         self.wrapper_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
@@ -758,8 +835,8 @@ class TypingPopup(QWidget):
         self.wrapper_layout.addWidget(self.inner_island)
 
         self.container_layout = QVBoxLayout(self.inner_island)
-        self.container_layout.setContentsMargins(26, 18, 26, 20)
-        self.container_layout.setSpacing(12)
+        self.container_layout.setContentsMargins(24, 16, 24, 18)
+        self.container_layout.setSpacing(10)
         self.container_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
         self.header_layout = QHBoxLayout()
@@ -778,9 +855,9 @@ class TypingPopup(QWidget):
         self.mood_pill.setFont(QFont(self.eng_font, 8, QFont.Medium))
         self.mood_pill.setStyleSheet("""
             QLabel {
-                color: rgba(235, 235, 245, 0.82);
+                color: rgba(235, 235, 245, 0.85);
                 background-color: rgba(255, 255, 255, 0.065);
-                border: 1px solid rgba(255, 255, 255, 0.095);
+                border: 1px solid rgba(255, 255, 255, 0.10);
                 border-radius: 8px;
                 padding: 2px 9px;
             }
@@ -812,9 +889,9 @@ class TypingPopup(QWidget):
         self.separator.setStyleSheet("""
             background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
             stop:0 rgba(255,255,255,0),
-            stop:0.2 rgba(255,255,255,0.05),
-            stop:0.5 rgba(255,255,255,0.14),
-            stop:0.8 rgba(255,255,255,0.05),
+            stop:0.2 rgba(255,255,255,0.06),
+            stop:0.5 rgba(255,255,255,0.15),
+            stop:0.8 rgba(255,255,255,0.06),
             stop:1 rgba(255,255,255,0));
             border: none;
         """)
@@ -1065,12 +1142,22 @@ class TypingPopup(QWidget):
             cursor.setPosition(span[1], QTextCursor.KeepAnchor)
             fmt = QTextCharFormat()
             r, g, b = [max(0, min(255, int(c))) for c in self.current_rgb]
-            fmt.setBackground(QColor(r, g, b, 95))
+            fmt.setBackground(QColor(r, g, b, 105))
             fmt.setForeground(QColor(255, 255, 255, 255))
             sel = QTextEdit.ExtraSelection()
             sel.cursor = cursor
             sel.format = fmt
             self.text_browser.setExtraSelections([sel])
+
+            scrollbar = self.text_browser.verticalScrollBar()
+            if scrollbar.maximum() > 0 and self.auto_scroll_enabled:
+                rect = self.text_browser.cursorRect(cursor)
+                vp_h = self.text_browser.viewport().height()
+                if rect.bottom() > vp_h * 0.78:
+                    delta = rect.bottom() - vp_h * 0.62
+                    target_v = min(scrollbar.maximum(), int(scrollbar.value() + delta))
+                    scrollbar.setValue(target_v)
+                    self._smooth_scroll_y = float(target_v)
         except Exception:
             pass
 
@@ -1105,21 +1192,21 @@ class TypingPopup(QWidget):
         target_y = self.custom_pos.y() if self.custom_pos is not None else self.start_y
 
         self.resize(self.max_width, int(round(self.current_height)))
-        self.move(target_x, target_y - 26)
+        self.move(target_x, target_y - 24)
         self.show()
         self.raise_()
 
         self.anim_group = QParallelAnimationGroup(self)
 
         fade_in = QPropertyAnimation(self, b"windowOpacity")
-        fade_in.setDuration(260)
+        fade_in.setDuration(250)
         fade_in.setStartValue(self.windowOpacity())
         fade_in.setEndValue(1.0)
         fade_in.setEasingCurve(QEasingCurve.OutCubic)
 
         slide_down = QPropertyAnimation(self, b"pos")
-        slide_down.setDuration(320)
-        slide_down.setStartValue(QPoint(target_x, target_y - 26))
+        slide_down.setDuration(300)
+        slide_down.setStartValue(QPoint(target_x, target_y - 24))
         slide_down.setEndValue(QPoint(target_x, target_y))
         slide_down.setEasingCurve(QEasingCurve.OutQuint)
 
@@ -1170,6 +1257,7 @@ class TypingPopup(QWidget):
             elif self.status == "completed":
                 self.status_tag.setText("Response Ready")
                 self.target_rgb = [48.0, 209.0, 88.0]
+                self.text_browser.clear_Completed_Stream_Placeholders()
 
         if text_changed:
             self.current_raw_text = new_text
@@ -1187,14 +1275,14 @@ class TypingPopup(QWidget):
 
     def render_markdown_async(self, raw_text):
         self.pending_raw_text = raw_text
-        self.parse_debounce_timer.start(28)
+        self.parse_debounce_timer.start(24)
 
     def _execute_parse(self):
         if not self.pending_raw_text:
             return
         if self.worker is not None and self.worker.isRunning():
             self.worker.is_cancelled = True
-            self.parse_debounce_timer.start(16)
+            self.parse_debounce_timer.start(14)
             return
 
         self.worker = ParserWorker(
@@ -1206,7 +1294,10 @@ class TypingPopup(QWidget):
         self.worker.finished_signal.connect(self.on_markdown_parsed)
         self.worker.start()
 
-    def on_markdown_parsed(self, tokens, final_html):
+    def on_markdown_parsed(self, code_snippets, final_html):
+        self.text_browser.code_snippets = list(code_snippets or [])
+        self._has_rich_media_or_code = bool(self.text_browser.code_snippets) or ("<img " in final_html)
+
         if final_html == self._last_rendered_html:
             self.update_layout_height()
             return
@@ -1217,9 +1308,10 @@ class TypingPopup(QWidget):
 
         self.text_browser.setUpdatesEnabled(False)
         doc = self.text_browser.document()
-        doc.setDocumentMargin(4.0)
-        doc.setTextWidth(float(self.max_width - 102))
+        doc.setDocumentMargin(0.0)
+        doc.setTextWidth(float(self.max_width - 100))
         self.text_browser.setHtml(final_html)
+        self.text_browser.normalize_document_layout()
 
         self._cached_plain_text = None
         self._word_char_spans = None
@@ -1275,17 +1367,23 @@ class TypingPopup(QWidget):
         else:
             self.auto_scroll_enabled = True
 
-        effective_target_h = max(self.padding_h, self.target_height)
+        effective_target_h = float(max(self.padding_h, self.target_height))
         diff_h = effective_target_h - self.current_height
 
-        if abs(diff_h) > 0.6:
-            self.current_height += diff_h * 0.26
+        if abs(diff_h) > 0.35 or abs(self._height_velocity) > 0.15:
+            spring_force = diff_h * 0.28
+            self._height_velocity = (self._height_velocity + spring_force) * 0.56
+            self.current_height += self._height_velocity
+            if abs(effective_target_h - self.current_height) < 0.45:
+                self.current_height = effective_target_h
+                self._height_velocity = 0.0
             new_h = int(round(self.current_height))
             if self.height() != new_h:
                 self.resize(self.max_width, new_h)
-        elif int(round(self.current_height)) != effective_target_h:
-            self.current_height = float(effective_target_h)
-            if self.height() != effective_target_h:
+        elif int(round(self.current_height)) != int(effective_target_h):
+            self.current_height = effective_target_h
+            self._height_velocity = 0.0
+            if self.height() != int(effective_target_h):
                 self.resize(self.max_width, int(effective_target_h))
 
         if effective_target_h < self.max_allowed_height:
@@ -1311,38 +1409,48 @@ class TypingPopup(QWidget):
             self._smooth_scroll_y = float(cur_v)
             self.last_scroll_value = cur_v
 
-        self.glow_phase += 0.04
+        active_motion = (self.status == "typing") or self.tts_is_speaking or self.speak_btn.speaking
+        target_energy = 1.0 if active_motion else 0.0
+        self.border_energy += (target_energy - self.border_energy) * 0.08
+
+        self.glow_phase += 0.012 + (0.032 * self.border_energy)
         if self.glow_phase > math.pi * 2:
             self.glow_phase -= math.pi * 2
 
         for i in range(3):
             self.current_rgb[i] += (self.target_rgb[i] - self.current_rgb[i]) * 0.14
 
-        self.status_orb.set_state(self.current_rgb, self.glow_phase, self.status)
-        self.speak_btn.set_accent(self.current_rgb, self.glow_phase)
-        self.container.update_visuals(self.current_rgb, self.glow_phase)
-
+        dismiss_progress = 0.0
         if (
             self.status == "completed"
             and not self.underMouse()
             and not self.tts_is_speaking
             and not self.speak_btn.speaking
+            and not self.text_browser.pending_requests
         ):
             if not (hasattr(self, "preview_overlay") and self.preview_overlay.isVisible()):
                 word_count = len(self.clean_copy_text.split())
+                max_idle_ticks = 620 if self._has_rich_media_or_code else 440
                 if 0 < word_count < 45:
                     self.idle_counter += 1
-                    if self.idle_counter > 360:
+                    warn_start = max_idle_ticks - 150
+                    if self.idle_counter > warn_start:
+                        dismiss_progress = (self.idle_counter - warn_start) / 150.0
+                    if self.idle_counter >= max_idle_ticks:
                         self.fade_out(stop_tts=False)
         else:
             self.idle_counter = 0
+
+        self.status_orb.set_state(self.current_rgb, self.glow_phase, self.status)
+        self.speak_btn.set_accent(self.current_rgb, self.glow_phase)
+        self.container.update_visuals(self.current_rgb, self.glow_phase, self.border_energy, dismiss_progress)
 
     def update_layout_height(self):
         doc = self.text_browser.document()
         if doc is None:
             return
-        doc.setDocumentMargin(4.0)
-        exact_text_w = float(self.max_width - 102)
+        doc.setDocumentMargin(0.0)
+        exact_text_w = float(self.max_width - 100)
         if abs(doc.textWidth() - exact_text_w) > 0.5:
             doc.setTextWidth(exact_text_w)
 
@@ -1380,15 +1488,15 @@ class TypingPopup(QWidget):
         self.out_anim_group = QParallelAnimationGroup(self)
 
         fade_out = QPropertyAnimation(self, b"windowOpacity")
-        fade_out.setDuration(250)
+        fade_out.setDuration(240)
         fade_out.setStartValue(self.windowOpacity())
         fade_out.setEndValue(0.0)
         fade_out.setEasingCurve(QEasingCurve.InOutQuad)
 
         slide_up = QPropertyAnimation(self, b"pos")
-        slide_up.setDuration(280)
+        slide_up.setDuration(260)
         slide_up.setStartValue(self.pos())
-        slide_up.setEndValue(QPoint(self.x(), self.y() - 24))
+        slide_up.setEndValue(QPoint(self.x(), self.y() - 22))
         slide_up.setEasingCurve(QEasingCurve.InCubic)
 
         self.out_anim_group.addAnimation(fade_out)

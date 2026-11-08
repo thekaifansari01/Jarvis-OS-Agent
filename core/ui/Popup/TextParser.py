@@ -11,6 +11,11 @@ from pygments.formatters import HtmlFormatter
 class ParserWorker(QThread):
     finished_signal = pyqtSignal(list, str)
 
+    CARD_W = 656
+    CARD_H = 316
+    IMG_W = 656
+    IMG_H = 308
+
     IMAGE_EXT_RE = re.compile(
         r"\.(?:png|jpg|jpeg|gif|webp|bmp|svg|avif|ico|tiff)(?:[?#][^\s<>\"')]*)?$",
         re.IGNORECASE,
@@ -38,9 +43,15 @@ class ParserWorker(QThread):
         self.hin_font = hin_font
         self.is_streaming = bool(is_streaming)
         self.protected_elements = {}
+        self.code_snippets = []
         self.is_cancelled = False
 
-    def protect(self, html):
+    def protect_block(self, html):
+        token = f"<jarvis-token-{len(self.protected_elements)}/>"
+        self.protected_elements[token] = html
+        return f"\n\n{token}\n\n"
+
+    def protect_inline(self, html):
         token = f"<jarvis-token-{len(self.protected_elements)}/>"
         self.protected_elements[token] = html
         return token
@@ -75,25 +86,27 @@ class ParserWorker(QThread):
         header_html = ""
         if caption_text and caption_url:
             header_html = (
+                f'<p style="margin-top: 8px; margin-bottom: 4px; line-height: 1.35;">'
                 f'<a href="{caption_url}" style="text-decoration:none; color:#C48AF9; '
-                f'font-weight:600;">{caption_text} ↗</a><br>'
+                f'font-weight:600;">{caption_text} ↗</a></p>'
             )
-        return self.protect(
-            f'<p style="margin-top: 10px; margin-bottom: 10px; line-height: 1.25;">'
+        card_html = (
             f'{header_html}'
+            f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
             f'<a href="imgpreview://{safe_url}" style="text-decoration:none;">'
-            f'<img src="img://{safe_url}" width="420" height="236" alt="{alt}"></a></p>'
+            f'<img src="img://{safe_url}" width="{self.IMG_W}" height="{self.IMG_H}" alt="{alt}"></a></p>'
         )
+        return self.protect_block(card_html)
 
     def build_loading_card_html(self, kind="preview"):
         if kind == "image":
-            return self.protect(
-                '<p style="margin-top: 10px; margin-bottom: 10px; line-height: 1.0;">'
-                '<img src="loading://image" width="420" height="236" alt="loading_image"></p>'
+            return self.protect_block(
+                f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
+                f'<img src="loading://image" width="{self.IMG_W}" height="{self.IMG_H}" alt="loading_image"></p>'
             )
-        return self.protect(
-            '<p style="margin-top: 10px; margin-bottom: 8px; line-height: 1.0;">'
-            '<img src="loading://preview" width="420" height="286" alt="loading_preview"></p>'
+        return self.protect_block(
+            f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
+            f'<img src="loading://preview" width="{self.CARD_W}" height="{self.CARD_H}" alt="loading_preview"></p>'
         )
 
     def normalize_streaming_fences(self, text):
@@ -140,6 +153,9 @@ class ParserWorker(QThread):
         def replacer(match):
             lang = match.group(1).strip().lower()
             raw_code = match.group(2).rstrip("\n")
+            code_idx = len(self.code_snippets)
+            self.code_snippets.append(raw_code)
+
             formatter = HtmlFormatter(style="monokai", noclasses=True, nowrap=True)
 
             if not lang:
@@ -151,25 +167,35 @@ class ParserWorker(QThread):
 
             highlighted = highlight(raw_code, lexer, formatter)
             html = (
-                f'<table width="100%" cellspacing="0" cellpadding="1" bgcolor="#32333D" '
-                f'style="margin-top: 12px; margin-bottom: 14px;">'
+                f'<table width="100%" cellspacing="0" cellpadding="1" bgcolor="#2A2B36" '
+                f'style="margin-top: 8px; margin-bottom: 10px;">'
                 f'<tr><td>'
-                f'<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#131419">'
-                f'<tr><td bgcolor="#1F2028" style="padding: 7px 14px;">'
-                f'<span style="color:#FF5F56; font-size:13px;">●</span>&nbsp;'
-                f'<span style="color:#FFBD2E; font-size:13px;">●</span>&nbsp;'
-                f'<span style="color:#27C93F; font-size:13px;">●</span>'
-                f'&nbsp;&nbsp;&nbsp;<span style="color: #8E8E98; font-size: 9.5pt; font-weight: bold; '
+                f'<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#121318">'
+                f'<tr><td bgcolor="#1C1D26" style="padding: 7px 14px;">'
+                f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0; border:none;">'
+                f'<tr>'
+                f'<td align="left" style="border:none; padding:0;">'
+                f'<span style="color:#FF5F56; font-size:12px;">●</span>&nbsp;'
+                f'<span style="color:#FFBD2E; font-size:12px;">●</span>&nbsp;'
+                f'<span style="color:#27C93F; font-size:12px;">●</span>'
+                f'&nbsp;&nbsp;&nbsp;<span style="color: #9496A6; font-size: 9pt; font-weight: 700; '
                 f'font-family: \'{self.eng_font}\', sans-serif; letter-spacing: 0.8px;">{lang.upper()}</span>'
+                f'</td>'
+                f'<td align="right" style="border:none; padding:0;">'
+                f'<a href="copycode://{code_idx}" style="color: #B4B6C8; text-decoration: none; '
+                f'font-size: 8.5pt; font-weight: 600; font-family: \'{self.eng_font}\', sans-serif;">'
+                f'Copy Code</a>'
+                f'</td>'
+                f'</tr></table>'
                 f'</td></tr>'
-                f'<tr><td style="padding: 13px 15px;">'
+                f'<tr><td style="padding: 12px 15px;">'
                 f'<pre style="margin: 0; font-family: \'Cascadia Code\', Consolas, monospace; '
-                f'font-size: 10.5pt; line-height: 1.45; color: #E5E5EA; white-space: pre-wrap; word-wrap: break-word;">'
+                f'font-size: 10.2pt; line-height: 1.45; color: #E5E5EA; white-space: pre-wrap; word-wrap: break-word;">'
                 f'{highlighted}</pre>'
                 f'</td></tr></table>'
                 f'</td></tr></table>'
             )
-            return self.protect(html)
+            return self.protect_block(html)
 
         return re.sub(pattern, replacer, text, flags=re.DOTALL)
 
@@ -190,17 +216,20 @@ class ParserWorker(QThread):
             display_text, url = match.groups()
             url = url.strip().strip("\"'")
             if "<jarvis-token-" in display_text:
-                return self.protect(f'<p style="margin-top: 10px;"><a href="{url}">{display_text}</a></p>')
+                return self.protect_block(
+                    f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;"><a href="{url}">{display_text}</a></p>'
+                )
 
             if "youtube.com" in url or "youtu.be" in url:
                 yt_match = re.search(r"(?:v=|youtu\.be/|shorts/|embed/)([a-zA-Z0-9_-]{11})", url)
                 if yt_match:
                     vid_id = yt_match.group(1)
-                    return self.protect(
-                        f'<p style="margin-top: 10px; margin-bottom: 8px; line-height: 1.25;">'
-                        f'<a href="{url}" style="text-decoration:none; color:#C48AF9; font-weight:600;">{display_text} ↗</a><br>'
+                    return self.protect_block(
+                        f'<p style="margin-top: 8px; margin-bottom: 4px; line-height: 1.35;">'
+                        f'<a href="{url}" style="text-decoration:none; color:#C48AF9; font-weight:600;">{display_text} ↗</a></p>'
+                        f'<p style="margin-top: 4px; margin-bottom: 6px; line-height: 100%;">'
                         f'<a href="{url}" style="text-decoration:none;">'
-                        f'<img src="https://img.youtube.com/vi/{vid_id}/maxresdefault.jpg" width="420" height="236" alt="yt_preview"></a></p>'
+                        f'<img src="https://img.youtube.com/vi/{vid_id}/maxresdefault.jpg" width="{self.IMG_W}" height="{self.IMG_H}" alt="yt_preview"></a></p>'
                     )
 
             clean_disp = display_text.strip()
@@ -210,13 +239,13 @@ class ParserWorker(QThread):
                 return self.build_image_card_html(url, alt=clean_disp, caption_text=clean_disp, caption_url=url)
 
             if clean_disp == url or clean_disp.startswith(("http://", "https://")):
-                return self.protect(
-                    f'<p style="margin-top: 10px; margin-bottom: 8px; line-height: 1.0;">'
+                return self.protect_block(
+                    f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
                     f'<a href="{url}" style="text-decoration:none;">'
-                    f'<img src="preview://{url}" width="420" height="286" alt="link_preview"></a></p>'
+                    f'<img src="preview://{url}" width="{self.CARD_W}" height="{self.CARD_H}" alt="link_preview"></a></p>'
                 )
 
-            return self.protect(
+            return self.protect_inline(
                 f'<a href="{url}" style="color: #C48AF9; text-decoration: none; font-weight: 600;">{display_text} ↗</a>'
             )
 
@@ -249,10 +278,10 @@ class ParserWorker(QThread):
         )
         return re.sub(
             pattern,
-            lambda m: self.protect(
-                f'<p style="margin-top: 10px; margin-bottom: 8px; line-height: 1.0;">'
+            lambda m: self.protect_block(
+                f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
                 f'<a href="{m.group(1)}" style="text-decoration:none;">'
-                f'<img src="https://img.youtube.com/vi/{m.group(2)}/maxresdefault.jpg" width="420" height="236" alt="yt_preview"></a></p>'
+                f'<img src="https://img.youtube.com/vi/{m.group(2)}/maxresdefault.jpg" width="{self.IMG_W}" height="{self.IMG_H}" alt="yt_preview"></a></p>'
             ),
             text,
         )
@@ -264,10 +293,10 @@ class ParserWorker(QThread):
             url = match.group(1).rstrip(".,;)")
             if self.is_image_url(url):
                 return self.build_image_card_html(url, alt="img_preview")
-            return self.protect(
-                f'<p style="margin-top: 10px; margin-bottom: 8px; line-height: 1.0;">'
+            return self.protect_block(
+                f'<p style="margin-top: 6px; margin-bottom: 6px; line-height: 100%;">'
                 f'<a href="{url}" style="text-decoration:none;">'
-                f'<img src="preview://{url}" width="420" height="286" alt="link_preview"></a></p>'
+                f'<img src="preview://{url}" width="{self.CARD_W}" height="{self.CARD_H}" alt="link_preview"></a></p>'
             )
 
         return re.sub(pattern, replacer, text)
@@ -277,75 +306,75 @@ class ParserWorker(QThread):
         <html><head><style>
             body {{
                 margin: 0px;
-                padding: 2px 4px 4px 2px;
+                padding: 0px;
                 color: #ECECF2;
                 font-family: '{self.eng_font}', '{self.hin_font}', 'Segoe UI', sans-serif;
-                font-size: 12.2pt;
-                line-height: 1.62;
+                font-size: 12pt;
+                line-height: 1.56;
                 word-wrap: break-word;
             }}
             h1 {{
-                font-size: 17.5pt;
+                font-size: 16.5pt;
                 color: #FFFFFF;
                 font-weight: 700;
-                margin-top: 12px;
-                margin-bottom: 10px;
-                border-bottom: 1px solid rgba(255,255,255,0.09);
-                padding-bottom: 6px;
+                margin-top: 10px;
+                margin-bottom: 8px;
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+                padding-bottom: 5px;
             }}
             h2 {{
-                font-size: 14.8pt;
+                font-size: 14.2pt;
                 color: #F7F7FC;
                 font-weight: 700;
-                margin-top: 12px;
-                margin-bottom: 8px;
-            }}
-            h3 {{
-                font-size: 13pt;
-                color: #E2E2F0;
-                font-weight: 600;
                 margin-top: 10px;
                 margin-bottom: 6px;
             }}
+            h3 {{
+                font-size: 12.6pt;
+                color: #E2E2F0;
+                font-weight: 600;
+                margin-top: 8px;
+                margin-bottom: 5px;
+            }}
             p {{
                 margin-top: 0px;
-                margin-bottom: 10px;
+                margin-bottom: 8px;
             }}
             blockquote {{
-                margin: 10px 0px 14px 0px;
-                padding: 10px 14px;
+                margin: 8px 0px 10px 0px;
+                padding: 8px 14px;
                 border-left: 3px solid #BF5AF2;
-                background-color: rgba(191, 90, 242, 0.09);
+                background-color: rgba(191, 90, 242, 0.085);
                 color: #DCDCE8;
                 font-style: italic;
             }}
             ul, ol {{
-                margin-top: 4px;
-                margin-bottom: 12px;
+                margin-top: 3px;
+                margin-bottom: 8px;
                 padding-left: 22px;
             }}
             li {{
-                margin-bottom: 6px;
+                margin-bottom: 4px;
             }}
             hr {{
                 border: none;
-                border-top: 1px solid rgba(255,255,255,0.09);
-                margin: 14px 0px;
+                border-top: 1px solid rgba(255,255,255,0.08);
+                margin: 10px 0px;
             }}
             table {{
                 border-collapse: collapse;
-                margin-top: 8px;
-                margin-bottom: 14px;
+                margin-top: 6px;
+                margin-bottom: 10px;
                 width: 100%;
             }}
             th, td {{
-                border: 1px solid rgba(255,255,255,0.10);
-                padding: 9px 12px;
+                border: 1px solid rgba(255,255,255,0.09);
+                padding: 8px 11px;
                 text-align: left;
-                font-size: 11.2pt;
+                font-size: 11pt;
             }}
             th {{
-                background-color: rgba(255,255,255,0.07);
+                background-color: rgba(255,255,255,0.065);
                 font-weight: 700;
                 color: #FFFFFF;
             }}
@@ -354,24 +383,18 @@ class ParserWorker(QThread):
                 font-weight: 700;
             }}
             code {{
-                background-color: #23242D;
-                color: #E5A4FA;
-                padding: 2px 5px;
+                background-color: #21222C;
+                color: #E6A8FA;
                 font-family: 'Cascadia Code', Consolas, monospace;
-                font-size: 10.8pt;
+                font-size: 10.4pt;
             }}
             pre code {{
                 background-color: transparent;
-                padding: 0;
             }}
             a {{
                 color: #C48AF9;
                 text-decoration: none;
                 font-weight: 600;
-            }}
-            img {{
-                display: block;
-                margin-bottom: 0px;
             }}
         </style></head><body>{content}</body></html>
         """
@@ -401,14 +424,22 @@ class ParserWorker(QThread):
                 "fenced-code-blocks",
             ],
         )
-        md_html = re.sub(r"<p>\s*(<jarvis-token-\d+/>)\s*</p>", r"\1", md_html)
+
+        md_html = re.sub(
+            r"<code>([^<\n]+?)</code>",
+            r"<code>&nbsp;\1&nbsp;</code>",
+            md_html,
+        )
+        md_html = re.sub(r"<p>\s*(?:<br\s*/?>\s*)*(<jarvis-token-\d+/>)\s*(?:<br\s*/?>\s*)*</p>", r"\1", md_html)
 
         for token, value in self.protected_elements.items():
             md_html = md_html.replace(token, value)
+
+        md_html = re.sub(r"(?:<p>\s*</p>\s*)+$", "", md_html.strip())
 
         if self.is_cancelled:
             return
 
         final_html = self.get_styled_html(md_html)
         if not self.is_cancelled:
-            self.finished_signal.emit([], final_html)
+            self.finished_signal.emit(self.code_snippets, final_html)

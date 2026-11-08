@@ -6,21 +6,21 @@ import time
 import urllib.parse
 from collections import OrderedDict
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
-from PyQt5.QtCore import Qt, QUrl, QTimer, QRectF, QPointF, QByteArray, QSizeF
+from PyQt5.QtCore import Qt, QUrl, QTimer, QRectF, QPointF, QByteArray
 from PyQt5.QtWidgets import QTextBrowser, QFrame, QSizePolicy, QApplication
 from PyQt5.QtGui import (
     QColor, QImage, QPainter, QPainterPath, QPen,
     QTextDocument, QPalette, QDesktopServices, QFont,
-    QFontMetrics, QLinearGradient
+    QFontMetrics, QLinearGradient, QTextBlockFormat, QTextCursor
 )
 from PyQt5.QtSvg import QSvgRenderer
 
 
 class AsyncTextBrowser(QTextBrowser):
-    CARD_W = 420
-    CARD_H = 286
-    IMG_W = 420
-    IMG_H = 236
+    CARD_W = 656
+    CARD_H = 316
+    IMG_W = 656
+    IMG_H = 308
 
     USER_AGENT = (
         b"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -35,13 +35,26 @@ class AsyncTextBrowser(QTextBrowser):
         self.network_manager.finished.connect(self.on_network_reply)
         self.image_cache = OrderedDict()
         self.raw_image_cache = OrderedDict()
-        self.static_placeholders = {}
         self.failed_urls = {}
         self.pending_requests = set()
+        self.active_placeholders = {}
         self.active_replies = {}
+        self.code_snippets = []
         self.MAX_CACHE_SIZE = 100
         self.MAX_RAW_CACHE_SIZE = 35
         self.CACHE_TTL = 30
+
+        self.shimmer_phase = 0.0
+        self.shimmer_timer = QTimer(self)
+        self.shimmer_timer.setInterval(33)
+        self.shimmer_timer.timeout.connect(self._tick_shimmer)
+
+        self.scroll_indicator_alpha = 0.0
+        self.scroll_fade_timer = QTimer(self)
+        self.scroll_fade_timer.setInterval(25)
+        self.scroll_fade_timer.timeout.connect(self._tick_scroll_indicator)
+
+        self.verticalScrollBar().valueChanged.connect(self._on_scroll_activity)
 
         self.cache_dir = "Data/cache"
         if not os.path.exists(self.cache_dir):
@@ -64,12 +77,86 @@ class AsyncTextBrowser(QTextBrowser):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet("background: transparent; border: none; outline: none;")
-        self.document().setDocumentMargin(4.0)
+        self.document().setDocumentMargin(0.0)
 
         palette = self.palette()
         palette.setColor(QPalette.Highlight, QColor(191, 90, 242, 110))
         palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255, 255))
         self.setPalette(palette)
+
+    def _on_scroll_activity(self):
+        self.scroll_indicator_alpha = 1.0
+        if not self.scroll_fade_timer.isActive():
+            self.scroll_fade_timer.start()
+        self.viewport().update()
+
+    def _tick_scroll_indicator(self):
+        if self.underMouse():
+            target = 0.72
+        else:
+            target = 0.0
+        diff = target - self.scroll_indicator_alpha
+        if abs(diff) < 0.03:
+            self.scroll_indicator_alpha = target
+            if target == 0.0:
+                self.scroll_fade_timer.stop()
+        else:
+            self.scroll_indicator_alpha += diff * 0.14
+        self.viewport().update()
+
+    def enterEvent(self, event):
+        if self.verticalScrollBar().maximum() > 0:
+            self.scroll_indicator_alpha = max(self.scroll_indicator_alpha, 0.72)
+            if not self.scroll_fade_timer.isActive():
+                self.scroll_fade_timer.start()
+            self.viewport().update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self.scroll_fade_timer.isActive():
+            self.scroll_fade_timer.start()
+        super().leaveEvent(event)
+
+    def normalize_document_layout(self):
+        doc = self.document()
+        if doc is None:
+            return
+        doc.setDocumentMargin(0.0)
+
+        block = doc.begin()
+        while block.isValid():
+            if "\ufffc" in block.text():
+                fmt = block.blockFormat()
+                fmt.setLineHeight(100.0, QTextBlockFormat.ProportionalHeight)
+                fmt.setTopMargin(4.0)
+                fmt.setBottomMargin(4.0)
+                cursor = QTextCursor(block)
+                cursor.setBlockFormat(fmt)
+            block = block.next()
+
+        first_block = doc.firstBlock()
+        if first_block.isValid():
+            fmt = first_block.blockFormat()
+            if fmt.topMargin() != 0.0:
+                fmt.setTopMargin(0.0)
+                cursor = QTextCursor(first_block)
+                cursor.setBlockFormat(fmt)
+
+        last_block = doc.lastBlock()
+        if last_block.isValid():
+            fmt = last_block.blockFormat()
+            fmt.setBottomMargin(0.0)
+            if last_block.blockNumber() > 0 and last_block.text().strip() == "":
+                fmt.setTopMargin(0.0)
+                fmt.setLineHeight(1.0, QTextBlockFormat.FixedHeight)
+                cursor = QTextCursor(last_block)
+                cursor.setBlockFormat(fmt)
+                char_fmt = cursor. blockCharFormat()
+                char_fmt.setFontPointSize(1.0)
+                cursor.setBlockCharFormat(char_fmt)
+            else:
+                cursor = QTextCursor(last_block)
+                cursor.setBlockFormat(fmt)
 
     def _get_dpr(self):
         screen = QApplication.primaryScreen()
@@ -98,6 +185,17 @@ class AsyncTextBrowser(QTextBrowser):
 
     def handle_link_click(self, url):
         url_str = url.toString()
+        if url_str.startswith("copycode://"):
+            try:
+                idx = int(url_str[len("copycode://"):])
+                if 0 <= idx < len(self.code_snippets):
+                    QApplication.clipboard().setText(self.code_snippets[idx])
+                    if hasattr(self.parent_popup, "copy_btn"):
+                        self.parent_popup.copy_btn.show_copied()
+            except Exception:
+                pass
+            return
+
         if url_str.startswith("imgpreview://"):
             target_url = url_str[len("imgpreview://"):]
             raw_img = (
@@ -112,60 +210,93 @@ class AsyncTextBrowser(QTextBrowser):
             return
         QDesktopServices.openUrl(url)
 
-    def _create_placeholder(self, text, w=420, h=236, is_card=False):
-        cache_key = (text, int(w), int(h), bool(is_card), round(self._get_dpr(), 2))
-        if cache_key in self.static_placeholders:
-            return self.static_placeholders[cache_key]
+    def _register_placeholder(self, url, text, w, h, is_card, animated=True):
+        if animated:
+            self.active_placeholders[url] = (text, w, h, is_card)
+            if not self.shimmer_timer.isActive():
+                self.shimmer_timer.start()
+        else:
+            self.active_placeholders.pop(url, None)
+        return self._create_placeholder(text, w=w, h=h, is_card=is_card, phase=self.shimmer_phase if animated else -1.0)
 
+    def _tick_shimmer(self):
+        if not self.active_placeholders or self.document() is None:
+            self.shimmer_timer.stop()
+            return
+        self.shimmer_phase = (self.shimmer_phase + 0.042) % 1.0
+        doc = self.document()
+        for url, (text, w, h, is_card) in list(self.active_placeholders.items()):
+            img = self._create_placeholder(text, w=w, h=h, is_card=is_card, phase=self.shimmer_phase)
+            doc.addResource(QTextDocument.ImageResource, QUrl(url), img)
+        self.viewport().update()
+
+    def clear_Completed_Stream_Placeholders(self):
+        for k in ("loading://image", "loading://preview"):
+            self.active_placeholders.pop(k, None)
+        if not self.active_placeholders and self.shimmer_timer.isActive():
+            self.shimmer_timer.stop()
+
+    def _create_placeholder(self, text, w=656, h=308, is_card=False, phase=-1.0):
         img, _ = self._new_canvas(w, h)
         painter = QPainter(img)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        rect = QRectF(1.5, 1.5, w - 3.0, h - 3.0)
+        rect = QRectF(1.0, 1.0, w - 2.0, h - 2.0)
         path = QPainterPath()
         path.addRoundedRect(rect, 14.0, 14.0)
 
         grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        grad.setColorAt(0.0, QColor(32, 33, 42, 235))
-        grad.setColorAt(1.0, QColor(18, 19, 25, 245))
+        grad.setColorAt(0.0, QColor(28, 30, 39, 242))
+        grad.setColorAt(1.0, QColor(16, 17, 23, 248))
         painter.fillPath(path, grad)
 
+        painter.save()
+        painter.setClipPath(path)
+
         if is_card:
-            hero_h = 192.0
-            shimmer_rect = QRectF(1.5, 1.5, w - 3.0, hero_h)
-            painter.save()
-            painter.setClipPath(path)
-            painter.fillRect(shimmer_rect, QColor(255, 255, 255, 8))
-            painter.setPen(QPen(QColor(255, 255, 255, 20), 1.0))
-            painter.drawLine(QPointF(1.5, hero_h), QPointF(w - 1.5, hero_h))
+            hero_h = 222.0
+            shimmer_rect = QRectF(1.0, 1.0, w - 2.0, hero_h)
+            painter.fillRect(shimmer_rect, QColor(255, 255, 255, 7))
+            painter.setPen(QPen(QColor(255, 255, 255, 18), 1.0))
+            painter.drawLine(QPointF(1.0, hero_h), QPointF(w - 1.0, hero_h))
 
             bar1 = QPainterPath()
-            bar1.addRoundedRect(QRectF(14.0, hero_h + 16.0, w * 0.55, 12.0), 6.0, 6.0)
+            bar1.addRoundedRect(QRectF(18.0, hero_h + 18.0, w * 0.48, 13.0), 6.5, 6.5)
             painter.fillPath(bar1, QColor(255, 255, 255, 24))
 
             bar2 = QPainterPath()
-            bar2.addRoundedRect(QRectF(14.0, hero_h + 38.0, w * 0.78, 10.0), 5.0, 5.0)
+            bar2.addRoundedRect(QRectF(18.0, hero_h + 40.0, w * 0.74, 10.0), 5.0, 5.0)
             painter.fillPath(bar2, QColor(255, 255, 255, 14))
 
             bar3 = QPainterPath()
-            bar3.addRoundedRect(QRectF(14.0, hero_h + 60.0, w * 0.30, 9.0), 4.5, 4.5)
+            bar3.addRoundedRect(QRectF(18.0, hero_h + 62.0, w * 0.24, 9.0), 4.5, 4.5)
             painter.fillPath(bar3, QColor(191, 90, 242, 42))
-            painter.restore()
 
-            text_rect = QRectF(0.0, 0.0, float(w), 192.0)
+            text_rect = QRectF(0.0, 0.0, float(w), hero_h)
         else:
             text_rect = QRectF(0.0, 0.0, float(w), float(h))
 
-        painter.setPen(QColor(180, 182, 198, 220))
+        if phase >= 0.0:
+            sweep_span = w * 0.65
+            cx = -sweep_span + (w + sweep_span * 2.0) * phase
+            shimmer_grad = QLinearGradient(QPointF(cx - sweep_span * 0.5, 0.0), QPointF(cx + sweep_span * 0.5, h * 0.35))
+            shimmer_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
+            shimmer_grad.setColorAt(0.45, QColor(196, 138, 249, 18))
+            shimmer_grad.setColorAt(0.5, QColor(255, 255, 255, 32))
+            shimmer_grad.setColorAt(0.55, QColor(196, 138, 249, 18))
+            shimmer_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+            painter.fillRect(rect, shimmer_grad)
+
+        painter.restore()
+
+        painter.setPen(QColor(186, 188, 205, 215))
         font = QFont(getattr(self.parent_popup, "eng_font", "Segoe UI"), 9, QFont.DemiBold)
         painter.setFont(font)
         painter.drawText(text_rect, Qt.AlignCenter, text)
 
-        pen = QPen(QColor(255, 255, 255, 34), 1.2)
+        pen = QPen(QColor(255, 255, 255, 30), 1.1)
         painter.strokePath(path, pen)
         painter.end()
-
-        self.static_placeholders[cache_key] = img
         return img
 
     def save_meta_cache(self):
@@ -223,8 +354,8 @@ class AsyncTextBrowser(QTextBrowser):
             renderer = QSvgRenderer(QByteArray(raw_bytes))
             if renderer.isValid():
                 default_size = renderer.defaultSize()
-                w = max(420, default_size.width() if default_size.width() > 0 else 420)
-                h = max(236, default_size.height() if default_size.height() > 0 else 236)
+                w = max(self.IMG_W, default_size.width() if default_size.width() > 0 else self.IMG_W)
+                h = max(self.IMG_H, default_size.height() if default_size.height() > 0 else self.IMG_H)
                 svg_img = QImage(w, h, QImage.Format_ARGB32_Premultiplied)
                 svg_img.fill(Qt.transparent)
                 p = QPainter(svg_img)
@@ -254,9 +385,9 @@ class AsyncTextBrowser(QTextBrowser):
             current_time = time.time()
 
             if url == "loading://image":
-                return self._create_placeholder("Loading Image...", w=self.IMG_W, h=self.IMG_H, is_card=False)
+                return self._register_placeholder(url, "Loading Image...", self.IMG_W, self.IMG_H, False, True)
             if url == "loading://preview":
-                return self._create_placeholder("Loading Preview...", w=self.CARD_W, h=self.CARD_H, is_card=True)
+                return self._register_placeholder(url, "Loading Preview...", self.CARD_W, self.CARD_H, True, True)
 
             if url in self.image_cache:
                 self.image_cache.move_to_end(url)
@@ -275,14 +406,14 @@ class AsyncTextBrowser(QTextBrowser):
                             "domain": urllib.parse.urlparse(actual_url).netloc or "Web Link",
                         }
                         return self._draw_card(None, url, meta)
-                    return self._create_placeholder("Image Unavailable", w=self.IMG_W, h=self.IMG_H, is_card=False)
+                    return self._register_placeholder(url, "Image Unavailable", self.IMG_W, self.IMG_H, False, False)
                 else:
                     del self.failed_urls[url]
 
             if url in self.pending_requests:
                 if is_preview_scheme:
-                    return self._create_placeholder("Loading Link Preview...", w=self.CARD_W, h=self.CARD_H, is_card=True)
-                return self._create_placeholder("Loading Media...", w=self.IMG_W, h=self.IMG_H, is_card=False)
+                    return self._register_placeholder(url, "Loading Link Preview...", self.CARD_W, self.CARD_H, True, True)
+                return self._register_placeholder(url, "Loading Media...", self.IMG_W, self.IMG_H, False, True)
 
             if is_preview_scheme:
                 actual_url = url[10:]
@@ -292,7 +423,7 @@ class AsyncTextBrowser(QTextBrowser):
                     if img_url:
                         self.pending_requests.add(url)
                         self._request_image(img_url, url, meta)
-                        return self._create_placeholder("Loading Link Preview...", w=self.CARD_W, h=self.CARD_H, is_card=True)
+                        return self._register_placeholder(url, "Loading Link Preview...", self.CARD_W, self.CARD_H, True, True)
                     else:
                         styled = self._draw_card(None, url, meta)
                         self._cache_and_update(url, styled)
@@ -307,7 +438,7 @@ class AsyncTextBrowser(QTextBrowser):
                     original_url=url,
                     actual_url=actual_url,
                 )
-                return self._create_placeholder("Loading Link Preview...", w=self.CARD_W, h=self.CARD_H, is_card=True)
+                return self._register_placeholder(url, "Loading Link Preview...", self.CARD_W, self.CARD_H, True, True)
 
             actual_media_url = url[6:] if is_img_scheme else url
 
@@ -322,7 +453,7 @@ class AsyncTextBrowser(QTextBrowser):
                     return styled_img
                 else:
                     self.failed_urls[url] = current_time
-                    return self._create_placeholder("Local Image Not Found", w=self.IMG_W, h=self.IMG_H, is_card=False)
+                    return self._register_placeholder(url, "Local Image Not Found", self.IMG_W, self.IMG_H, False, False)
 
             if actual_media_url.startswith(("http://", "https://")):
                 self.pending_requests.add(url)
@@ -333,7 +464,7 @@ class AsyncTextBrowser(QTextBrowser):
                     original_url=url,
                     actual_url=actual_media_url,
                 )
-                return self._create_placeholder("Loading Media...", w=self.IMG_W, h=self.IMG_H, is_card=False)
+                return self._register_placeholder(url, "Loading Media...", self.IMG_W, self.IMG_H, False, True)
 
         return super().loadResource(type, name)
 
@@ -347,6 +478,10 @@ class AsyncTextBrowser(QTextBrowser):
         )
 
     def _cache_and_update(self, url, img):
+        self.active_placeholders.pop(url, None)
+        if not self.active_placeholders and self.shimmer_timer.isActive():
+            self.shimmer_timer.stop()
+
         if url in self.image_cache:
             self.image_cache.move_to_end(url)
         elif len(self.image_cache) >= self.MAX_CACHE_SIZE:
@@ -356,9 +491,17 @@ class AsyncTextBrowser(QTextBrowser):
         doc = self.document()
         if doc is not None:
             doc.addResource(QTextDocument.ImageResource, QUrl(url), img)
+            self.normalize_document_layout()
             doc.markContentsDirty(0, max(1, doc.characterCount()))
         self.viewport().update()
         self._trigger_debounced_reflow()
+
+    def _create_smooth_blurred_backdrop(self, raw_image, target_w, target_h):
+        s1 = raw_image.scaled(128, 72, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        s2 = s1.scaled(36, 20, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        s3 = s2.scaled(96, 54, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        s4 = s3.scaled(28, 16, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        return s4.scaled(target_w, target_h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
 
     def _style_simple_image(self, raw_image, url):
         w, h = self.IMG_W, self.IMG_H
@@ -368,10 +511,10 @@ class AsyncTextBrowser(QTextBrowser):
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
-        rect = QRectF(1.5, 1.5, w - 3.0, h - 3.0)
+        rect = QRectF(1.0, 1.0, w - 2.0, h - 2.0)
         path = QPainterPath()
         path.addRoundedRect(rect, 14.0, 14.0)
-        painter.fillPath(path, QColor(16, 17, 23))
+        painter.fillPath(path, QColor(14, 15, 20))
         painter.setClipPath(path)
 
         orig_w = max(1, raw_image.width())
@@ -379,7 +522,7 @@ class AsyncTextBrowser(QTextBrowser):
         img_ratio = orig_w / float(orig_h)
         is_yt = "img.youtube.com" in url
 
-        if is_yt or (1.45 <= img_ratio <= 2.15 and orig_w >= 260):
+        if is_yt or (1.52 <= img_ratio <= 2.35 and orig_w >= 320):
             scaled_fill = raw_image.scaled(
                 int(round(w * dpr)),
                 int(round(h * dpr)),
@@ -392,18 +535,16 @@ class AsyncTextBrowser(QTextBrowser):
             dy = (h - sh) / 2.0
             painter.drawImage(QRectF(dx, dy, sw, sh), scaled_fill)
         else:
-            tiny = raw_image.scaled(28, 16, Qt.IgnoreAspectRatio, Qt.FastTransformation)
-            blurred_bg = tiny.scaled(
+            blurred_bg = self._create_smooth_blurred_backdrop(
+                raw_image,
                 int(round(w * dpr)),
                 int(round(h * dpr)),
-                Qt.IgnoreAspectRatio,
-                Qt.SmoothTransformation,
             )
             painter.drawImage(QRectF(0.0, 0.0, float(w), float(h)), blurred_bg)
-            painter.fillRect(QRectF(0.0, 0.0, float(w), float(h)), QColor(12, 13, 18, 188))
+            painter.fillRect(QRectF(0.0, 0.0, float(w), float(h)), QColor(11, 12, 17, 172))
 
-            avail_w = w - 20.0
-            avail_h = h - 20.0
+            avail_w = w - 28.0
+            avail_h = h - 24.0
             scaled_fit = raw_image.scaled(
                 int(round(avail_w * dpr)),
                 int(round(avail_h * dpr)),
@@ -415,86 +556,109 @@ class AsyncTextBrowser(QTextBrowser):
             fx = (w - fw) / 2.0
             fy = (h - fh) / 2.0
 
+            shadow_rect = QRectF(fx - 2.0, fy + 2.0, fw + 4.0, fh + 4.0)
+            shadow_path = QPainterPath()
+            shadow_path.addRoundedRect(shadow_rect, 10.0, 10.0)
+            painter.fillPath(shadow_path, QColor(0, 0, 0, 95))
+
             inner_rect = QRectF(fx, fy, fw, fh)
             inner_path = QPainterPath()
-            inner_path.addRoundedRect(inner_rect, 8.0, 8.0)
+            inner_path.addRoundedRect(inner_rect, 9.0, 9.0)
             painter.save()
             painter.setClipPath(inner_path, Qt.IntersectClip)
             painter.drawImage(inner_rect, scaled_fit)
             painter.restore()
-            painter.setPen(QPen(QColor(255, 255, 255, 32), 1.0))
-            painter.drawRoundedRect(inner_rect, 8.0, 8.0)
+            painter.setPen(QPen(QColor(255, 255, 255, 38), 1.0))
+            painter.drawRoundedRect(inner_rect, 9.0, 9.0)
 
         if is_yt:
-            pill_w, pill_h = 58.0, 40.0
+            footer_grad = QLinearGradient(0.0, h - 56.0, 0.0, float(h))
+            footer_grad.setColorAt(0.0, QColor(0, 0, 0, 0))
+            footer_grad.setColorAt(1.0, QColor(8, 9, 13, 195))
+            painter.fillRect(QRectF(0.0, h - 56.0, float(w), 56.0), footer_grad)
+
+            pill_w, pill_h = 62.0, 42.0
             pill_x, pill_y = (w - pill_w) / 2.0, (h - pill_h) / 2.0
             path_pill = QPainterPath()
-            path_pill.addRoundedRect(pill_x, pill_y, pill_w, pill_h, 11.0, 11.0)
-            painter.fillPath(path_pill, QColor(255, 15, 35, 235))
+            path_pill.addRoundedRect(pill_x, pill_y, pill_w, pill_h, 12.0, 12.0)
+            painter.fillPath(path_pill, QColor(255, 18, 38, 238))
+            painter.setPen(QPen(QColor(255, 255, 255, 55), 1.0))
+            painter.drawPath(path_pill)
+
             triangle = QPainterPath()
-            tx, ty = pill_x + 23.0, pill_y + 12.0
+            tx, ty = pill_x + 25.0, pill_y + 12.5
             triangle.moveTo(tx, ty)
-            triangle.lineTo(tx + 15.0, ty + 8.0)
-            triangle.lineTo(tx, ty + 16.0)
+            triangle.lineTo(tx + 15.5, ty + 8.5)
+            triangle.lineTo(tx, ty + 17.0)
             triangle.closeSubpath()
             painter.fillPath(triangle, QColor(255, 255, 255))
         else:
-            footer_grad = QLinearGradient(0.0, h - 46.0, 0.0, float(h))
+            footer_grad = QLinearGradient(0.0, h - 52.0, 0.0, float(h))
             footer_grad.setColorAt(0.0, QColor(0, 0, 0, 0))
-            footer_grad.setColorAt(1.0, QColor(8, 9, 13, 185))
-            painter.fillRect(QRectF(0.0, h - 46.0, float(w), 46.0), footer_grad)
+            footer_grad.setColorAt(1.0, QColor(8, 9, 13, 195))
+            painter.fillRect(QRectF(0.0, h - 52.0, float(w), 52.0), footer_grad)
 
             eng_font = getattr(self.parent_popup, "eng_font", "Segoe UI")
-            domain = urllib.parse.urlparse(url).netloc if url.startswith("http") else "Local Image"
+            domain = urllib.parse.urlparse(url).netloc if url.startswith("http") else "Local Media"
             info_label = f"{domain}  •  {orig_w}×{orig_h}" if domain else f"{orig_w}×{orig_h}"
 
             badge_font = QFont(eng_font, 8, QFont.DemiBold)
             painter.setFont(badge_font)
-            painter.setPen(QColor(235, 235, 245, 225))
-            painter.drawText(QRectF(12.0, h - 28.0, w - 95.0, 20.0), Qt.AlignLeft | Qt.AlignVCenter, info_label)
+            fm_info = QFontMetrics(badge_font)
+            info_w = min(w - 130.0, float(fm_info.horizontalAdvance(info_label) + 18))
 
-            zoom_rect = QRectF(w - 76.0, h - 29.0, 64.0, 20.0)
+            info_rect = QRectF(12.0, h - 32.0, info_w, 22.0)
+            info_path = QPainterPath()
+            info_path.addRoundedRect(info_rect, 7.0, 7.0)
+            painter.fillPath(info_path, QColor(15, 16, 22, 175))
+            painter.setPen(QPen(QColor(255, 255, 255, 32), 0.8))
+            painter.drawPath(info_path)
+
+            painter.setPen(QColor(235, 235, 245, 230))
+            painter.drawText(info_rect.adjusted(9.0, 0.0, -6.0, 0.0), Qt.AlignLeft | Qt.AlignVCenter, info_label)
+
+            zoom_rect = QRectF(w - 86.0, h - 32.0, 74.0, 22.0)
             zoom_path = QPainterPath()
-            zoom_path.addRoundedRect(zoom_rect, 6.0, 6.0)
-            painter.fillPath(zoom_path, QColor(255, 255, 255, 28))
-            painter.setPen(QPen(QColor(255, 255, 255, 45), 0.8))
+            zoom_path.addRoundedRect(zoom_rect, 7.0, 7.0)
+            painter.fillPath(zoom_path, QColor(255, 255, 255, 32))
+            painter.setPen(QPen(QColor(255, 255, 255, 55), 0.9))
             painter.drawPath(zoom_path)
 
-            painter.setPen(QColor(255, 255, 255, 235))
-            painter.drawText(zoom_rect, Qt.AlignCenter, "Preview ⤢")
+            painter.setPen(QColor(255, 255, 255, 242))
+            painter.drawText(zoom_rect, Qt.AlignCenter, "Expand ⤢")
 
         painter.setClipping(False)
-        pen = QPen(QColor(255, 255, 255, 42), 1.3)
+        pen = QPen(QColor(255, 255, 255, 38), 1.15)
         painter.strokePath(path, pen)
         painter.end()
         return styled_img
 
     def _draw_card(self, raw_image, url, meta):
         w, h = self.CARD_W, self.CARD_H
-        img_h = 192
+        img_h = 222
         styled_img, dpr = self._new_canvas(w, h)
 
         painter = QPainter(styled_img)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
-        rect = QRectF(1.5, 1.5, w - 3.0, h - 3.0)
+        rect = QRectF(1.0, 1.0, w - 2.0, h - 2.0)
         path = QPainterPath()
         path.addRoundedRect(rect, 14.0, 14.0)
-        painter.fillPath(path, QColor(22, 23, 30, 248))
+        painter.fillPath(path, QColor(20, 21, 28, 250))
         painter.setClipPath(path)
 
         if raw_image is None or raw_image.isNull():
             hero_grad = QLinearGradient(0.0, 0.0, float(w), float(img_h))
-            hero_grad.setColorAt(0.0, QColor(38, 34, 54))
-            hero_grad.setColorAt(1.0, QColor(24, 25, 34))
+            hero_grad.setColorAt(0.0, QColor(36, 32, 52))
+            hero_grad.setColorAt(1.0, QColor(21, 22, 31))
             painter.fillRect(QRectF(0.0, 0.0, float(w), float(img_h)), hero_grad)
 
             domain_label = (meta.get("domain") or "WEB").upper()
             eng_font = getattr(self.parent_popup, "eng_font", "Segoe UI")
-            watermark_font = QFont(eng_font, 14, QFont.Bold)
+            watermark_font = QFont(eng_font, 15, QFont.Bold)
             painter.setFont(watermark_font)
-            painter.setPen(QColor(196, 138, 249, 95))
+            painter.setPen(QColor(196, 138, 249, 90))
             painter.drawText(QRectF(0.0, 0.0, float(w), float(img_h)), Qt.AlignCenter, domain_label)
         else:
             scaled_hero = raw_image.scaled(
@@ -510,6 +674,10 @@ class AsyncTextBrowser(QTextBrowser):
             painter.save()
             painter.setClipRect(QRectF(0.0, 0.0, float(w), float(img_h)), Qt.IntersectClip)
             painter.drawImage(QRectF(img_x, img_y, sw, sh), scaled_hero)
+            hero_fade = QLinearGradient(0.0, img_h - 48.0, 0.0, float(img_h))
+            hero_fade.setColorAt(0.0, QColor(20, 21, 28, 0))
+            hero_fade.setColorAt(1.0, QColor(20, 21, 28, 165))
+            painter.fillRect(QRectF(0.0, img_h - 48.0, float(w), 48.0), hero_fade)
             painter.restore()
 
         painter.setClipping(False)
@@ -520,38 +688,83 @@ class AsyncTextBrowser(QTextBrowser):
 
         eng_font = getattr(self.parent_popup, "eng_font", "Segoe UI")
 
-        painter.setPen(QColor(255, 255, 255, 245))
+        painter.setPen(QColor(255, 255, 255, 248))
         title_font = QFont(eng_font, 10, QFont.Bold)
         painter.setFont(title_font)
         fm_title = QFontMetrics(title_font)
-        elided_title = fm_title.elidedText(title, Qt.ElideRight, w - 28)
-        painter.drawText(14, img_h + 26, elided_title)
+        elided_title = fm_title.elidedText(title, Qt.ElideRight, w - 34)
+        painter.drawText(17, img_h + 26, elided_title)
 
-        painter.setPen(QColor(175, 175, 190, 225))
+        painter.setPen(QColor(175, 177, 194, 225))
         desc_font = QFont(eng_font, 9, QFont.Normal)
         painter.setFont(desc_font)
         fm_desc = QFontMetrics(desc_font)
-        elided_desc = fm_desc.elidedText(desc, Qt.ElideRight, w - 28)
-        painter.drawText(14, img_h + 50, elided_desc)
+        elided_desc = fm_desc.elidedText(desc, Qt.ElideRight, w - 34)
+        painter.drawText(17, img_h + 50, elided_desc)
 
         if domain:
-            painter.setPen(QColor(196, 138, 249, 230))
+            painter.setPen(QColor(196, 138, 249, 235))
             dom_font = QFont(eng_font, 8, QFont.DemiBold)
             painter.setFont(dom_font)
-            painter.drawText(14, img_h + 75, f"{domain} ↗")
+            painter.drawText(17, img_h + 74, f"{domain} ↗")
 
-        pen = QPen(QColor(255, 255, 255, 34), 1.2)
+        pen = QPen(QColor(255, 255, 255, 36), 1.15)
         painter.strokePath(path, pen)
 
-        line_pen = QPen(QColor(255, 255, 255, 22), 1.0)
+        line_pen = QPen(QColor(255, 255, 255, 20), 1.0)
         painter.setPen(line_pen)
         painter.drawLine(QPointF(1.5, float(img_h)), QPointF(float(w - 1.5), float(img_h)))
 
         painter.end()
         return styled_img
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        scrollbar = self.verticalScrollBar()
+        max_v = scrollbar.maximum()
+        if max_v <= 0:
+            return
+
+        cur_v = scrollbar.value()
+        vp = self.viewport()
+        vw = float(vp.width())
+        vh = float(vp.height())
+
+        painter = QPainter(vp)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        if cur_v > 2:
+            top_grad = QLinearGradient(0.0, 0.0, 0.0, 18.0)
+            top_grad.setColorAt(0.0, QColor(18, 19, 25, 210))
+            top_grad.setColorAt(1.0, QColor(18, 19, 25, 0))
+            painter.fillRect(QRectF(0.0, 0.0, vw, 18.0), top_grad)
+
+        if cur_v < max_v - 2:
+            bot_grad = QLinearGradient(0.0, vh - 22.0, 0.0, vh)
+            bot_grad.setColorAt(0.0, QColor(11, 12, 16, 0))
+            bot_grad.setColorAt(1.0, QColor(11, 12, 16, 220))
+            painter.fillRect(QRectF(0.0, vh - 22.0, vw, 22.0), bot_grad)
+
+        if self.scroll_indicator_alpha > 0.01:
+            page_step = max(1.0, float(scrollbar.pageStep()))
+            total_doc_h = max(1.0, float(max_v + page_step))
+            track_margin = 4.0
+            track_h = max(24.0, vh - track_margin * 2.0)
+            thumb_h = max(28.0, min(track_h, (page_step / total_doc_h) * track_h))
+            scroll_ratio = float(cur_v) / float(max_v)
+            thumb_y = track_margin + scroll_ratio * (track_h - thumb_h)
+
+            thumb_rect = QRectF(vw - 4.5, thumb_y, 3.2, thumb_h)
+            thumb_path = QPainterPath()
+            thumb_path.addRoundedRect(thumb_rect, 1.6, 1.6)
+            alpha = int(145 * self.scroll_indicator_alpha)
+            painter.fillPath(thumb_path, QColor(215, 218, 235, alpha))
+
+        painter.end()
+
     def _trigger_debounced_reflow(self):
-        QTimer.singleShot(12, self.parent_popup.update_layout_height)
+        QTimer.singleShot(10, self.parent_popup.update_layout_height)
 
     def on_network_reply(self, reply):
         timer = self.active_replies.pop(reply, None)
@@ -572,6 +785,7 @@ class AsyncTextBrowser(QTextBrowser):
 
         if self.document() is None:
             self.pending_requests.discard(target_cleanup_url)
+            self.active_placeholders.pop(target_cleanup_url, None)
             reply.deleteLater()
             return
 
@@ -585,6 +799,7 @@ class AsyncTextBrowser(QTextBrowser):
                 w=self.CARD_W if is_card else self.IMG_W,
                 h=self.CARD_H if is_card else self.IMG_H,
                 is_card=is_card,
+                phase=-1.0,
             )
             self._cache_and_update(target_cleanup_url, ph)
             reply.deleteLater()
@@ -638,6 +853,7 @@ class AsyncTextBrowser(QTextBrowser):
                     w=self.CARD_W if is_card else self.IMG_W,
                     h=self.CARD_H if is_card else self.IMG_H,
                     is_card=is_card,
+                    phase=-1.0,
                 )
                 self._cache_and_update(target_cleanup_url, ph)
                 reply.deleteLater()
@@ -755,6 +971,7 @@ class AsyncTextBrowser(QTextBrowser):
                     w=self.IMG_W,
                     h=self.IMG_H,
                     is_card=False,
+                    phase=-1.0,
                 )
                 self._cache_and_update(target_url, ph)
             reply.deleteLater()
