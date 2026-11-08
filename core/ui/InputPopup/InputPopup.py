@@ -48,21 +48,28 @@ qInstallMessageHandler(_input_qt_message_handler)
 
 
 class GlassContainer(QFrame):
-    def __init__(self, initial_rgb=None, parent=None):
+    def __init__(self, initial_rgb=None, secondary_rgb=None, is_ask_mode=False, parent=None):
         super().__init__(parent)
         self.rgb = list(initial_rgb) if initial_rgb else [191.0, 90.0, 242.0]
+        self.rgb2 = list(secondary_rgb) if secondary_rgb else [120.0, 115.0, 245.0]
+        self.is_ask_mode = is_ask_mode
         self.phase = 0.0
         self._pulse = 0.0
-        self.corner_radius = 28.0
+        self.error_flash = 0.0
+        self.header_bottom_y = 0.0
+        self.corner_radius = 26.0
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumSize(0, 0)
 
     def minimumSizeHint(self):
         return QSize(0, 0)
 
-    def update_visuals(self, rgb, phase):
+    def update_visuals(self, rgb, rgb2, phase, error_flash=0.0, header_bottom_y=0.0):
         self.rgb = rgb
+        self.rgb2 = rgb2
         self.phase = phase
+        self.error_flash = error_flash
+        self.header_bottom_y = header_bottom_y
         self.update()
 
     @pyqtProperty(float)
@@ -79,72 +86,200 @@ class GlassContainer(QFrame):
         painter.setRenderHint(QPainter.Antialiasing, True)
 
         rect = QRectF(self.rect())
-        r, g, b = [max(0, min(255, int(c))) for c in self.rgb]
+        ef = max(0.0, min(1.0, self.error_flash))
 
-        island_rect = rect.adjusted(5.0, 3.0, -5.0, -5.0)
+        r = int(max(0, min(255, self.rgb[0] * (1.0 - ef) + 255.0 * ef)))
+        g = int(max(0, min(255, self.rgb[1] * (1.0 - ef) + 78.0 * ef)))
+        b = int(max(0, min(255, self.rgb[2] * (1.0 - ef) + 98.0 * ef)))
+
+        r2 = int(max(0, min(255, self.rgb2[0] * (1.0 - ef) + 255.0 * ef)))
+        g2 = int(max(0, min(255, self.rgb2[1] * (1.0 - ef) + 120.0 * ef)))
+        b2 = int(max(0, min(255, self.rgb2[2] * (1.0 - ef) + 80.0 * ef)))
+
+        island_rect = rect.adjusted(8.0, 4.0, -8.0, -10.0)
         radius = self.corner_radius
 
+        shadow_specs = (
+            (1.0, 1.5, 28, 1.0),
+            (2.5, 3.5, 22, 2.0),
+            (4.5, 6.0, 14, 3.5),
+            (7.0, 8.5, 8, 5.0),
+        )
+        painter.setPen(Qt.NoPen)
+        for spread, dy, alpha, extra_r in shadow_specs:
+            s_rect = island_rect.adjusted(-spread, dy - spread * 0.4, spread, dy + spread)
+            painter.setBrush(QColor(0, 0, 0, alpha))
+            painter.drawRoundedRect(s_rect, radius + extra_r * 0.4, radius + extra_r * 0.4)
+
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(island_rect, radius, radius)
+        painter.save()
+        painter.setClipPath(clip_path)
+
         bg_grad = QLinearGradient(island_rect.topLeft(), island_rect.bottomLeft())
-        bg_grad.setColorAt(0.0, QColor(31, 32, 42, 252))
-        bg_grad.setColorAt(0.5, QColor(18, 19, 26, 254))
+        bg_grad.setColorAt(0.0, QColor(24, 26, 36, 252))
+        bg_grad.setColorAt(0.45, QColor(15, 16, 23, 254))
         bg_grad.setColorAt(1.0, QColor(9, 10, 15, 255))
         painter.setBrush(bg_grad)
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(island_rect, radius, radius)
+        painter.drawRect(island_rect)
 
-        ambient = QRadialGradient(
-            QPointF(island_rect.left() + island_rect.width() * 0.22, island_rect.top()),
-            island_rect.width() * 0.6
+        if self.is_ask_mode and self.header_bottom_y > 0:
+            header_rect = QRectF(
+                island_rect.left(),
+                island_rect.top(),
+                island_rect.width(),
+                min(island_rect.height(), self.header_bottom_y)
+            )
+            header_grad = QLinearGradient(header_rect.topLeft(), header_rect.bottomLeft())
+            header_grad.setColorAt(0.0, QColor(r, g, b, 22))
+            header_grad.setColorAt(0.7, QColor(r2, g2, b2, 8))
+            header_grad.setColorAt(1.0, QColor(255, 255, 255, 4))
+            painter.setBrush(header_grad)
+            painter.drawRect(header_rect)
+
+        ambient_top = QRadialGradient(
+            QPointF(island_rect.left() + island_rect.width() * 0.2, island_rect.top()),
+            island_rect.width() * 0.65
         )
-        ambient.setColorAt(0.0, QColor(r, g, b, 38))
-        ambient.setColorAt(0.55, QColor(r, g, b, 14))
-        ambient.setColorAt(1.0, QColor(r, g, b, 0))
-        painter.setBrush(ambient)
-        painter.drawRoundedRect(island_rect, radius, radius)
+        ambient_top.setColorAt(0.0, QColor(r, g, b, int(34 + self._pulse * 16 + ef * 35)))
+        ambient_top.setColorAt(0.55, QColor(r2, g2, b2, 12))
+        ambient_top.setColorAt(1.0, QColor(r, g, b, 0))
+        painter.setBrush(ambient_top)
+        painter.drawRect(island_rect)
 
-        bloom = QRadialGradient(
-            QPointF(island_rect.center().x(), island_rect.bottom()),
+        bloom_bottom = QRadialGradient(
+            QPointF(island_rect.right() - island_rect.width() * 0.22, island_rect.bottom()),
             island_rect.width() * 0.55
         )
-        bloom.setColorAt(0.0, QColor(r, g, b, 28))
-        bloom.setColorAt(1.0, QColor(r, g, b, 0))
-        painter.setBrush(bloom)
-        painter.drawRoundedRect(island_rect, radius, radius)
+        bloom_bottom.setColorAt(0.0, QColor(r2, g2, b2, int(24 + self._pulse * 18)))
+        bloom_bottom.setColorAt(1.0, QColor(r2, g2, b2, 0))
+        painter.setBrush(bloom_bottom)
+        painter.drawRect(island_rect)
+
+        rim_rect = QRectF(island_rect.left(), island_rect.top(), island_rect.width(), 2.0)
+        rim_grad = QLinearGradient(rim_rect.topLeft(), rim_rect.topRight())
+        rim_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
+        rim_grad.setColorAt(0.2, QColor(255, 255, 255, 45))
+        rim_grad.setColorAt(0.5, QColor(255, 255, 255, 95))
+        rim_grad.setColorAt(0.8, QColor(255, 255, 255, 45))
+        rim_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+        painter.setBrush(rim_grad)
+        painter.drawRect(rim_rect)
+
+        painter.restore()
 
         cx = island_rect.center().x()
         cy = island_rect.center().y()
-        span = max(island_rect.width(), island_rect.height()) * 0.7
+        span = max(island_rect.width(), island_rect.height()) * 0.72
         dx = math.cos(self.phase) * span
         dy = math.sin(self.phase) * span
 
-        boost = int(self._pulse * 90)
+        boost = int(self._pulse * 75 + ef * 90)
         border_grad = QLinearGradient(
             QPointF(cx - dx, cy - dy),
             QPointF(cx + dx, cy + dy)
         )
-        border_grad.setColorAt(0.0, QColor(255, 255, 255, min(255, 115 + boost // 2)))
-        border_grad.setColorAt(0.35, QColor(255, 255, 255, 24))
-        border_grad.setColorAt(0.72, QColor(r, g, b, min(255, 200 + boost // 3)))
-        border_grad.setColorAt(1.0, QColor(255, 255, 255, 60))
+        border_grad.setColorAt(0.0, QColor(255, 255, 255, min(255, 95 + boost // 2)))
+        border_grad.setColorAt(0.32, QColor(r, g, b, min(255, 165 + boost // 2)))
+        border_grad.setColorAt(0.68, QColor(r2, g2, b2, min(255, 195 + boost // 2)))
+        border_grad.setColorAt(1.0, QColor(255, 255, 255, 48))
 
-        border_pen = QPen(border_grad, 1.35 + self._pulse * 0.35)
+        border_pen = QPen(border_grad, 1.25 + self._pulse * 0.35 + ef * 0.45)
         painter.setPen(border_pen)
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(
-            island_rect.adjusted(0.7, 0.7, -0.7, -0.7),
+            island_rect.adjusted(0.6, 0.6, -0.6, -0.6),
             radius, radius
         )
 
-        shine_rect = island_rect.adjusted(
-            22.0, 1.2, -22.0, -(island_rect.height() - 2.0)
-        )
-        shine_grad = QLinearGradient(shine_rect.topLeft(), shine_rect.topRight())
-        shine_grad.setColorAt(0.0, QColor(255, 255, 255, 0))
-        shine_grad.setColorAt(0.5, QColor(255, 255, 255, 72))
-        shine_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+
+class RadarDot(QWidget):
+    def __init__(self, initial_rgb=None, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(16, 16)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.rgb = list(initial_rgb) if initial_rgb else [56.0, 189.0, 248.0]
+        self.phase = 0.0
+
+    def set_visuals(self, rgb, phase):
+        self.rgb = rgb
+        self.phase = phase
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        r, g, b = [max(0, min(255, int(c))) for c in self.rgb]
+        cx, cy = self.width() / 2.0, self.height() / 2.0
+
+        wave = (math.sin(self.phase * 1.6) + 1.0) * 0.5
+        halo_radius = 4.2 + wave * 3.2
+        halo_alpha = int(95 * (1.0 - wave * 0.65))
+
         painter.setPen(Qt.NoPen)
-        painter.setBrush(shine_grad)
-        painter.drawRect(shine_rect)
+        painter.setBrush(QColor(r, g, b, halo_alpha))
+        painter.drawEllipse(QPointF(cx, cy), halo_radius, halo_radius)
+
+        painter.setBrush(QColor(r, g, b, 245))
+        painter.drawEllipse(QPointF(cx, cy), 3.1, 3.1)
+
+        painter.setBrush(QColor(255, 255, 255, 210))
+        painter.drawEllipse(QPointF(cx - 0.6, cy - 0.6), 1.1, 1.1)
+
+
+class KeycapHint(QWidget):
+    def __init__(self, key_text="ESC", label_text="Skip", font_family="Segoe UI", on_click=None, parent=None):
+        super().__init__(parent)
+        self.key_text = key_text
+        self.label_text = label_text
+        self.font_family = font_family
+        self.on_click = on_click
+        self.hovered = False
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        if on_click is not None:
+            self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(20)
+        self.setFixedWidth(68)
+
+    def enterEvent(self, event):
+        self.hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and callable(self.on_click):
+            self.on_click()
+        else:
+            super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        bg_alpha = 38 if self.hovered else 22
+        border_alpha = 85 if self.hovered else 48
+        text_alpha = 215 if self.hovered else 145
+
+        cap_rect = QRectF(1.0, 2.0, 29.0, 16.0)
+        painter.setBrush(QColor(255, 255, 255, bg_alpha))
+        painter.setPen(QPen(QColor(255, 255, 255, border_alpha), 1.0))
+        painter.drawRoundedRect(cap_rect, 4.5, 4.5)
+
+        key_font = QFont(self.font_family, 7, QFont.Bold)
+        painter.setFont(key_font)
+        painter.setPen(QColor(255, 255, 255, min(255, text_alpha + 25)))
+        painter.drawText(cap_rect, Qt.AlignCenter, self.key_text)
+
+        lbl_rect = QRectF(35.0, 2.0, self.width() - 36.0, 16.0)
+        lbl_font = QFont(self.font_family, 8, QFont.Medium)
+        painter.setFont(lbl_font)
+        painter.setPen(QColor(255, 255, 255, text_alpha - 25))
+        painter.drawText(lbl_rect, Qt.AlignLeft | Qt.AlignVCenter, self.label_text)
 
 
 class QuestionBanner(QFrame):
@@ -163,31 +298,28 @@ class QuestionBanner(QFrame):
 
         rect = QRectF(self.rect())
         r, g, b = [max(0, min(255, int(c))) for c in self.rgb]
-        radius = 16.0
 
-        bg_grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        bg_grad.setColorAt(0.0, QColor(r, g, b, 24))
-        bg_grad.setColorAt(0.6, QColor(255, 255, 255, 8))
-        bg_grad.setColorAt(1.0, QColor(12, 14, 22, 160))
-        painter.setBrush(bg_grad)
+        y = rect.bottom() - 0.5
+        line_grad = QLinearGradient(QPointF(rect.left(), y), QPointF(rect.right(), y))
+        line_grad.setColorAt(0.0, QColor(r, g, b, 0))
+        line_grad.setColorAt(0.18, QColor(r, g, b, 68))
+        line_grad.setColorAt(0.5, QColor(255, 255, 255, 85))
+        line_grad.setColorAt(0.82, QColor(r, g, b, 68))
+        line_grad.setColorAt(1.0, QColor(r, g, b, 0))
 
-        border_pen = QPen(QColor(r, g, b, 75), 1.0)
-        painter.setPen(border_pen)
-        painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
-
-        bar_rect = QRectF(rect.left() + 1.0, rect.top() + 10.0, 3.2, max(12.0, rect.height() - 20.0))
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(r, g, b, 230))
-        painter.drawRoundedRect(bar_rect, 1.6, 1.6)
+        painter.setPen(QPen(line_grad, 1.0))
+        painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y))
 
 
 class EnterIndicator(QWidget):
-    def __init__(self, initial_rgb=None, parent=None):
+    def __init__(self, initial_rgb=None, on_click=None, parent=None):
         super().__init__(parent)
         self.setFixedSize(28, 28)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.rgb = list(initial_rgb) if initial_rgb else [191.0, 90.0, 242.0]
         self._opacity = 0.0
+        self.on_click = on_click
+        self.hovered = False
 
     @pyqtProperty(float)
     def indicatorOpacity(self):
@@ -196,11 +328,31 @@ class EnterIndicator(QWidget):
     @indicatorOpacity.setter
     def indicatorOpacity(self, val):
         self._opacity = val
+        if self._opacity > 0.15:
+            self.setCursor(Qt.PointingHandCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
         self.update()
 
     def set_visuals(self, rgb):
         self.rgb = rgb
         self.update()
+
+    def enterEvent(self, event):
+        self.hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self._opacity > 0.15 and callable(self.on_click):
+            self.on_click()
+        else:
+            super().mousePressEvent(event)
 
     def paintEvent(self, event):
         if self._opacity < 0.02:
@@ -213,28 +365,32 @@ class EnterIndicator(QWidget):
         alpha = int(self._opacity * 255)
         cx, cy = self.width() / 2.0, self.height() / 2.0
 
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(r, g, b, int(alpha * 0.15)))
-        painter.drawEllipse(QPointF(cx, cy), 12.5, 12.5)
+        hover_boost = 1.25 if self.hovered else 1.0
+        pill_rect = QRectF(2.0, 2.0, self.width() - 4.0, self.height() - 4.0)
 
-        painter.setBrush(QColor(r, g, b, int(alpha * 0.22)))
-        painter.drawEllipse(QPointF(cx, cy), 10.0, 10.0)
+        bg_grad = QLinearGradient(pill_rect.topLeft(), pill_rect.bottomRight())
+        bg_grad.setColorAt(0.0, QColor(r, g, b, min(255, int(alpha * 0.34 * hover_boost))))
+        bg_grad.setColorAt(1.0, QColor(r, g, b, min(255, int(alpha * 0.18 * hover_boost))))
 
-        pen = QPen(QColor(255, 255, 255, alpha), 1.9,
+        painter.setBrush(bg_grad)
+        painter.setPen(QPen(QColor(r, g, b, min(255, int(alpha * 0.55 * hover_boost))), 1.0))
+        painter.drawRoundedRect(pill_rect, 8.5, 8.5)
+
+        pen = QPen(QColor(255, 255, 255, alpha), 1.85,
                    Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
 
         path = QPainterPath()
-        path.moveTo(cx + 4.5, cy - 5.5)
-        path.lineTo(cx + 4.5, cy + 3.5)
-        path.lineTo(cx - 3.0, cy + 3.5)
+        path.moveTo(cx + 4.0, cy - 4.5)
+        path.lineTo(cx + 4.0, cy + 2.5)
+        path.lineTo(cx - 3.5, cy + 2.5)
         painter.drawPath(path)
 
         arrow = QPainterPath()
-        arrow.moveTo(cx - 6.5, cy + 1.0)
-        arrow.lineTo(cx - 3.5, cy + 3.5)
-        arrow.lineTo(cx - 6.5, cy + 6.0)
+        arrow.moveTo(cx - 1.0, cy - 0.2)
+        arrow.lineTo(cx - 4.0, cy + 2.5)
+        arrow.lineTo(cx - 1.0, cy + 5.2)
         painter.drawPath(arrow)
 
 
@@ -245,6 +401,8 @@ class SmartInput(QTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setAcceptRichText(False)
+        self.document().setDocumentMargin(0.0)
+        self.setViewportMargins(0, 3, 0, 3)
 
     def insertFromMimeData(self, source):
         if source.hasText():
@@ -266,22 +424,22 @@ class InputPopup(QDialog):
     WIDTH = 720
     OUTER_MARGINS = (14, 10, 14, 14)
     CONTAINER_MARGINS = (26, 18, 26, 18)
-    CONTAINER_SPACING = 16
+    CONTAINER_SPACING = 14
     WINDOW_BOTTOM_OFFSET = 160
-    MIN_TEXT_HEIGHT = 30
+    MIN_TEXT_HEIGHT = 28
     MAX_TEXT_HEIGHT = 180
-    MIN_QUESTION_HEIGHT = 24
+    MIN_QUESTION_HEIGHT = 22
     MAX_QUESTION_HEIGHT = 135
-    VERTICAL_OVERHEAD = 70
-    GLOW_INTERVAL_MS = 36
+    VERTICAL_OVERHEAD = 68
+    GLOW_INTERVAL_MS = 32
     GLOW_PHASE_STEP = 0.045
-    ENTRY_FADE_MS = 280
-    ENTRY_SLIDE_MS = 360
-    EXIT_FADE_MS = 260
-    EXIT_SLIDE_MS = 300
-    RESIZE_MS = 340
+    ENTRY_FADE_MS = 260
+    ENTRY_SLIDE_MS = 340
+    EXIT_FADE_MS = 240
+    EXIT_SLIDE_MS = 280
+    RESIZE_MS = 300
     PULSE_PERIOD_MS = 1200
-    FOCUS_DELAY_MS = 120
+    FOCUS_DELAY_MS = 110
 
     def __init__(self, question_text="", placeholder_text="", parent=None):
         super().__init__(parent)
@@ -295,18 +453,26 @@ class InputPopup(QDialog):
         self.commandText = ""
         self.resizeAnimGroup = None
         self.outAnimGroup = None
+        self.shakeAnim = None
         self.question_overhead = 0
+        self.error_flash = 0.0
 
         self.gradient_phase = 0.0
         if self.is_ask_mode:
             self.idle_rgb = [56.0, 189.0, 248.0]
-            self.active_rgb = [103.0, 214.0, 255.0]
+            self.active_rgb = [96.0, 218.0, 255.0]
+            self.idle_rgb2 = [99.0, 102.0, 241.0]
+            self.active_rgb2 = [139.0, 92.0, 246.0]
         else:
-            self.idle_rgb = [191.0, 90.0, 242.0]
-            self.active_rgb = [200.0, 100.0, 252.0]
+            self.idle_rgb = [180.0, 86.0, 235.0]
+            self.active_rgb = [216.0, 110.0, 255.0]
+            self.idle_rgb2 = [99.0, 102.0, 241.0]
+            self.active_rgb2 = [244.0, 114.0, 182.0]
 
         self.current_rgb = list(self.idle_rgb)
         self.target_rgb = list(self.idle_rgb)
+        self.current_rgb2 = list(self.idle_rgb2)
+        self.target_rgb2 = list(self.idle_rgb2)
 
         self._load_fonts()
         self.initUI()
@@ -355,7 +521,9 @@ class InputPopup(QDialog):
         self.outer_layout.setContentsMargins(*self.OUTER_MARGINS)
         self.outer_layout.setSizeConstraint(QVBoxLayout.SetNoConstraint)
 
-        self.container = GlassContainer(self.current_rgb, self)
+        self.container = GlassContainer(
+            self.current_rgb, self.current_rgb2, self.is_ask_mode, self
+        )
         self.container.setObjectName("Island")
         self.container.setMinimumSize(0, 0)
 
@@ -365,44 +533,39 @@ class InputPopup(QDialog):
 
         self.question_banner = None
         self.question_view = None
+        self.radar_dot = None
+        self.esc_badge = None
 
         if self.is_ask_mode:
             self.question_banner = QuestionBanner(self.current_rgb, self.container)
             banner_layout = QVBoxLayout(self.question_banner)
-            banner_layout.setContentsMargins(16, 10, 14, 10)
-            banner_layout.setSpacing(4)
+            banner_layout.setContentsMargins(2, 0, 2, 12)
+            banner_layout.setSpacing(6)
 
             badge_row = QHBoxLayout()
             badge_row.setContentsMargins(0, 0, 0, 0)
-            badge_row.setSpacing(6)
+            badge_row.setSpacing(8)
 
-            badge_dot = QLabel("●", self.question_banner)
-            badge_dot.setStyleSheet(
-                "color: rgba(56, 189, 248, 0.98); font-size: 9pt; background: transparent; border: none;"
-            )
-            badge_title = QLabel("JARVIS CLARIFICATION REQUEST", self.question_banner)
+            self.radar_dot = RadarDot(self.current_rgb, self.question_banner)
+            badge_title = QLabel("JARVIS  •  AWAITING INPUT", self.question_banner)
             badge_title.setStyleSheet(f"""
-                color: rgba(125, 211, 252, 0.95);
-                font-family: "{self.font_eng.family()}", "Segoe UI", sans-serif;
-                font-size: 8.5pt;
-                font-weight: 700;
-                letter-spacing: 1.3px;
-                background: transparent;
-                border: none;
-            """)
-            badge_hint = QLabel("ESC to skip", self.question_banner)
-            badge_hint.setStyleSheet(f"""
-                color: rgba(255, 255, 255, 0.38);
+                color: rgba(125, 211, 252, 0.92);
                 font-family: "{self.font_eng.family()}", "Segoe UI", sans-serif;
                 font-size: 8pt;
+                font-weight: 700;
+                letter-spacing: 1.4px;
                 background: transparent;
                 border: none;
             """)
+            self.esc_badge = KeycapHint(
+                "ESC", "Skip", self.font_eng.family(),
+                on_click=self.triggerReject, parent=self.question_banner
+            )
 
-            badge_row.addWidget(badge_dot, 0, Qt.AlignVCenter)
+            badge_row.addWidget(self.radar_dot, 0, Qt.AlignVCenter)
             badge_row.addWidget(badge_title, 0, Qt.AlignVCenter)
             badge_row.addStretch(1)
-            badge_row.addWidget(badge_hint, 0, Qt.AlignVCenter)
+            badge_row.addWidget(self.esc_badge, 0, Qt.AlignVCenter)
             banner_layout.addLayout(badge_row)
 
             self.question_view = QTextEdit(self.question_banner)
@@ -410,11 +573,12 @@ class InputPopup(QDialog):
             self.question_view.setFrameShape(QFrame.NoFrame)
             self.question_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.question_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.question_view.document().setDocumentMargin(0.0)
             self.question_view.setPlainText(self.ask_question)
             self.question_view.setStyleSheet(f"""
                 QTextEdit {{
                     background: transparent;
-                    color: rgba(241, 245, 249, 0.96);
+                    color: rgba(241, 245, 249, 0.95);
                     border: none;
                     font-family: "{self.font_eng.family()}", "{self.font_hin.family()}", "Segoe UI", sans-serif;
                     font-size: 11.5pt;
@@ -424,7 +588,7 @@ class InputPopup(QDialog):
                 QScrollBar:vertical {{
                     border: none;
                     background: transparent;
-                    width: 5px;
+                    width: 4px;
                     margin: 0px;
                 }}
                 QScrollBar::handle:vertical {{
@@ -442,7 +606,6 @@ class InputPopup(QDialog):
         input_row = QHBoxLayout()
         input_row.setContentsMargins(0, 0, 0, 0)
         input_row.setSpacing(self.CONTAINER_SPACING)
-        input_row.setAlignment(Qt.AlignTop)
 
         self.icon_label = QLabel(self.container)
         self.icon_label.setFixedSize(28, 28)
@@ -452,13 +615,13 @@ class InputPopup(QDialog):
         pixmap = QPixmap(icon_path)
         if not pixmap.isNull():
             self.icon_label.setPixmap(pixmap.scaled(
-                28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             self.icon_label.setStyleSheet(
                 "background: transparent; border: none;"
             )
         else:
             self.icon_label.setText("J")
-            self.icon_label.setFont(QFont(self.font_eng.family(), 18, QFont.Black))
+            self.icon_label.setFont(QFont(self.font_eng.family(), 16, QFont.Black))
             accent_css = "rgba(56, 189, 248, 0.95)" if self.is_ask_mode else "rgba(191, 90, 242, 0.95)"
             self.icon_label.setStyleSheet(
                 f"color: {accent_css}; background: transparent; border: none;"
@@ -468,7 +631,7 @@ class InputPopup(QDialog):
 
         self.inputField = SmartInput(self, self.container)
         self.inputField.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        default_ph = "Type your answer for Jarvis..." if self.is_ask_mode else "What do you need?"
+        default_ph = "Type your response..." if self.is_ask_mode else "What do you need?"
         self.inputField.setPlaceholderText(self.ask_placeholder or default_ph)
         sel_bg = "rgba(56, 189, 248, 0.42)" if self.is_ask_mode else "rgba(191, 90, 242, 0.45)"
         scroll_hover = "rgba(56, 189, 248, 0.65)" if self.is_ask_mode else "rgba(191, 90, 242, 0.65)"
@@ -479,19 +642,19 @@ class InputPopup(QDialog):
                 border: none;
                 font-family: "{self.font_eng.family()}", "{self.font_hin.family()}", "Segoe UI", sans-serif;
                 font-size: 13.5pt;
-                letter-spacing: 0.4px;
+                letter-spacing: 0.3px;
                 selection-background-color: {sel_bg};
                 selection-color: #FFFFFF;
             }}
             QScrollBar:vertical {{
                 border: none;
                 background: transparent;
-                width: 6px;
+                width: 5px;
                 margin: 0px;
             }}
             QScrollBar::handle:vertical {{
-                background: rgba(255, 255, 255, 0.22);
-                border-radius: 3px;
+                background: rgba(255, 255, 255, 0.20);
+                border-radius: 2px;
                 min-height: 20px;
             }}
             QScrollBar::handle:vertical:hover {{
@@ -509,16 +672,18 @@ class InputPopup(QDialog):
 
         try:
             pal = self.inputField.palette()
-            pal.setColor(QPalette.PlaceholderText, QColor(255, 255, 255, 78))
+            pal.setColor(QPalette.PlaceholderText, QColor(255, 255, 255, 82))
             self.inputField.setPalette(pal)
         except AttributeError:
             pass
 
         input_row.addWidget(self.inputField, 1)
 
-        self.enter_indicator = EnterIndicator(self.current_rgb, self.container)
+        self.enter_indicator = EnterIndicator(
+            self.current_rgb, on_click=self.triggerAccept, parent=self.container
+        )
         self.enter_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        input_row.addWidget(self.enter_indicator, 0, Qt.AlignTop)
+        input_row.addWidget(self.enter_indicator, 0, Qt.AlignBottom)
 
         container_vlayout.addLayout(input_row)
         self.outer_layout.addWidget(self.container)
@@ -527,8 +692,8 @@ class InputPopup(QDialog):
 
         self.indicator_anim = QPropertyAnimation(
             self.enter_indicator, b"indicatorOpacity", self)
-        self.indicator_anim.setDuration(400)
-        self.indicator_anim.setEasingCurve(QEasingCurve.InOutSine)
+        self.indicator_anim.setDuration(260)
+        self.indicator_anim.setEasingCurve(QEasingCurve.OutCubic)
 
         self.pulse_anim = QSequentialAnimationGroup(self)
         pulse_up = QPropertyAnimation(self.container, b"pulseIntensity")
@@ -562,7 +727,7 @@ class InputPopup(QDialog):
 
         slide_up = QPropertyAnimation(self, b"pos")
         slide_up.setDuration(self.ENTRY_SLIDE_MS)
-        slide_up.setStartValue(QPoint(self.targetX, self.y() + 28))
+        slide_up.setStartValue(QPoint(self.targetX, self.y() + 24))
         slide_up.setEndValue(QPoint(self.targetX, self.y()))
         slide_up.setEasingCurve(QEasingCurve.OutQuint)
 
@@ -579,10 +744,10 @@ class InputPopup(QDialog):
             self.WIDTH
             - self.OUTER_MARGINS[0] - self.OUTER_MARGINS[2]
             - self.CONTAINER_MARGINS[0] - self.CONTAINER_MARGINS[2]
-            - 30
+            - 8
         )
         self.question_view.document().setTextWidth(avail_width)
-        q_doc_h = int(self.question_view.document().size().height()) + 4
+        q_doc_h = int(self.question_view.document().size().height()) + 2
         clamped_q_h = max(self.MIN_QUESTION_HEIGHT, min(q_doc_h, self.MAX_QUESTION_HEIGHT))
 
         if q_doc_h > self.MAX_QUESTION_HEIGHT:
@@ -591,7 +756,7 @@ class InputPopup(QDialog):
             self.question_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.question_view.setFixedHeight(clamped_q_h)
-        banner_h = clamped_q_h + 42
+        banner_h = clamped_q_h + 38
         self.question_banner.setFixedHeight(banner_h)
         self.question_overhead = banner_h + 12
 
@@ -625,13 +790,31 @@ class InputPopup(QDialog):
         if self.gradient_phase >= math.pi * 2:
             self.gradient_phase -= math.pi * 2
 
+        if self.error_flash > 0.005:
+            self.error_flash *= 0.84
+        else:
+            self.error_flash = 0.0
+
         for i in range(3):
             self.current_rgb[i] += (self.target_rgb[i] - self.current_rgb[i]) * 0.16
+            self.current_rgb2[i] += (self.target_rgb2[i] - self.current_rgb2[i]) * 0.16
 
-        self.container.update_visuals(self.current_rgb, self.gradient_phase)
-        self.enter_indicator.set_visuals(self.current_rgb)
+        header_bottom = 0.0
         if self.question_banner is not None:
+            header_bottom = float(self.CONTAINER_MARGINS[1] + self.question_banner.height())
             self.question_banner.set_visuals(self.current_rgb)
+
+        if self.radar_dot is not None:
+            self.radar_dot.set_visuals(self.current_rgb, self.gradient_phase)
+
+        self.container.update_visuals(
+            self.current_rgb,
+            self.current_rgb2,
+            self.gradient_phase,
+            self.error_flash,
+            header_bottom
+        )
+        self.enter_indicator.set_visuals(self.current_rgb)
 
     def forceFocus(self):
         if self.isClosing:
@@ -672,19 +855,21 @@ class InputPopup(QDialog):
 
             self.indicator_anim.stop()
             self.indicator_anim.setStartValue(self.enter_indicator.indicatorOpacity)
-            self.indicator_anim.setEndValue(0.95 if hasText else 0.0)
+            self.indicator_anim.setEndValue(0.98 if hasText else 0.0)
             self.indicator_anim.start()
 
             if hasText:
                 self.target_rgb = list(self.active_rgb)
+                self.target_rgb2 = list(self.active_rgb2)
                 self.pulse_anim.start()
             else:
                 self.target_rgb = list(self.idle_rgb)
+                self.target_rgb2 = list(self.idle_rgb2)
 
         self.adjustHeight(True)
 
     def adjustHeight(self, animate):
-        doc_height = int(self.inputField.document().size().height())
+        doc_height = int(self.inputField.document().size().height()) + 6
         new_text_height = max(self.MIN_TEXT_HEIGHT,
                               min(doc_height, self.MAX_TEXT_HEIGHT))
 
@@ -736,11 +921,30 @@ class InputPopup(QDialog):
             self.inputField.setMaximumHeight(new_text_height)
             self.setGeometry(self.targetX, new_y, self.width(), new_window_height)
 
+    def triggerInvalidShake(self):
+        self.error_flash = 1.0
+        if self.shakeAnim is not None and self.shakeAnim.state() == QAbstractAnimation.Running:
+            return
+
+        base_y = self.y()
+        bx = self.targetX
+        self.shakeAnim = QPropertyAnimation(self, b"pos", self)
+        self.shakeAnim.setDuration(240)
+        self.shakeAnim.setKeyValueAt(0.0, QPoint(bx, base_y))
+        self.shakeAnim.setKeyValueAt(0.2, QPoint(bx - 7, base_y))
+        self.shakeAnim.setKeyValueAt(0.4, QPoint(bx + 7, base_y))
+        self.shakeAnim.setKeyValueAt(0.6, QPoint(bx - 4, base_y))
+        self.shakeAnim.setKeyValueAt(0.8, QPoint(bx + 4, base_y))
+        self.shakeAnim.setKeyValueAt(1.0, QPoint(bx, base_y))
+        self.shakeAnim.setEasingCurve(QEasingCurve.OutSine)
+        self.shakeAnim.start()
+
     def triggerAccept(self):
         if self.isClosing:
             return
         raw = self.inputField.toPlainText().strip()
         if not raw and self.is_ask_mode:
+            self.triggerInvalidShake()
             return
         self.isClosing = True
         self.commandText = raw
@@ -770,7 +974,7 @@ class InputPopup(QDialog):
         slide_down = QPropertyAnimation(self, b"pos")
         slide_down.setDuration(self.EXIT_SLIDE_MS)
         slide_down.setStartValue(self.pos())
-        slide_down.setEndValue(QPoint(self.x(), self.y() + 24))
+        slide_down.setEndValue(QPoint(self.targetX, self.y() + 20))
         slide_down.setEasingCurve(QEasingCurve.InQuart)
 
         self.outAnimGroup.addAnimation(fade_out)
