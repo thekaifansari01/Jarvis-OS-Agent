@@ -39,15 +39,20 @@ if (!(Get-Command npm -ErrorAction SilentlyContinue)) {
 
 Write-Host "✅ All prerequisites met (Git, Python 3.10+, Node.js)." -ForegroundColor Green
 
-# Step 2: Clone Repo
+# Step 2: Clone Repo into User's Home Directory
 Write-Host "`n[2/6] Cloning J.A.R.V.I.S. Repository..." -ForegroundColor Yellow
-if (Test-Path "Jarvis-OS-Agent") {
-    Write-Host "⚠️ Folder 'Jarvis-OS-Agent' already exists. Updating..." -ForegroundColor DarkYellow
-    Set-Location -Path "Jarvis-OS-Agent"
+
+# Define install location safely in the user's home folder
+$installPath = Join-Path $HOME "Jarvis-OS-Agent"
+
+if (Test-Path $installPath) {
+    Write-Host "⚠️ Folder already exists at $installPath. Updating..." -ForegroundColor DarkYellow
+    Set-Location -Path $installPath
     git pull
 } else {
-    git clone https://github.com/thekaifansari01/Jarvis-OS-Agent.git
-    Set-Location -Path "Jarvis-OS-Agent"
+    Write-Host "📁 Installing to: $installPath" -ForegroundColor Cyan
+    git clone https://github.com/thekaifansari01/Jarvis-OS-Agent.git $installPath
+    Set-Location -Path $installPath
 }
 
 # Step 3: Python Virtual Environment
