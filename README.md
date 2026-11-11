@@ -1199,7 +1199,7 @@ Jarvis speaks or asks for consent
 Skip the manual setup. Open **PowerShell** and paste this single command:
 
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/thekaifansari01/Jarvis-OS-Agent/main/install.ps1')))
+Set-ExecutionPolicy Bypass -Scope Process -Force; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod -Uri 'https://github.com/thekaifansari01/Jarvis-OS-Agent/releases/latest/download/install.ps1')))
 ```
 
 **Sit back and relax.** This bulletproof script will automatically:
