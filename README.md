@@ -1194,7 +1194,25 @@ Jarvis speaks or asks for consent
 - **Node.js 18+** (Node.js 24+ recommended for latest MCP servers)
 - **npm** (bundled with Node.js)
 
-### One-Block Setup
+### ⚡ 1-Click Auto-Installer (Recommended)
+
+Skip the manual setup. Open **PowerShell** and paste this single command:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/thekaifansari01/Jarvis-OS-Agent/main/install.ps1'))
+```
+
+**Sit back and relax.** This bulletproof script will automatically:
+1. Verify Python 3.10+ and Node.js 18+ are installed.
+2. Clone the repository and set up the Python virtual environment (`venv`).
+3. Install all Python dependencies **including the CPU-optimized version of PyTorch** (saving you from a 2GB CUDA download crash on low-RAM devices).
+4. Run `npm install` for the WhatsApp Baileys Bridge.
+5. Auto-generate your `.env` file from `.env.example`.
+6. Register the `jarvis` command globally in your system.
+
+### 🛠️ Manual Installation (Advanced)
+
+If you prefer to set up everything manually, run these commands block-by-block in PowerShell:
 
 ```powershell
 git clone https://github.com/thekaifansari01/Jarvis-OS-Agent.git
