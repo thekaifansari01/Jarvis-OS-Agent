@@ -23,6 +23,14 @@ function Write-Fail {
     Write-Host "  [X] $Message" -ForegroundColor Red
 }
 
+function Clear-ConsoleInputBuffer {
+    try {
+        while ([Console]::KeyAvailable) {
+            [void][Console]::ReadKey($true)
+        }
+    } catch {}
+}
+
 function Update-SessionPath {
     $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
     $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
@@ -68,6 +76,26 @@ function Download-FileFast {
     } finally {
         $ProgressPreference = $prevPref
     }
+}
+
+function Test-VcRedistInstalled {
+    $regPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64",
+        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+    )
+    $regInstalled = $false
+    foreach ($rp in $regPaths) {
+        if (Test-Path $rp) {
+            $props = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue
+            if ($null -ne $props -and $props.Installed -eq 1) {
+                $regInstalled = $true
+                break
+            }
+        }
+    }
+    $dll1 = Join-Path $env:SystemRoot "System32\vcruntime140.dll"
+    $dll2 = Join-Path $env:SystemRoot "System32\vcruntime140_1.dll"
+    return ($regInstalled -and (Test-Path $dll1) -and (Test-Path $dll2))
 }
 
 function Test-IsPython311 {
@@ -254,14 +282,14 @@ function Set-EnvValue {
         $raw = Get-Content -Path $FilePath -Raw -ErrorAction SilentlyContinue
         if ($null -ne $raw) { $content = $raw }
     }
-    $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=.*$"
-    if ($content -match $pattern) {
-        $content = [regex]::Replace($content, $pattern, "$Key=$Value")
+    $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=[^\r\n]*"
+    if ([regex]::IsMatch($content, $pattern)) {
+        $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) "$Key=$Value" })
     } else {
         if ([string]::IsNullOrWhiteSpace($content)) {
             $content = "$Key=$Value`r`n"
         } else {
-            $content = $content.TrimEnd() + "`r`n$Key=$Value`r`n"
+            $content = $content.TrimEnd("`r", "`n") + "`r`n$Key=$Value`r`n"
         }
     }
     Set-Content -Path $FilePath -Value $content -Encoding UTF8
@@ -272,21 +300,30 @@ function Clear-EnvValue {
     if (-not (Test-Path $FilePath)) { return }
     $content = Get-Content -Path $FilePath -Raw -ErrorAction SilentlyContinue
     if ([string]::IsNullOrEmpty($content)) { return }
-    $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$"
+    $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=([^\r\n]*)"
     $m = [regex]::Match($content, $pattern)
     if (-not $m.Success) { return }
     $current = $m.Groups[1].Value.Trim()
     if ($OnlyIfPlaceholder -and $current -ne "your_key_here" -and $current -ne "your_key") { return }
-    $content = [regex]::Replace($content, $pattern, "$Key=")
+    $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) "$Key=" })
     Set-Content -Path $FilePath -Value $content -Encoding UTF8
 }
 
 function Get-EnvVal {
     param([string]$Content, [string]$Key)
     if ([string]::IsNullOrEmpty($Content)) { return "" }
-    $m = [regex]::Match($Content, "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$")
+    $m = [regex]::Match($Content, "(?m)^" + [regex]::Escape($Key) + "\s*=([^\r\n]*)")
     if ($m.Success) { return $m.Groups[1].Value.Trim() }
     return ""
+}
+
+function Get-EffectiveDefault {
+    param([string]$Content, [string]$Key, [string]$FallbackDefault)
+    $existing = Get-EnvVal -Content $Content -Key $Key
+    if (-not [string]::IsNullOrWhiteSpace($existing) -and $existing -ne "your_key_here" -and $existing -ne "your_key") {
+        return $existing
+    }
+    return $FallbackDefault
 }
 
 function Read-EnvInput {
@@ -300,16 +337,21 @@ function Read-EnvInput {
         $prompt += " [default: $Default]"
     }
     $prompt += ": "
+    Clear-ConsoleInputBuffer
     while ($true) {
         $userInput = Read-Host $prompt
         if ([string]::IsNullOrWhiteSpace($userInput)) {
             if (-not [string]::IsNullOrWhiteSpace($Default)) { return $Default }
             if ($AllowSkip) { return $null }
-            Write-Host "    [!] Value required." -ForegroundColor DarkYellow
+            Write-Host "    [!] Value required (or type 's' to skip)." -ForegroundColor DarkYellow
             continue
         }
         $trimmed = $userInput.Trim()
-        if ($AllowSkip -and ($trimmed -eq "s" -or $trimmed -eq "skip")) { return $null }
+        if ($trimmed -eq "s" -or $trimmed -eq "skip") {
+            if (-not [string]::IsNullOrWhiteSpace($Default)) { return $Default }
+            if ($AllowSkip) { return $null }
+            return $null
+        }
         return $trimmed
     }
 }
@@ -320,6 +362,7 @@ function Read-YesNo {
         [string]$Default = "N"
     )
     $hint = if ($Default -eq "Y") { "(Y/n)" } else { "(y/N)" }
+    Clear-ConsoleInputBuffer
     while ($true) {
         $ans = Read-Host "  $Question $hint"
         if ([string]::IsNullOrWhiteSpace($ans)) { return $Default }
@@ -339,9 +382,11 @@ function Read-KeyWithReuse {
         [string]$DefaultEndpoint,
         [string]$DefaultModel
     )
-    $reuse = Read-YesNo "Same as Fast Brain for $GroupName (key + endpoint + model)?" "Y"
-    if ($reuse -eq "Y") {
-        return @{ Key = $SourceKey; Endpoint = $SourceEndpoint; Model = $SourceModel }
+    if (-not [string]::IsNullOrWhiteSpace($SourceKey)) {
+        $reuse = Read-YesNo "Same as Fast Brain for $GroupName (key + endpoint + model)?" "Y"
+        if ($reuse -eq "Y") {
+            return @{ Key = $SourceKey; Endpoint = $SourceEndpoint; Model = $SourceModel }
+        }
     }
     return @{
         Key      = (Read-EnvInput "$GroupName API Key" "" $true)
@@ -356,7 +401,7 @@ function Install-Jarvis {
     Write-Host "   J.A.R.V.I.S. OS Agent - Production Automated Setup     " -ForegroundColor Cyan
     Write-Host "==========================================================" -ForegroundColor Cyan
 
-    Write-Step "1/6" "Verifying System Prerequisites..."
+    Write-Step "1/7" "Verifying System Prerequisites..."
     Update-SessionPath
 
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -373,6 +418,57 @@ function Install-Jarvis {
         return
     }
     Write-Success "Git detected."
+
+    $vcRebootRequired = $false
+    if (-not (Test-VcRedistInstalled)) {
+        Write-Warn "Microsoft Visual C++ Redistributable (x64) not found. Auto-installing..."
+        $vcUrl = "https://aka.ms/vs/16/release/vc_redist.x64.exe"
+        $vcExe = Join-Path $env:TEMP "vc_redist.x64.exe"
+        $vcInstalled = $false
+
+        Write-Host "  -> Downloading vc_redist.x64.exe (~24 MB)..." -ForegroundColor Cyan
+        if (Download-FileFast -Url $vcUrl -OutFile $vcExe) {
+            Write-Host "  -> Running Visual C++ Redistributable installer (accept UAC prompt if shown)..." -ForegroundColor Cyan
+            $vcExit = -1
+            try {
+                $vcProc = Start-Process -FilePath $vcExe -ArgumentList "/install", "/quiet", "/norestart" -Verb RunAs -Wait -PassThru -ErrorAction Stop
+                $vcExit = $vcProc.ExitCode
+            } catch {
+                try {
+                    $vcProc = Start-Process -FilePath $vcExe -ArgumentList "/install", "/passive", "/norestart" -Wait -PassThru -ErrorAction Stop
+                    $vcExit = $vcProc.ExitCode
+                } catch {}
+            }
+            Remove-Item -Path $vcExe -Force -ErrorAction SilentlyContinue
+
+            if ($vcExit -eq 0 -or $vcExit -eq 1638) {
+                $vcInstalled = $true
+            } elseif ($vcExit -eq 3010) {
+                $vcInstalled = $true
+                $vcRebootRequired = $true
+            }
+        } else {
+            Write-Warn "Direct download of vc_redist.x64.exe failed."
+        }
+
+        if (-not $vcInstalled -and -not (Test-VcRedistInstalled) -and (Test-WingetAvailable)) {
+            Write-Warn "Attempting winget fallback for Visual C++ Redistributable..."
+            if (Install-WithWinget -PackageId "Microsoft.VCRedist.2015+.x64" -DisplayName "Microsoft Visual C++ 2015-2022 Redistributable (x64)") {
+                $vcInstalled = $true
+            }
+        }
+
+        if (-not $vcInstalled -and -not (Test-VcRedistInstalled)) {
+            Write-Fail "Visual C++ Redistributable (x64) could not be installed automatically."
+            Write-Fail "Manual install: https://aka.ms/vs/16/release/vc_redist.x64.exe"
+            return
+        }
+    }
+    if ($vcRebootRequired) {
+        Write-Success "Visual C++ Redistributable (x64) installed (system reboot recommended after setup)."
+    } else {
+        Write-Success "Visual C++ Redistributable (x64) verified."
+    }
 
     $sysPython = Get-ValidPython
     if (-not $sysPython) {
@@ -455,7 +551,7 @@ function Install-Jarvis {
     $nodeVerStr = & node --version 2>&1
     Write-Success "Node.js detected ($nodeVerStr)."
 
-    Write-Step "2/6" "Syncing J.A.R.V.I.S. OS Agent Repository..."
+    Write-Step "2/7" "Syncing J.A.R.V.I.S. OS Agent Repository..."
     $installPath = Join-Path $HOME "Jarvis-OS-Agent"
     $repoUrl = "https://github.com/thekaifansari01/Jarvis-OS-Agent.git"
 
@@ -492,7 +588,7 @@ function Install-Jarvis {
 
     Push-Location $installPath
     try {
-        Write-Step "3/6" "Configuring Isolated Python 3.11 Virtual Environment (.venv)..."
+        Write-Step "3/7" "Configuring Isolated Python 3.11 Virtual Environment (.venv)..."
         $venvPython = Join-Path $installPath ".venv\Scripts\python.exe"
 
         if (Test-Path $venvPython) {
@@ -513,7 +609,7 @@ function Install-Jarvis {
             Write-Success "Healthy Python 3.11 virtual environment already exists."
         }
 
-        Write-Step "4/6" "Installing Python Dependencies & AI Models (5-10 mins on first run)..."
+        Write-Step "4/7" "Installing Python Dependencies & AI Models (5-10 mins on first run)..."
         Write-Host "  -> Upgrading pip, setuptools, and wheel..." -ForegroundColor DarkGray
         & $venvPython -m pip install --upgrade pip setuptools wheel --quiet
         if ($LASTEXITCODE -ne 0) {
@@ -528,7 +624,7 @@ function Install-Jarvis {
         }
         Write-Success "All Python packages installed and verified."
 
-        Write-Step "5/6" "Installing Node.js Dependencies for WhatsApp Baileys Bridge..."
+        Write-Step "5/7" "Installing Node.js Dependencies for WhatsApp Baileys Bridge..."
         $baileysPath = Join-Path $installPath "tools\Messanger\whatsapp\BaileysServer"
         if (Test-Path $baileysPath) {
             Push-Location $baileysPath
@@ -546,7 +642,7 @@ function Install-Jarvis {
             Write-Warn "BaileysServer directory not found; skipping npm install."
         }
 
-        Write-Step "6/6" "Finalizing Environment & Registering Global 'jarvis' CLI..."
+        Write-Step "6/7" "Configuring Environment (.env) & API Keys..."
         $envFile = Join-Path $installPath ".env"
         $envExample = Join-Path $installPath ".env.example"
 
@@ -562,18 +658,15 @@ function Install-Jarvis {
             Write-Success "Existing .env configuration preserved."
         }
 
-        & $venvPython SetupRegistry.py
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "SetupRegistry.py returned a non-zero exit code."
-        } else {
-            Update-SessionPath
-            Write-Success "Global 'jarvis' command registered and activated for current session."
-        }
-
         if ([Environment]::UserInteractive) {
+            Clear-ConsoleInputBuffer
+            $existingRaw = Get-Content -Path $envFile -Raw -ErrorAction SilentlyContinue
+            $existingFbKey = Get-EnvVal -Content $existingRaw -Key "FAST_BRAIN_API_KEY"
+            $promptDefault = if ([string]::IsNullOrWhiteSpace($existingFbKey) -or $existingFbKey -eq "your_key_here" -or $existingFbKey -eq "your_key") { "Y" } else { "N" }
+
             Write-Host ""
-            $configureNow = Read-Host "Would you like to configure your API keys now? (y/N)"
-            if ($configureNow -match "^[Yy]") {
+            $configureNow = Read-YesNo "Would you like to configure your API keys now?" $promptDefault
+            if ($configureNow -eq "Y") {
                 Write-Host ""
                 Write-Host "  Press Enter to accept default; type 's' to skip any field." -ForegroundColor DarkGray
                 Write-Host "  API_BASE_URL stays untouched (default is fine)." -ForegroundColor DarkGray
@@ -584,7 +677,8 @@ function Install-Jarvis {
 
                 Write-Host ""
                 Write-Host "--- Identity ---" -ForegroundColor Cyan
-                $userName = Read-EnvInput "Your name" "" $true
+                $defName = Get-EffectiveDefault $existingRaw "USER_NAME" ""
+                $userName = Read-EnvInput "Your name" $defName $true
                 if ($null -ne $userName) {
                     Set-EnvValue -FilePath $envFile -Key "USER_NAME" -Value $userName
                     Write-Success "USER_NAME set."
@@ -596,23 +690,33 @@ function Install-Jarvis {
                 Write-Host ""
                 Write-Host "--- Fast Brain (MANDATORY) ---" -ForegroundColor Cyan
                 $fbKey = Read-EnvInput "Fast Brain API Key (Groq/OpenAI-compatible)" "" $true
-                $fbEndpoint = Read-EnvInput "Fast Brain Endpoint" "https://api.groq.com/openai/v1"
-                $fbModel = Read-EnvInput "Fast Brain Model" "llama-3.3-70b-versatile"
+                $defFbEnd = Get-EffectiveDefault $existingRaw "FAST_BRAIN_ENDPOINT" "https://api.groq.com/openai/v1"
+                $defFbMod = Get-EffectiveDefault $existingRaw "FAST_BRAIN_MODEL" "llama-3.3-70b-versatile"
+                $fbEndpoint = Read-EnvInput "Fast Brain Endpoint" $defFbEnd
+                $fbModel = Read-EnvInput "Fast Brain Model" $defFbMod
                 if ($null -ne $fbKey) {
                     Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -Value $fbKey
                     Write-Success "FAST_BRAIN_API_KEY set."
                     $configuredCount++
                 } else {
                     Clear-EnvValue -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -OnlyIfPlaceholder
-                    Write-Warn "FAST_BRAIN_API_KEY skipped (agent may NOT boot)."
-                    $warnings += "FAST_BRAIN_API_KEY not configured"
+                    $afterFb = Get-EnvVal (Get-Content -Path $envFile -Raw -ErrorAction SilentlyContinue) "FAST_BRAIN_API_KEY"
+                    if ([string]::IsNullOrWhiteSpace($afterFb)) {
+                        Write-Warn "FAST_BRAIN_API_KEY skipped (agent may NOT boot)."
+                        $warnings += "FAST_BRAIN_API_KEY not configured"
+                    } else {
+                        Write-Success "FAST_BRAIN_API_KEY kept existing value."
+                        $fbKey = $afterFb
+                    }
                 }
                 Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_ENDPOINT" -Value $fbEndpoint
                 Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_MODEL" -Value $fbModel
 
                 Write-Host ""
                 Write-Host "--- Semantic Router ---" -ForegroundColor Cyan
-                $rtr = Read-KeyWithReuse "Router" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
+                $defRtrEnd = Get-EffectiveDefault $existingRaw "ROUTER_ENDPOINT" "https://api.groq.com/openai/v1"
+                $defRtrMod = Get-EffectiveDefault $existingRaw "ROUTER_MODEL" "llama-3.3-70b-versatile"
+                $rtr = Read-KeyWithReuse "Router" $fbKey $fbEndpoint $fbModel $defRtrEnd $defRtrMod
                 if ($null -ne $rtr.Key) {
                     Set-EnvValue -FilePath $envFile -Key "ROUTER_API_KEY" -Value $rtr.Key
                     Write-Success "ROUTER_API_KEY set."
@@ -626,7 +730,9 @@ function Install-Jarvis {
 
                 Write-Host ""
                 Write-Host "--- LTM Extraction ---" -ForegroundColor Cyan
-                $ltm = Read-KeyWithReuse "LTM Extraction" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
+                $defLtmEnd = Get-EffectiveDefault $existingRaw "LTM_EXTRACTION_ENDPOINT" "https://api.groq.com/openai/v1"
+                $defLtmMod = Get-EffectiveDefault $existingRaw "LTM_EXTRACTION_MODEL" "llama-3.3-70b-versatile"
+                $ltm = Read-KeyWithReuse "LTM Extraction" $fbKey $fbEndpoint $fbModel $defLtmEnd $defLtmMod
                 if ($null -ne $ltm.Key) {
                     Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_API_KEY" -Value $ltm.Key
                     Write-Success "LTM_EXTRACTION_API_KEY set."
@@ -640,7 +746,9 @@ function Install-Jarvis {
 
                 Write-Host ""
                 Write-Host "--- Proactive Agent ---" -ForegroundColor Cyan
-                $pro = Read-KeyWithReuse "Proactive" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
+                $defProEnd = Get-EffectiveDefault $existingRaw "PROACTIVE_ENDPOINT" "https://api.groq.com/openai/v1"
+                $defProMod = Get-EffectiveDefault $existingRaw "PROACTIVE_MODEL" "llama-3.3-70b-versatile"
+                $pro = Read-KeyWithReuse "Proactive" $fbKey $fbEndpoint $fbModel $defProEnd $defProMod
                 if ($null -ne $pro.Key) {
                     Set-EnvValue -FilePath $envFile -Key "PROACTIVE_API_KEY" -Value $pro.Key
                     Write-Success "PROACTIVE_API_KEY set."
@@ -655,8 +763,10 @@ function Install-Jarvis {
                 Write-Host ""
                 Write-Host "--- Agentic Brain: Primary ---" -ForegroundColor Cyan
                 $priKey = Read-EnvInput "Primary API Key (OpenAI / any provider)" "" $true
-                $priBase = Read-EnvInput "Primary Base URL" "https://api.openai.com/v1"
-                $priModel = Read-EnvInput "Primary Model" "gpt-4o-mini"
+                $defPriBase = Get-EffectiveDefault $existingRaw "PRIMARY_BASE_URL" "https://api.openai.com/v1"
+                $defPriMod = Get-EffectiveDefault $existingRaw "PRIMARY_MODEL" "gpt-4o-mini"
+                $priBase = Read-EnvInput "Primary Base URL" $defPriBase
+                $priModel = Read-EnvInput "Primary Model" $defPriMod
                 $priThink = Read-YesNo "Enable thinking for Primary?" "Y"
                 if ($null -ne $priKey) {
                     Set-EnvValue -FilePath $envFile -Key "PRIMARY_API_KEY" -Value $priKey
@@ -672,12 +782,14 @@ function Install-Jarvis {
 
                 Write-Host ""
                 Write-Host "--- Agentic Brain: Fallback ---" -ForegroundColor Cyan
-                if ((Read-YesNo "Fallback = same as Primary?" "N") -eq "Y") {
+                if (-not [string]::IsNullOrWhiteSpace($priKey) -and (Read-YesNo "Fallback = same as Primary?" "N") -eq "Y") {
                     $fblKey = $priKey; $fblBase = $priBase; $fblModel = $priModel; $fblThink = $priThink
                 } else {
                     $fblKey = Read-EnvInput "Fallback API Key" "" $true
-                    $fblBase = Read-EnvInput "Fallback Base URL" "https://api.openai.com/v1"
-                    $fblModel = Read-EnvInput "Fallback Model" "gpt-4o-mini"
+                    $defFblBase = Get-EffectiveDefault $existingRaw "FALLBACK_BASE_URL" "https://api.openai.com/v1"
+                    $defFblMod = Get-EffectiveDefault $existingRaw "FALLBACK_MODEL" "gpt-4o-mini"
+                    $fblBase = Read-EnvInput "Fallback Base URL" $defFblBase
+                    $fblModel = Read-EnvInput "Fallback Model" $defFblMod
                     $fblThink = Read-YesNo "Enable thinking for Fallback?" "Y"
                 }
                 if ($null -ne $fblKey) {
@@ -696,8 +808,10 @@ function Install-Jarvis {
                 Write-Host "--- Image Generation (optional) ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Configure Image Generation?" "N") -eq "Y") {
                     $imgKey = Read-EnvInput "Image Gen API Key" "" $true
-                    $imgEndpoint = Read-EnvInput "Image Gen Endpoint" "https://api.openai.com/v1"
-                    $imgModel = Read-EnvInput "Image Gen Model" "dall-e-3"
+                    $defImgEnd = Get-EffectiveDefault $existingRaw "IMAGE_GEN_ENDPOINT" "https://api.openai.com/v1"
+                    $defImgMod = Get-EffectiveDefault $existingRaw "IMAGE_GEN_MODEL" "dall-e-3"
+                    $imgEndpoint = Read-EnvInput "Image Gen Endpoint" $defImgEnd
+                    $imgModel = Read-EnvInput "Image Gen Model" $defImgMod
                     if ($null -ne $imgKey) {
                         Set-EnvValue -FilePath $envFile -Key "IMAGE_GEN_API_KEY" -Value $imgKey
                         Write-Success "IMAGE_GEN_API_KEY set."
@@ -850,7 +964,23 @@ function Install-Jarvis {
                 }
                 Write-Host "  Config file     : $envFile" -ForegroundColor White
                 Write-Host "==========================================================" -ForegroundColor Cyan
+            } else {
+                Write-Warn "Interactive API key configuration skipped. You can edit $envFile anytime."
             }
+        }
+
+        Write-Step "7/7" "Registering Global 'jarvis' CLI Command..."
+        $registryScript = Join-Path $installPath "SetupRegistry.py"
+        if (Test-Path $registryScript) {
+            & $venvPython $registryScript
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warn "SetupRegistry.py returned a non-zero exit code ($LASTEXITCODE)."
+            } else {
+                Update-SessionPath
+                Write-Success "Global 'jarvis' CLI command registered via SetupRegistry.py and activated."
+            }
+        } else {
+            Write-Fail "SetupRegistry.py not found in $installPath."
         }
 
         Write-Host ""
@@ -860,6 +990,9 @@ function Install-Jarvis {
         Write-Host "  Install Location : $installPath" -ForegroundColor White
         Write-Host "  Config File      : $envFile" -ForegroundColor White
         Write-Host "  Launch Command   : jarvis" -ForegroundColor Cyan
+        if ($vcRebootRequired) {
+            Write-Host "  Notice           : Please restart Windows once to finalize VC++ runtime." -ForegroundColor Yellow
+        }
         Write-Host "==========================================================" -ForegroundColor Green
         Write-Host ""
     } finally {
