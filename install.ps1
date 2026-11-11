@@ -106,6 +106,87 @@ function Set-EnvValue {
     Set-Content -Path $FilePath -Value $content -Encoding UTF8
 }
 
+function Read-EnvInput {
+    param(
+        [string]$Label,
+        [string]$Default = "",
+        [switch]$AllowSkip
+    )
+    $prompt = "  $Label"
+    if (-not [string]::IsNullOrWhiteSpace($Default)) {
+        $prompt += " [default: $Default]"
+    }
+    $prompt += ": "
+    while ($true) {
+        $userInput = Read-Host $prompt
+        if ([string]::IsNullOrWhiteSpace($userInput)) {
+            if (-not [string]::IsNullOrWhiteSpace($Default)) { return $Default }
+            if ($AllowSkip) { return $null }
+            Write-Host "    [!] Value required." -ForegroundColor DarkYellow
+            continue
+        }
+        $trimmed = $userInput.Trim()
+        if ($AllowSkip -and ($trimmed -eq "s" -or $trimmed -eq "skip")) { return $null }
+        return $trimmed
+    }
+}
+
+function Read-YesNo {
+    param(
+        [string]$Question,
+        [string]$Default = "N"
+    )
+    $hint = if ($Default -eq "Y") { "(Y/n)" } else { "(y/N)" }
+    while ($true) {
+        $ans = Read-Host "  $Question $hint"
+        if ([string]::IsNullOrWhiteSpace($ans)) { return $Default }
+        $ans = $ans.Trim().ToLower()
+        if ($ans -eq "y" -or $ans -eq "yes") { return "Y" }
+        if ($ans -eq "n" -or $ans -eq "no") { return "N" }
+        Write-Host "    [!] Please answer y or n." -ForegroundColor DarkYellow
+    }
+}
+
+function Read-KeyWithReuse {
+    param(
+        [string]$GroupName,
+        [string]$SourceKey,
+        [string]$SourceEndpoint,
+        [string]$SourceModel,
+        [string]$DefaultEndpoint,
+        [string]$DefaultModel
+    )
+    $reuse = Read-YesNo "Same as Fast Brain for $GroupName (key + endpoint + model)?" "Y"
+    if ($reuse -eq "Y") {
+        return @{ Key = $SourceKey; Endpoint = $SourceEndpoint; Model = $SourceModel }
+    }
+    return @{
+        Key      = (Read-EnvInput "$GroupName API Key" "" $true)
+        Endpoint = (Read-EnvInput "$GroupName Endpoint" $DefaultEndpoint)
+        Model    = (Read-EnvInput "$GroupName Model" $DefaultModel)
+    }
+}
+
+function Clear-EnvValue {
+    param([string]$FilePath, [string]$Key, [switch]$OnlyIfPlaceholder)
+    $content = Get-Content -Path $FilePath -Raw
+    $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$"
+    $m = [regex]::Match($content, $pattern)
+    if (-not $m.Success) { return }
+    $current = $m.Groups[1].Value.Trim()
+    if ($OnlyIfPlaceholder -and $current -ne "your_key_here" -and $current -ne "your_key") { return }
+    $content = [regex]::Replace($content, $pattern, "$Key=")
+    Set-Content -Path $FilePath -Value $content -Encoding UTF8
+}
+
+function Get-EnvVal {
+    param([string]$Content, [string]$Key)
+    $m = [regex]::Match($Content, "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$")
+    if ($m.Success) { return $m.Groups[1].Value.Trim() }
+    return ""
+}
+
+
 function Install-Jarvis {
     Clear-Host
     Write-Host "==========================================================" -ForegroundColor Cyan
@@ -272,30 +353,297 @@ function Install-Jarvis {
 
         if ([Environment]::UserInteractive) {
             Write-Host ""
-            $configureNow = Read-Host "Would you like to configure your core API keys right now? (y/N)"
+            $configureNow = Read-Host "Would you like to configure your API keys now? (y/N)"
             if ($configureNow -match "^[Yy]") {
                 Write-Host ""
-                Write-Host "Press Enter to skip any key you want to configure later in .env" -ForegroundColor DarkGray
-                $groqKey = Read-Host "  1. Enter Groq / Primary LLM API Key"
-                $deepgramKey = Read-Host "  2. Enter Deepgram API Key (Voice STT)"
-                $tavilyKey = Read-Host "  3. Enter Tavily API Key (Web Search)"
+                Write-Host "  Press Enter to accept default; type 's' to skip any field." -ForegroundColor DarkGray
+                Write-Host "  API_BASE_URL stays untouched (default is fine)." -ForegroundColor DarkGray
 
-                if (-not [string]::IsNullOrWhiteSpace($groqKey)) {
-                    Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -Value $groqKey.Trim()
-                    Set-EnvValue -FilePath $envFile -Key "ROUTER_API_KEY" -Value $groqKey.Trim()
-                    Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_API_KEY" -Value $groqKey.Trim()
-                    Set-EnvValue -FilePath $envFile -Key "MEMORY_SUMMARY_API_KEY" -Value $groqKey.Trim()
-                    Set-EnvValue -FilePath $envFile -Key "PROACTIVE_API_KEY" -Value $groqKey.Trim()
-                    Set-EnvValue -FilePath $envFile -Key "PRIMARY_API_KEY" -Value $groqKey.Trim()
-                    Set-EnvValue -FilePath $envFile -Key "FALLBACK_API_KEY" -Value $groqKey.Trim()
+                $configuredCount = 0
+                $skippedGroups = @()
+                $warnings = @()
+
+                # --- IDENTITY ---
+                Write-Host ""
+                Write-Host "--- Identity ---" -ForegroundColor Cyan
+                $userName = Read-EnvInput "Your name" "" $true
+                if ($null -ne $userName) {
+                    Set-EnvValue -FilePath $envFile -Key "USER_NAME" -Value $userName
+                    Write-Success "USER_NAME set."
+                    $configuredCount++
+                } else {
+                    Write-Warn "USER_NAME skipped."
                 }
-                if (-not [string]::IsNullOrWhiteSpace($deepgramKey)) {
-                    Set-EnvValue -FilePath $envFile -Key "DEEPGRAM_API_KEY" -Value $deepgramKey.Trim()
+
+                # --- FAST BRAIN ---
+                Write-Host ""
+                Write-Host "--- Fast Brain (MANDATORY) ---" -ForegroundColor Cyan
+                $fbKey = Read-EnvInput "Fast Brain API Key (Groq/OpenAI-compatible)" "" $true
+                $fbEndpoint = Read-EnvInput "Fast Brain Endpoint" "https://api.groq.com/openai/v1"
+                $fbModel = Read-EnvInput "Fast Brain Model" "llama-3.3-70b-versatile"
+                if ($null -ne $fbKey) {
+                    Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -Value $fbKey
+                    Write-Success "FAST_BRAIN_API_KEY set."
+                    $configuredCount++
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "FAST_BRAIN_API_KEY skipped (agent may NOT boot)."
+                    $warnings += "FAST_BRAIN_API_KEY not configured"
                 }
-                if (-not [string]::IsNullOrWhiteSpace($tavilyKey)) {
-                    Set-EnvValue -FilePath $envFile -Key "TAVILY_API_KEY" -Value $tavilyKey.Trim()
+                Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_ENDPOINT" -Value $fbEndpoint
+                Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_MODEL" -Value $fbModel
+
+                # --- ROUTER ---
+                Write-Host ""
+                Write-Host "--- Semantic Router ---" -ForegroundColor Cyan
+                $rtr = Read-KeyWithReuse "Router" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
+                if ($null -ne $rtr.Key) {
+                    Set-EnvValue -FilePath $envFile -Key "ROUTER_API_KEY" -Value $rtr.Key
+                    Write-Success "ROUTER_API_KEY set."
+                    $configuredCount++
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "ROUTER_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "ROUTER_API_KEY skipped."
                 }
-                Write-Success "API keys saved to $envFile"
+                Set-EnvValue -FilePath $envFile -Key "ROUTER_ENDPOINT" -Value $rtr.Endpoint
+                Set-EnvValue -FilePath $envFile -Key "ROUTER_MODEL" -Value $rtr.Model
+
+                # --- LTM EXTRACTION ---
+                Write-Host ""
+                Write-Host "--- LTM Extraction ---" -ForegroundColor Cyan
+                $ltm = Read-KeyWithReuse "LTM Extraction" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
+                if ($null -ne $ltm.Key) {
+                    Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_API_KEY" -Value $ltm.Key
+                    Write-Success "LTM_EXTRACTION_API_KEY set."
+                    $configuredCount++
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "LTM_EXTRACTION_API_KEY skipped."
+                }
+                Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_ENDPOINT" -Value $ltm.Endpoint
+                Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_MODEL" -Value $ltm.Model
+
+                # --- PROACTIVE ---
+                Write-Host ""
+                Write-Host "--- Proactive Agent ---" -ForegroundColor Cyan
+                $pro = Read-KeyWithReuse "Proactive" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
+                if ($null -ne $pro.Key) {
+                    Set-EnvValue -FilePath $envFile -Key "PROACTIVE_API_KEY" -Value $pro.Key
+                    Write-Success "PROACTIVE_API_KEY set."
+                    $configuredCount++
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "PROACTIVE_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "PROACTIVE_API_KEY skipped."
+                }
+                Set-EnvValue -FilePath $envFile -Key "PROACTIVE_ENDPOINT" -Value $pro.Endpoint
+                Set-EnvValue -FilePath $envFile -Key "PROACTIVE_MODEL" -Value $pro.Model
+
+                # --- PRIMARY BRAIN ---
+                Write-Host ""
+                Write-Host "--- Agentic Brain: Primary ---" -ForegroundColor Cyan
+                $priKey = Read-EnvInput "Primary API Key (OpenAI / any provider)" "" $true
+                $priBase = Read-EnvInput "Primary Base URL" "https://api.openai.com/v1"
+                $priModel = Read-EnvInput "Primary Model" "gpt-4o-mini"
+                $priThink = Read-YesNo "Enable thinking for Primary?" "Y"
+                if ($null -ne $priKey) {
+                    Set-EnvValue -FilePath $envFile -Key "PRIMARY_API_KEY" -Value $priKey
+                    Write-Success "PRIMARY_API_KEY set."
+                    $configuredCount++
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "PRIMARY_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "PRIMARY_API_KEY skipped."
+                }
+                Set-EnvValue -FilePath $envFile -Key "PRIMARY_BASE_URL" -Value $priBase
+                Set-EnvValue -FilePath $envFile -Key "PRIMARY_MODEL" -Value $priModel
+                Set-EnvValue -FilePath $envFile -Key "PRIMARY_THINKING_ENABLED" -Value $(if ($priThink -eq "Y") { "true" } else { "false" })
+
+                # --- FALLBACK BRAIN ---
+                Write-Host ""
+                Write-Host "--- Agentic Brain: Fallback ---" -ForegroundColor Cyan
+                if ((Read-YesNo "Fallback = same as Primary?" "N") -eq "Y") {
+                    $fblKey = $priKey; $fblBase = $priBase; $fblModel = $priModel; $fblThink = $priThink
+                } else {
+                    $fblKey = Read-EnvInput "Fallback API Key" "" $true
+                    $fblBase = Read-EnvInput "Fallback Base URL" "https://api.openai.com/v1"
+                    $fblModel = Read-EnvInput "Fallback Model" "gpt-4o-mini"
+                    $fblThink = Read-YesNo "Enable thinking for Fallback?" "Y"
+                }
+                if ($null -ne $fblKey) {
+                    Set-EnvValue -FilePath $envFile -Key "FALLBACK_API_KEY" -Value $fblKey
+                    Write-Success "FALLBACK_API_KEY set."
+                    $configuredCount++
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "FALLBACK_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "FALLBACK_API_KEY skipped."
+                }
+                Set-EnvValue -FilePath $envFile -Key "FALLBACK_BASE_URL" -Value $fblBase
+                Set-EnvValue -FilePath $envFile -Key "FALLBACK_MODEL" -Value $fblModel
+                Set-EnvValue -FilePath $envFile -Key "FALLBACK_THINKING_ENABLED" -Value $(if ($fblThink -eq "Y") { "true" } else { "false" })
+
+                # --- IMAGE GEN (OPTIONAL) ---
+                Write-Host ""
+                Write-Host "--- Image Generation (optional) ---" -ForegroundColor Cyan
+                if ((Read-YesNo "Configure Image Generation?" "N") -eq "Y") {
+                    $imgKey = Read-EnvInput "Image Gen API Key" "" $true
+                    $imgEndpoint = Read-EnvInput "Image Gen Endpoint" "https://api.openai.com/v1"
+                    $imgModel = Read-EnvInput "Image Gen Model" "dall-e-3"
+                    if ($null -ne $imgKey) {
+                        Set-EnvValue -FilePath $envFile -Key "IMAGE_GEN_API_KEY" -Value $imgKey
+                        Write-Success "IMAGE_GEN_API_KEY set."
+                        $configuredCount++
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "IMAGE_GEN_API_KEY" -OnlyIfPlaceholder
+                        Write-Warn "IMAGE_GEN_API_KEY skipped."
+                    }
+                    Set-EnvValue -FilePath $envFile -Key "IMAGE_GEN_ENDPOINT" -Value $imgEndpoint
+                    Set-EnvValue -FilePath $envFile -Key "IMAGE_GEN_MODEL" -Value $imgModel
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "IMAGE_GEN_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "Image Generation skipped."
+                    $skippedGroups += "Image Gen"
+                }
+
+                # --- SEARCH & EMBEDDINGS (OPTIONAL) ---
+                Write-Host ""
+                Write-Host "--- Search & Embeddings (optional) ---" -ForegroundColor Cyan
+                if ((Read-YesNo "Configure Gemini + Tavily?" "N") -eq "Y") {
+                    $gem = Read-EnvInput "Gemini API Key" "" $true
+                    $tav = Read-EnvInput "Tavily API Key" "" $true
+                    if ($null -ne $gem) {
+                        Set-EnvValue -FilePath $envFile -Key "GEMINI_API_KEY" -Value $gem
+                        Write-Success "GEMINI_API_KEY set."
+                        $configuredCount++
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "GEMINI_API_KEY" -OnlyIfPlaceholder
+                    }
+                    if ($null -ne $tav) {
+                        Set-EnvValue -FilePath $envFile -Key "TAVILY_API_KEY" -Value $tav
+                        Write-Success "TAVILY_API_KEY set."
+                        $configuredCount++
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "TAVILY_API_KEY" -OnlyIfPlaceholder
+                    }
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "GEMINI_API_KEY" -OnlyIfPlaceholder
+                    Clear-EnvValue -FilePath $envFile -Key "TAVILY_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "Search/Embeddings skipped."
+                    $skippedGroups += "Search"
+                }
+
+                # --- DEEPGRAM (OPTIONAL) ---
+                Write-Host ""
+                Write-Host "--- Voice STT (optional) ---" -ForegroundColor Cyan
+                if ((Read-YesNo "Configure Deepgram (STT)?" "N") -eq "Y") {
+                    $dg = Read-EnvInput "Deepgram API Key" "" $true
+                    if ($null -ne $dg) {
+                        Set-EnvValue -FilePath $envFile -Key "DEEPGRAM_API_KEY" -Value $dg
+                        Write-Success "DEEPGRAM_API_KEY set."
+                        $configuredCount++
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "DEEPGRAM_API_KEY" -OnlyIfPlaceholder
+                        Write-Warn "DEEPGRAM_API_KEY skipped."
+                    }
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "DEEPGRAM_API_KEY" -OnlyIfPlaceholder
+                    Write-Warn "Deepgram skipped."
+                    $skippedGroups += "Deepgram"
+                }
+
+                # --- TTS (OPTIONAL) ---
+                Write-Host ""
+                Write-Host "--- Custom TTS (optional; N uses Edge TTS fallback) ---" -ForegroundColor Cyan
+                if ((Read-YesNo "Configure custom TTS?" "N") -eq "Y") {
+                    $ttsKey = Read-EnvInput "TTS API Key" "" $true
+                    $ttsEndpoint = Read-EnvInput "TTS Endpoint" "" $true
+                    if ($null -ne $ttsKey) {
+                        Set-EnvValue -FilePath $envFile -Key "TTS_API_KEY" -Value $ttsKey
+                        Write-Success "TTS_API_KEY set."
+                        $configuredCount++
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "TTS_API_KEY" -OnlyIfPlaceholder
+                    }
+                    if ($null -ne $ttsEndpoint) {
+                        Set-EnvValue -FilePath $envFile -Key "TTS_ENDPOINT" -Value $ttsEndpoint
+                        Write-Success "TTS_ENDPOINT set."
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "TTS_ENDPOINT" -OnlyIfPlaceholder
+                    }
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "TTS_API_KEY" -OnlyIfPlaceholder
+                    Clear-EnvValue -FilePath $envFile -Key "TTS_ENDPOINT" -OnlyIfPlaceholder
+                    Write-Warn "Custom TTS skipped (Edge TTS fallback will be used)."
+                    $skippedGroups += "TTS"
+                }
+
+                # --- TELEGRAM (OPTIONAL) ---
+                Write-Host ""
+                Write-Host "--- Telegram (optional) ---" -ForegroundColor Cyan
+                if ((Read-YesNo "Configure Telegram?" "N") -eq "Y") {
+                    $tgId = Read-EnvInput "Telegram API ID" "" $true
+                    $tgHash = Read-EnvInput "Telegram API Hash" "" $true
+                    $tgBot = Read-EnvInput "Telegram Bot Username" "" $true
+                    if ($null -ne $tgId) {
+                        Set-EnvValue -FilePath $envFile -Key "TELEGRAM_API_ID" -Value $tgId
+                        Write-Success "TELEGRAM_API_ID set."
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_ID" -OnlyIfPlaceholder
+                    }
+                    if ($null -ne $tgHash) {
+                        Set-EnvValue -FilePath $envFile -Key "TELEGRAM_API_HASH" -Value $tgHash
+                        Write-Success "TELEGRAM_API_HASH set."
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_HASH" -OnlyIfPlaceholder
+                    }
+                    if ($null -ne $tgBot) {
+                        Set-EnvValue -FilePath $envFile -Key "TELEGRAM_BOT_USERNAME" -Value $tgBot
+                        Write-Success "TELEGRAM_BOT_USERNAME set."
+                    } else {
+                        Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_BOT_USERNAME" -OnlyIfPlaceholder
+                    }
+                } else {
+                    Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_ID" -OnlyIfPlaceholder
+                    Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_HASH" -OnlyIfPlaceholder
+                    Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_BOT_USERNAME" -OnlyIfPlaceholder
+                    Write-Warn "Telegram skipped."
+                    $skippedGroups += "Telegram"
+                }
+
+                # --- VALIDATION ---
+                $envContent = Get-Content -Path $envFile -Raw
+                $priKeyCheck = Get-EnvVal $envContent "PRIMARY_API_KEY"
+                $priBaseCheck = Get-EnvVal $envContent "PRIMARY_BASE_URL"
+                $fblKeyCheck = Get-EnvVal $envContent "FALLBACK_API_KEY"
+                $fblBaseCheck = Get-EnvVal $envContent "FALLBACK_BASE_URL"
+                $fbEndCheck = Get-EnvVal $envContent "FAST_BRAIN_ENDPOINT"
+
+                if ($priKeyCheck -like "gsk_*" -and $priBaseCheck -match "openai\.com") {
+                    $warnings += "PRIMARY_API_KEY looks like Groq (gsk_) but PRIMARY_BASE_URL is OpenAI — verify!"
+                }
+                if ($fblKeyCheck -like "gsk_*" -and $fblBaseCheck -match "openai\.com") {
+                    $warnings += "FALLBACK_API_KEY looks like Groq (gsk_) but FALLBACK_BASE_URL is OpenAI — verify!"
+                }
+                if ($fbEndCheck -and $fbEndCheck -notmatch "^https?://") {
+                    $warnings += "FAST_BRAIN_ENDPOINT does not look like a URL."
+                }
+
+                Write-Host ""
+                Write-Host "==========================================================" -ForegroundColor Cyan
+                Write-Host "  Configuration Summary" -ForegroundColor Cyan
+                Write-Host "==========================================================" -ForegroundColor Cyan
+                Write-Host "  Keys configured : $configuredCount" -ForegroundColor Green
+                if ($skippedGroups.Count -gt 0) {
+                    Write-Host "  Groups skipped  : $($skippedGroups -join ', ')" -ForegroundColor DarkYellow
+                } else {
+                    Write-Host "  Groups skipped  : none" -ForegroundColor Green
+                }
+                if ($warnings.Count -gt 0) {
+                    Write-Host "  Warnings        :" -ForegroundColor DarkYellow
+                    foreach ($w in $warnings) {
+                        Write-Host "    - $w" -ForegroundColor DarkYellow
+                    }
+                }
+                Write-Host "  Config file     : $envFile" -ForegroundColor White
+                Write-Host "==========================================================" -ForegroundColor Cyan
             }
         }
 
