@@ -22,6 +22,7 @@ edge-tts==7.2.8
 PyAudio==0.2.14
 vosk==0.3.45
 azure-core==1.41.0
+azure-cognitiveservices-speech==1.42.0
 youtube-transcript-api==1.2.4
 appopener==1.7; sys_platform == 'win32'
 comtypes==1.4.16; sys_platform == 'win32'
