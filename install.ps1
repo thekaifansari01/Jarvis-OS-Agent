@@ -27,68 +27,221 @@ function Update-SessionPath {
     $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
     $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
     $env:Path = "$machinePath;$userPath"
+
+    $extraPaths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python311",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\Scripts",
+        "$env:ProgramFiles\Python311",
+        "$env:ProgramFiles\Python311\Scripts",
+        "C:\Python311",
+        "C:\Python311\Scripts",
+        "$env:ProgramFiles\nodejs",
+        "$env:APPDATA\npm",
+        "$env:ProgramFiles\Git\cmd"
+    )
+    foreach ($p in $extraPaths) {
+        if ((Test-Path $p) -and ($env:Path -notlike "*$p*")) {
+            $env:Path = "$p;$env:Path"
+        }
+    }
+}
+
+function Download-FileFast {
+    param([string]$Url, [string]$OutFile)
+    if (Test-Path $OutFile) {
+        Remove-Item -Path $OutFile -Force -ErrorAction SilentlyContinue
+    }
+    $curlCmd = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($curlCmd) {
+        & $curlCmd.Source -fL --retry 3 --connect-timeout 15 -o $OutFile $Url
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $OutFile)) {
+            return $true
+        }
+    }
+    $prevPref = $ProgressPreference
+    try {
+        $ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -ErrorAction Stop
+        return (Test-Path $OutFile)
+    } catch {
+        return $false
+    } finally {
+        $ProgressPreference = $prevPref
+    }
+}
+
+function Test-IsPython311 {
+    param([string]$ExePath)
+    if ([string]::IsNullOrWhiteSpace($ExePath) -or -not (Test-Path $ExePath)) {
+        return $false
+    }
+    if ($ExePath -match "WindowsApps") {
+        return $false
+    }
+    $check = & $ExePath -c "import sys; print(1 if (sys.version_info.major == 3 and sys.version_info.minor == 11) else 0)" 2>$null
+    return ($LASTEXITCODE -eq 0 -and "$check".Trim() -eq "1")
 }
 
 function Get-ValidPython {
-    $candidates = @("python", "python3", "py")
-    foreach ($cmd in $candidates) {
-        $found = Get-Command $cmd -ErrorAction SilentlyContinue
-        if ($found -and ($found.Source -notmatch "WindowsApps")) {
-            if ($cmd -eq "py") {
-                $check = & py -3 -c "import sys; print(1 if (sys.version_info.major == 3 and sys.version_info.minor >= 10) else 0)" 2>$null
-                if ($LASTEXITCODE -eq 0 -and "$check".Trim() -eq "1") {
-                    $exePath = & py -3 -c "import sys; print(sys.executable)" 2>$null
-                    if ($exePath -and (Test-Path "$exePath".Trim())) {
-                        return "$exePath".Trim()
-                    }
-                }
-            } else {
-                $check = & $found.Source -c "import sys; print(1 if (sys.version_info.major == 3 and sys.version_info.minor >= 10) else 0)" 2>$null
-                if ($LASTEXITCODE -eq 0 -and "$check".Trim() -eq "1") {
-                    return $found.Source
-                }
+    $knownPaths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:ProgramFiles\Python311\python.exe",
+        "C:\Python311\python.exe",
+        "${env:ProgramFiles(x86)}\Python311-32\python.exe"
+    )
+    foreach ($candidate in $knownPaths) {
+        if (Test-IsPython311 -ExePath $candidate) {
+            return $candidate
+        }
+    }
+
+    $pyLauncher = Get-Command py -CommandType Application -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
+        $exePath = & py -3.11 -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $exePath) {
+            $trimmed = "$exePath".Trim()
+            if (Test-IsPython311 -ExePath $trimmed) {
+                return $trimmed
             }
         }
     }
-    $localPaths = @(
-        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
-        "C:\Python312\python.exe",
-        "C:\Python311\python.exe",
-        "C:\Python310\python.exe"
+
+    foreach ($cmd in @("python", "python3")) {
+        $found = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($found -and (Test-IsPython311 -ExePath $found.Source)) {
+            return $found.Source
+        }
+    }
+
+    $roots = @(
+        "$env:LOCALAPPDATA\Programs\Python",
+        "$env:ProgramFiles",
+        "C:\"
     )
-    foreach ($p in $localPaths) {
-        if (Test-Path $p) {
-            return $p
+    foreach ($root in $roots) {
+        if (-not (Test-Path $root)) { continue }
+        $dirs = Get-ChildItem -Path $root -Filter "Python311*" -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+        foreach ($dir in $dirs) {
+            $exe = Join-Path $dir.FullName "python.exe"
+            if (Test-IsPython311 -ExePath $exe) {
+                return $exe
+            }
         }
     }
     return $null
 }
 
 function Test-NodeVersion {
+    Update-SessionPath
     $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $nodeCmd) {
+        $fallback = "$env:ProgramFiles\nodejs\node.exe"
+        if (Test-Path $fallback) {
+            $env:Path = "$env:ProgramFiles\nodejs;$env:Path"
+            $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+        }
+    }
     $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
     if (-not $nodeCmd -or -not $npmCmd) {
         return $false
     }
-    $ver = & node -e "console.log(process.versions.node.split('.')[0])" 2>$null
+    $ver = & $nodeCmd.Source -e "console.log(process.versions.node.split('.')[0])" 2>$null
     if ($LASTEXITCODE -eq 0 -and ($ver -as [int]) -ge 18) {
         return $true
     }
     return $false
 }
 
-function Install-WithWinget {
-    param([string]$PackageId, [string]$DisplayName)
+function Get-LatestNodeMsiInfo {
+    $prevPref = $ProgressPreference
+    try {
+        $ProgressPreference = "SilentlyContinue"
+        $releases = Invoke-RestMethod -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+        if ($releases -and $releases.Count -gt 0) {
+            $latestVer = $releases[0].version.TrimStart("v")
+            if (-not [string]::IsNullOrWhiteSpace($latestVer)) {
+                return @{
+                    Version = $latestVer
+                    Url     = "https://nodejs.org/dist/v$latestVer/node-v$latestVer-x64.msi"
+                }
+            }
+        }
+    } catch {} finally {
+        $ProgressPreference = $prevPref
+    }
+    $fallbackVer = "24.0.0"
+    return @{
+        Version = $fallbackVer
+        Url     = "https://nodejs.org/dist/v$fallbackVer/node-v$fallbackVer-x64.msi"
+    }
+}
+
+function Test-WingetAvailable {
     $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if (-not $winget) {
+    if (-not $winget) { return $false }
+    try {
+        & winget --version *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
         return $false
     }
+}
+
+function Install-WithWinget {
+    param(
+        [string]$PackageId,
+        [string]$DisplayName,
+        [string]$Version = "",
+        [switch]$UserScope
+    )
+    if (-not (Test-WingetAvailable)) {
+        Write-Warn "winget not available on this system."
+        return $false
+    }
+
     Write-Host "  -> Auto-installing $DisplayName via winget..." -ForegroundColor Cyan
-    & winget install --id $PackageId -e --source winget --accept-package-agreements --accept-source-agreements --silent
+    $wingetArgs = @(
+        "install", "--id", $PackageId, "-e",
+        "--source", "winget",
+        "--silent",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+        "--disable-interactivity"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($Version)) {
+        $wingetArgs += @("--version", $Version)
+    }
+    if ($UserScope) {
+        $wingetArgs += @("--scope", "user")
+    }
+
+    & winget @wingetArgs
+    $exit = $LASTEXITCODE
+
+    if ($exit -ne 0 -and $exit -ne -1978335189) {
+        Write-Warn "winget exited with code $exit for $DisplayName."
+        return $false
+    }
+
     Update-SessionPath
-    return ($LASTEXITCODE -eq 0)
+    return $true
+}
+
+function Stop-RunningJarvis {
+    param([string]$TargetDir)
+    if (-not (Test-Path $TargetDir)) { return }
+    $normalizedTarget = [System.IO.Path]::GetFullPath($TargetDir).ToLowerInvariant()
+    $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        ($_.ExecutablePath -and $_.ExecutablePath.ToLowerInvariant().StartsWith($normalizedTarget)) -or
+        ($_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($normalizedTarget))
+    }
+    foreach ($proc in $processes) {
+        if ($proc.ProcessId -ne $PID) {
+            try {
+                Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+            } catch {}
+        }
+    }
 }
 
 function Set-EnvValue {
@@ -96,21 +249,51 @@ function Set-EnvValue {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         return
     }
-    $content = Get-Content -Path $FilePath -Raw
+    $content = ""
+    if (Test-Path $FilePath) {
+        $raw = Get-Content -Path $FilePath -Raw -ErrorAction SilentlyContinue
+        if ($null -ne $raw) { $content = $raw }
+    }
     $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=.*$"
     if ($content -match $pattern) {
         $content = [regex]::Replace($content, $pattern, "$Key=$Value")
     } else {
-        $content = $content.TrimEnd() + "`r`n$Key=$Value`r`n"
+        if ([string]::IsNullOrWhiteSpace($content)) {
+            $content = "$Key=$Value`r`n"
+        } else {
+            $content = $content.TrimEnd() + "`r`n$Key=$Value`r`n"
+        }
     }
     Set-Content -Path $FilePath -Value $content -Encoding UTF8
+}
+
+function Clear-EnvValue {
+    param([string]$FilePath, [string]$Key, [switch]$OnlyIfPlaceholder)
+    if (-not (Test-Path $FilePath)) { return }
+    $content = Get-Content -Path $FilePath -Raw -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrEmpty($content)) { return }
+    $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$"
+    $m = [regex]::Match($content, $pattern)
+    if (-not $m.Success) { return }
+    $current = $m.Groups[1].Value.Trim()
+    if ($OnlyIfPlaceholder -and $current -ne "your_key_here" -and $current -ne "your_key") { return }
+    $content = [regex]::Replace($content, $pattern, "$Key=")
+    Set-Content -Path $FilePath -Value $content -Encoding UTF8
+}
+
+function Get-EnvVal {
+    param([string]$Content, [string]$Key)
+    if ([string]::IsNullOrEmpty($Content)) { return "" }
+    $m = [regex]::Match($Content, "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$")
+    if ($m.Success) { return $m.Groups[1].Value.Trim() }
+    return ""
 }
 
 function Read-EnvInput {
     param(
         [string]$Label,
         [string]$Default = "",
-        [switch]$AllowSkip
+        [bool]$AllowSkip = $false
     )
     $prompt = "  $Label"
     if (-not [string]::IsNullOrWhiteSpace($Default)) {
@@ -167,26 +350,6 @@ function Read-KeyWithReuse {
     }
 }
 
-function Clear-EnvValue {
-    param([string]$FilePath, [string]$Key, [switch]$OnlyIfPlaceholder)
-    $content = Get-Content -Path $FilePath -Raw
-    $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$"
-    $m = [regex]::Match($content, $pattern)
-    if (-not $m.Success) { return }
-    $current = $m.Groups[1].Value.Trim()
-    if ($OnlyIfPlaceholder -and $current -ne "your_key_here" -and $current -ne "your_key") { return }
-    $content = [regex]::Replace($content, $pattern, "$Key=")
-    Set-Content -Path $FilePath -Value $content -Encoding UTF8
-}
-
-function Get-EnvVal {
-    param([string]$Content, [string]$Key)
-    $m = [regex]::Match($Content, "(?m)^" + [regex]::Escape($Key) + "\s*=(.*)$")
-    if ($m.Success) { return $m.Groups[1].Value.Trim() }
-    return ""
-}
-
-
 function Install-Jarvis {
     Clear-Host
     Write-Host "==========================================================" -ForegroundColor Cyan
@@ -202,6 +365,8 @@ function Install-Jarvis {
             Write-Fail "Git is required. Install from https://git-scm.com/download/win and re-run."
             return
         }
+        Start-Sleep -Seconds 2
+        Update-SessionPath
     }
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Fail "Git executable still not detected in PATH. Please restart PowerShell and try again."
@@ -211,26 +376,79 @@ function Install-Jarvis {
 
     $sysPython = Get-ValidPython
     if (-not $sysPython) {
-        Write-Warn "Python 3.10+ not found."
-        if (Install-WithWinget -PackageId "Python.Python.3.11" -DisplayName "Python 3.11") {
+        Write-Warn "Python 3.11 not found. Auto-installing Python 3.11.4..."
+        $pyVersion = "3.11.4"
+        $pyInstaller = Join-Path $env:TEMP "python-$pyVersion-amd64.exe"
+        $pyUrl = "https://www.python.org/ftp/python/$pyVersion/python-$pyVersion-amd64.exe"
+
+        Write-Host "  -> Downloading Python $pyVersion (~25 MB)..." -ForegroundColor Cyan
+        if (Download-FileFast -Url $pyUrl -OutFile $pyInstaller) {
+            Write-Host "  -> Running silent Python $pyVersion installer..." -ForegroundColor Cyan
+            $proc = Start-Process -FilePath $pyInstaller -ArgumentList "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_test=0", "Include_launcher=1" -Wait -PassThru
+            Remove-Item $pyInstaller -Force -ErrorAction SilentlyContinue
+            Update-SessionPath
+            Start-Sleep -Seconds 2
+            $sysPython = Get-ValidPython
+        } else {
+            Write-Warn "Direct download of Python $pyVersion failed."
+        }
+
+        if (-not $sysPython -and (Test-WingetAvailable)) {
+            Write-Warn "Attempting winget fallback for Python 3.11..."
+            if (-not (Install-WithWinget -PackageId "Python.Python.3.11" -DisplayName "Python 3.11.4" -Version "3.11.4" -UserScope)) {
+                Install-WithWinget -PackageId "Python.Python.3.11" -DisplayName "Python 3.11" -UserScope | Out-Null
+            }
+            Start-Sleep -Seconds 3
+            Update-SessionPath
             $sysPython = Get-ValidPython
         }
+
         if (-not $sysPython) {
-            Write-Fail "Python 3.10+ is required. Install from https://www.python.org/downloads/ (check 'Add to PATH')."
+            Write-Fail "Python 3.11.4 could not be installed automatically."
+            Write-Fail "Manual install: https://www.python.org/ftp/python/3.11.4/python-3.11.4-amd64.exe"
             return
         }
     }
     $pyVerStr = & $sysPython --version 2>&1
-    Write-Success "Python detected ($pyVerStr)."
+    Write-Success "Python detected ($pyVerStr at $sysPython)."
 
     if (-not (Test-NodeVersion)) {
-        Write-Warn "Node.js 18+ not found."
-        if (-not (Install-WithWinget -PackageId "OpenJS.NodeJS.LTS" -DisplayName "Node.js LTS")) {
-            Write-Fail "Node.js 18+ is required. Install from https://nodejs.org/ and re-run."
-            return
+        Write-Warn "Node.js not found. Attempting auto-install of latest Node.js..."
+
+        if (Test-WingetAvailable) {
+            if (-not (Install-WithWinget -PackageId "OpenJS.NodeJS" -DisplayName "Node.js (Latest)")) {
+                Install-WithWinget -PackageId "OpenJS.NodeJS.LTS" -DisplayName "Node.js LTS" | Out-Null
+            }
+            Start-Sleep -Seconds 3
+            Update-SessionPath
         }
+
         if (-not (Test-NodeVersion)) {
-            Write-Fail "Node.js 18+ installation could not be verified. Please restart PowerShell and re-run."
+            Write-Warn "winget path failed or unavailable. Falling back to direct nodejs.org download..."
+            $nodeInfo = Get-LatestNodeMsiInfo
+            $nodeVer = $nodeInfo.Version
+            $nodeUrl = $nodeInfo.Url
+            $nodeMsi = Join-Path $env:TEMP "node-v$nodeVer-x64.msi"
+
+            Write-Host "  -> Downloading Node.js v$nodeVer (~30 MB)..." -ForegroundColor Cyan
+            if (Download-FileFast -Url $nodeUrl -OutFile $nodeMsi) {
+                Write-Host "  -> Running Node.js installer (accept UAC prompt if shown)..." -ForegroundColor Cyan
+                try {
+                    Start-Process msiexec.exe -ArgumentList "/i", "`"$nodeMsi`"", "/passive", "/norestart" -Verb RunAs -Wait -ErrorAction Stop
+                } catch {
+                    Start-Process msiexec.exe -ArgumentList "/i", "`"$nodeMsi`"", "/qn", "/norestart" -Wait
+                }
+                Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
+                Update-SessionPath
+                Start-Sleep -Seconds 2
+            } else {
+                Write-Warn "Direct Node.js download failed."
+            }
+        }
+
+        if (-not (Test-NodeVersion)) {
+            Write-Fail "Node.js could not be installed automatically."
+            Write-Fail "Manual install: https://nodejs.org/ and re-run."
             return
         }
     }
@@ -240,6 +458,8 @@ function Install-Jarvis {
     Write-Step "2/6" "Syncing J.A.R.V.I.S. OS Agent Repository..."
     $installPath = Join-Path $HOME "Jarvis-OS-Agent"
     $repoUrl = "https://github.com/thekaifansari01/Jarvis-OS-Agent.git"
+
+    Stop-RunningJarvis -TargetDir $installPath
 
     if (Test-Path (Join-Path $installPath ".git")) {
         Write-Host "  -> Existing repository found at $installPath. Fetching updates..." -ForegroundColor Cyan
@@ -272,13 +492,12 @@ function Install-Jarvis {
 
     Push-Location $installPath
     try {
-        Write-Step "3/6" "Configuring Isolated Python Virtual Environment (.venv)..."
+        Write-Step "3/6" "Configuring Isolated Python 3.11 Virtual Environment (.venv)..."
         $venvPython = Join-Path $installPath ".venv\Scripts\python.exe"
 
         if (Test-Path $venvPython) {
-            & $venvPython -c "import sys" 2>$null
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warn "Existing .venv appears corrupted. Recreating..."
+            if (-not (Test-IsPython311 -ExePath $venvPython)) {
+                Write-Warn "Existing .venv is broken or not running Python 3.11. Recreating with Python 3.11..."
                 Remove-Item -Path ".venv" -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
@@ -289,9 +508,9 @@ function Install-Jarvis {
                 Write-Fail "Failed to create Python virtual environment."
                 return
             }
-            Write-Success "Virtual environment created."
+            Write-Success "Python 3.11 virtual environment created."
         } else {
-            Write-Success "Healthy virtual environment already exists."
+            Write-Success "Healthy Python 3.11 virtual environment already exists."
         }
 
         Write-Step "4/6" "Installing Python Dependencies & AI Models (5-10 mins on first run)..."
@@ -363,7 +582,6 @@ function Install-Jarvis {
                 $skippedGroups = @()
                 $warnings = @()
 
-                # --- IDENTITY ---
                 Write-Host ""
                 Write-Host "--- Identity ---" -ForegroundColor Cyan
                 $userName = Read-EnvInput "Your name" "" $true
@@ -375,7 +593,6 @@ function Install-Jarvis {
                     Write-Warn "USER_NAME skipped."
                 }
 
-                # --- FAST BRAIN ---
                 Write-Host ""
                 Write-Host "--- Fast Brain (MANDATORY) ---" -ForegroundColor Cyan
                 $fbKey = Read-EnvInput "Fast Brain API Key (Groq/OpenAI-compatible)" "" $true
@@ -393,7 +610,6 @@ function Install-Jarvis {
                 Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_ENDPOINT" -Value $fbEndpoint
                 Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_MODEL" -Value $fbModel
 
-                # --- ROUTER ---
                 Write-Host ""
                 Write-Host "--- Semantic Router ---" -ForegroundColor Cyan
                 $rtr = Read-KeyWithReuse "Router" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
@@ -408,7 +624,6 @@ function Install-Jarvis {
                 Set-EnvValue -FilePath $envFile -Key "ROUTER_ENDPOINT" -Value $rtr.Endpoint
                 Set-EnvValue -FilePath $envFile -Key "ROUTER_MODEL" -Value $rtr.Model
 
-                # --- LTM EXTRACTION ---
                 Write-Host ""
                 Write-Host "--- LTM Extraction ---" -ForegroundColor Cyan
                 $ltm = Read-KeyWithReuse "LTM Extraction" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
@@ -423,7 +638,6 @@ function Install-Jarvis {
                 Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_ENDPOINT" -Value $ltm.Endpoint
                 Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_MODEL" -Value $ltm.Model
 
-                # --- PROACTIVE ---
                 Write-Host ""
                 Write-Host "--- Proactive Agent ---" -ForegroundColor Cyan
                 $pro = Read-KeyWithReuse "Proactive" $fbKey $fbEndpoint $fbModel "https://api.groq.com/openai/v1" "llama-3.3-70b-versatile"
@@ -438,7 +652,6 @@ function Install-Jarvis {
                 Set-EnvValue -FilePath $envFile -Key "PROACTIVE_ENDPOINT" -Value $pro.Endpoint
                 Set-EnvValue -FilePath $envFile -Key "PROACTIVE_MODEL" -Value $pro.Model
 
-                # --- PRIMARY BRAIN ---
                 Write-Host ""
                 Write-Host "--- Agentic Brain: Primary ---" -ForegroundColor Cyan
                 $priKey = Read-EnvInput "Primary API Key (OpenAI / any provider)" "" $true
@@ -457,7 +670,6 @@ function Install-Jarvis {
                 Set-EnvValue -FilePath $envFile -Key "PRIMARY_MODEL" -Value $priModel
                 Set-EnvValue -FilePath $envFile -Key "PRIMARY_THINKING_ENABLED" -Value $(if ($priThink -eq "Y") { "true" } else { "false" })
 
-                # --- FALLBACK BRAIN ---
                 Write-Host ""
                 Write-Host "--- Agentic Brain: Fallback ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Fallback = same as Primary?" "N") -eq "Y") {
@@ -480,7 +692,6 @@ function Install-Jarvis {
                 Set-EnvValue -FilePath $envFile -Key "FALLBACK_MODEL" -Value $fblModel
                 Set-EnvValue -FilePath $envFile -Key "FALLBACK_THINKING_ENABLED" -Value $(if ($fblThink -eq "Y") { "true" } else { "false" })
 
-                # --- IMAGE GEN (OPTIONAL) ---
                 Write-Host ""
                 Write-Host "--- Image Generation (optional) ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Configure Image Generation?" "N") -eq "Y") {
@@ -503,7 +714,6 @@ function Install-Jarvis {
                     $skippedGroups += "Image Gen"
                 }
 
-                # --- SEARCH & EMBEDDINGS (OPTIONAL) ---
                 Write-Host ""
                 Write-Host "--- Search & Embeddings (optional) ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Configure Gemini + Tavily?" "N") -eq "Y") {
@@ -530,7 +740,6 @@ function Install-Jarvis {
                     $skippedGroups += "Search"
                 }
 
-                # --- DEEPGRAM (OPTIONAL) ---
                 Write-Host ""
                 Write-Host "--- Voice STT (optional) ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Configure Deepgram (STT)?" "N") -eq "Y") {
@@ -549,7 +758,6 @@ function Install-Jarvis {
                     $skippedGroups += "Deepgram"
                 }
 
-                # --- TTS (OPTIONAL) ---
                 Write-Host ""
                 Write-Host "--- Custom TTS (optional; N uses Edge TTS fallback) ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Configure custom TTS?" "N") -eq "Y") {
@@ -575,7 +783,6 @@ function Install-Jarvis {
                     $skippedGroups += "TTS"
                 }
 
-                # --- TELEGRAM (OPTIONAL) ---
                 Write-Host ""
                 Write-Host "--- Telegram (optional) ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Configure Telegram?" "N") -eq "Y") {
@@ -608,8 +815,7 @@ function Install-Jarvis {
                     $skippedGroups += "Telegram"
                 }
 
-                # --- VALIDATION ---
-                $envContent = Get-Content -Path $envFile -Raw
+                $envContent = Get-Content -Path $envFile -Raw -ErrorAction SilentlyContinue
                 $priKeyCheck = Get-EnvVal $envContent "PRIMARY_API_KEY"
                 $priBaseCheck = Get-EnvVal $envContent "PRIMARY_BASE_URL"
                 $fblKeyCheck = Get-EnvVal $envContent "FALLBACK_API_KEY"
