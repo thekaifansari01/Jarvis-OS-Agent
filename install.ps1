@@ -2,6 +2,41 @@ $ErrorActionPreference = "Continue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+if (-not ("JarvisWin32" -as [type])) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class JarvisWin32 {
+    [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern IntPtr GetStdHandle(int nStdHandle);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+    public static void DisableQuickEdit() {
+        IntPtr hIn = GetStdHandle(-10);
+        if (hIn != IntPtr.Zero && hIn != new IntPtr(-1)) {
+            uint mode;
+            if (GetConsoleMode(hIn, out mode)) {
+                mode = (mode & ~0x0040u) | 0x0080u;
+                SetConsoleMode(hIn, mode);
+            }
+        }
+    }
+}
+"@ -ErrorAction SilentlyContinue
+}
+
+function Disable-ConsoleQuickEdit {
+    try {
+        [JarvisWin32]::DisableQuickEdit()
+    } catch {}
+}
+
+Disable-ConsoleQuickEdit
+
 function Write-Step {
     param([string]$Step, [string]$Message)
     Write-Host ""
@@ -23,6 +58,21 @@ function Write-Fail {
     Write-Host "  [X] $Message" -ForegroundColor Red
 }
 
+function Broadcast-EnvironmentChange {
+    try {
+        $result = [UIntPtr]::Zero
+        [JarvisWin32]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
+    } catch {}
+}
+
+function Clear-VenvSessionVars {
+    foreach ($v in @("VIRTUAL_ENV", "VIRTUAL_ENV_PROMPT", "PYTHONHOME", "PYTHONPATH")) {
+        if (Test-Path "Env:\$v") {
+            Remove-Item "Env:\$v" -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Clear-ConsoleInputBuffer {
     try {
         while ([Console]::KeyAvailable) {
@@ -32,26 +82,52 @@ function Clear-ConsoleInputBuffer {
 }
 
 function Update-SessionPath {
-    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
-    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-    $env:Path = "$machinePath;$userPath"
+    try {
+        $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+        $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+        $currentPath = $env:Path
 
-    $extraPaths = @(
-        "$env:LOCALAPPDATA\Programs\Python\Python311",
-        "$env:LOCALAPPDATA\Programs\Python\Python311\Scripts",
-        "$env:ProgramFiles\Python311",
-        "$env:ProgramFiles\Python311\Scripts",
-        "C:\Python311",
-        "C:\Python311\Scripts",
-        "$env:ProgramFiles\nodejs",
-        "$env:APPDATA\npm",
-        "$env:ProgramFiles\Git\cmd"
-    )
-    foreach ($p in $extraPaths) {
-        if ((Test-Path $p) -and ($env:Path -notlike "*$p*")) {
-            $env:Path = "$p;$env:Path"
+        $extraPaths = @(
+            "$env:LOCALAPPDATA\Programs\Python\Python311",
+            "$env:LOCALAPPDATA\Programs\Python\Python311\Scripts",
+            "$env:ProgramFiles\Python311",
+            "$env:ProgramFiles\Python311\Scripts",
+            "C:\Python311",
+            "C:\Python311\Scripts",
+            "$env:LOCALAPPDATA\Programs\nodejs",
+            "$env:ProgramFiles\nodejs",
+            "$env:APPDATA\npm",
+            "$env:ProgramFiles\Git\cmd"
+        )
+
+        $combined = @()
+        $seen = @{}
+
+        foreach ($p in $extraPaths) {
+            if ($p -and (Test-Path $p)) {
+                $norm = $p.TrimEnd('\').ToLowerInvariant()
+                if (-not $seen.ContainsKey($norm)) {
+                    $seen[$norm] = $true
+                    $combined += $p
+                }
+            }
         }
-    }
+
+        foreach ($source in @($machinePath, $userPath, $currentPath)) {
+            if ([string]::IsNullOrWhiteSpace($source)) { continue }
+            foreach ($entry in ($source -split ";")) {
+                if ([string]::IsNullOrWhiteSpace($entry)) { continue }
+                $trimmed = $entry.Trim()
+                $expanded = [System.Environment]::ExpandEnvironmentVariables($trimmed).TrimEnd('\').ToLowerInvariant()
+                if ($expanded -and -not $seen.ContainsKey($expanded)) {
+                    $seen[$expanded] = $true
+                    $combined += $trimmed
+                }
+            }
+        }
+
+        $env:Path = ($combined -join ";")
+    } catch {}
 }
 
 function Download-FileFast {
@@ -62,15 +138,15 @@ function Download-FileFast {
     $curlCmd = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue
     if ($curlCmd) {
         & $curlCmd.Source -fL --retry 3 --connect-timeout 15 -o $OutFile $Url
-        if ($LASTEXITCODE -eq 0 -and (Test-Path $OutFile)) {
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 0)) {
             return $true
         }
     }
     $prevPref = $ProgressPreference
     try {
         $ProgressPreference = "SilentlyContinue"
-        Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -ErrorAction Stop
-        return (Test-Path $OutFile)
+        Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -TimeoutSec 120 -ErrorAction Stop
+        return ((Test-Path $OutFile) -and ((Get-Item $OutFile).Length -gt 0))
     } catch {
         return $false
     } finally {
@@ -87,7 +163,7 @@ function Test-VcRedistInstalled {
     foreach ($rp in $regPaths) {
         if (Test-Path $rp) {
             $props = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue
-            if ($null -ne $props -and $props.Installed -eq 1) {
+            if ($null -ne $props -and $props.Installed -eq 1 -and $props.Minor -ge 30) {
                 $regInstalled = $true
                 break
             }
@@ -106,7 +182,7 @@ function Test-IsPython311 {
     if ($ExePath -match "WindowsApps") {
         return $false
     }
-    $check = & $ExePath -c "import sys; print(1 if (sys.version_info.major == 3 and sys.version_info.minor == 11) else 0)" 2>$null
+    $check = & $ExePath -c "import sys, struct; print(1 if (sys.version_info.major == 3 and sys.version_info.minor == 11 and struct.calcsize('P') * 8 == 64) else 0)" 2>$null
     return ($LASTEXITCODE -eq 0 -and "$check".Trim() -eq "1")
 }
 
@@ -114,8 +190,7 @@ function Get-ValidPython {
     $knownPaths = @(
         "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
         "$env:ProgramFiles\Python311\python.exe",
-        "C:\Python311\python.exe",
-        "${env:ProgramFiles(x86)}\Python311-32\python.exe"
+        "C:\Python311\python.exe"
     )
     foreach ($candidate in $knownPaths) {
         if (Test-IsPython311 -ExePath $candidate) {
@@ -125,7 +200,10 @@ function Get-ValidPython {
 
     $pyLauncher = Get-Command py -CommandType Application -ErrorAction SilentlyContinue
     if ($pyLauncher) {
-        $exePath = & py -3.11 -c "import sys; print(sys.executable)" 2>$null
+        $exePath = & py -3.11-64 -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $exePath) {
+            $exePath = & py -3.11 -c "import sys; print(sys.executable)" 2>$null
+        }
         if ($LASTEXITCODE -eq 0 -and $exePath) {
             $trimmed = "$exePath".Trim()
             if (Test-IsPython311 -ExePath $trimmed) {
@@ -135,7 +213,7 @@ function Get-ValidPython {
     }
 
     foreach ($cmd in @("python", "python3")) {
-        $found = Get-Command $cmd -ErrorAction SilentlyContinue
+        $found = Get-Command $cmd -CommandType Application -ErrorAction SilentlyContinue
         if ($found -and (Test-IsPython311 -ExePath $found.Source)) {
             return $found.Source
         }
@@ -159,18 +237,39 @@ function Get-ValidPython {
     return $null
 }
 
+function Get-NpmExecutable {
+    $npmCmd = Get-Command npm.cmd -CommandType Application -ErrorAction SilentlyContinue
+    if ($npmCmd) { return $npmCmd.Source }
+    $fallbacks = @(
+        "$env:LOCALAPPDATA\Programs\nodejs\npm.cmd",
+        "$env:ProgramFiles\nodejs\npm.cmd"
+    )
+    foreach ($fb in $fallbacks) {
+        if (Test-Path $fb) { return $fb }
+    }
+    $npmAny = Get-Command npm -ErrorAction SilentlyContinue
+    if ($npmAny) { return $npmAny.Source }
+    return $null
+}
+
 function Test-NodeVersion {
     Update-SessionPath
-    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    $nodeCmd = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue
     if (-not $nodeCmd) {
-        $fallback = "$env:ProgramFiles\nodejs\node.exe"
-        if (Test-Path $fallback) {
-            $env:Path = "$env:ProgramFiles\nodejs;$env:Path"
-            $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+        $fallbacks = @(
+            "$env:LOCALAPPDATA\Programs\nodejs\node.exe",
+            "$env:ProgramFiles\nodejs\node.exe"
+        )
+        foreach ($fb in $fallbacks) {
+            if (Test-Path $fb) {
+                $env:Path = "$(Split-Path $fb);$env:Path"
+                $nodeCmd = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue
+                if ($nodeCmd) { break }
+            }
         }
     }
-    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $nodeCmd -or -not $npmCmd) {
+    $npmExe = Get-NpmExecutable
+    if (-not $nodeCmd -or -not $npmExe) {
         return $false
     }
     $ver = & $nodeCmd.Source -e "console.log(process.versions.node.split('.')[0])" 2>$null
@@ -186,7 +285,11 @@ function Get-LatestNodeMsiInfo {
         $ProgressPreference = "SilentlyContinue"
         $releases = Invoke-RestMethod -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
         if ($releases -and $releases.Count -gt 0) {
-            $latestVer = $releases[0].version.TrimStart("v")
+            $targetRelease = $releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1
+            if (-not $targetRelease) {
+                $targetRelease = $releases[0]
+            }
+            $latestVer = $targetRelease.version.TrimStart("v")
             if (-not [string]::IsNullOrWhiteSpace($latestVer)) {
                 return @{
                     Version = $latestVer
@@ -197,7 +300,7 @@ function Get-LatestNodeMsiInfo {
     } catch {} finally {
         $ProgressPreference = $prevPref
     }
-    $fallbackVer = "24.0.0"
+    $fallbackVer = "22.14.0"
     return @{
         Version = $fallbackVer
         Url     = "https://nodejs.org/dist/v$fallbackVer/node-v$fallbackVer-x64.msi"
@@ -205,7 +308,7 @@ function Get-LatestNodeMsiInfo {
 }
 
 function Test-WingetAvailable {
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    $winget = Get-Command winget -CommandType Application -ErrorAction SilentlyContinue
     if (-not $winget) { return $false }
     try {
         & winget --version *> $null
@@ -257,19 +360,61 @@ function Install-WithWinget {
 
 function Stop-RunningJarvis {
     param([string]$TargetDir)
-    if (-not (Test-Path $TargetDir)) { return }
-    $normalizedTarget = [System.IO.Path]::GetFullPath($TargetDir).ToLowerInvariant()
+    if (-not $TargetDir -or -not (Test-Path $TargetDir)) { return }
+    $normalizedTarget = ""
+    try {
+        $normalizedTarget = [System.IO.Path]::GetFullPath($TargetDir).TrimEnd('\').ToLowerInvariant()
+    } catch { return }
+    $targetWithSlash = $normalizedTarget + '\'
+    $allowedNames = @("python.exe", "pythonw.exe", "node.exe", "jarvis.exe", "pip.exe")
+    $killedCount = 0
+
     $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        ($_.ExecutablePath -and $_.ExecutablePath.ToLowerInvariant().StartsWith($normalizedTarget)) -or
-        ($_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($normalizedTarget))
-    }
-    foreach ($proc in $processes) {
-        if ($proc.ProcessId -ne $PID) {
-            try {
-                Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-            } catch {}
+        if ($_.ProcessId -eq $PID) { return $false }
+        $procName = if ($_.Name) { $_.Name.ToLowerInvariant() } else { "" }
+        $exePath = if ($_.ExecutablePath) { $_.ExecutablePath.ToLowerInvariant() } else { "" }
+        $cmdLine = if ($_.CommandLine) { $_.CommandLine.ToLowerInvariant() } else { "" }
+
+        if ($exePath.StartsWith($targetWithSlash)) {
+            return $true
         }
+        if ($allowedNames -contains $procName) {
+            if ($cmdLine.Contains($targetWithSlash) -or $cmdLine.Contains("jarvisprotocol.py") -or $cmdLine.Contains("baileysserver")) {
+                return $true
+            }
+        }
+        return $false
     }
+
+    foreach ($proc in $processes) {
+        try {
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+            $killedCount++
+        } catch {}
+    }
+
+    if ($killedCount -gt 0) {
+        Start-Sleep -Seconds 2
+    }
+}
+
+function Read-Utf8FileClean {
+    param([string]$FilePath)
+    if (-not (Test-Path $FilePath)) { return "" }
+    try {
+        $raw = [System.IO.File]::ReadAllText($FilePath, [System.Text.Encoding]::UTF8)
+        if ($null -eq $raw) { return "" }
+        return $raw.TrimStart([char]0xFEFF)
+    } catch {
+        return ""
+    }
+}
+
+function Write-Utf8NoBom {
+    param([string]$FilePath, [string]$Content)
+    $clean = if ($null -ne $Content) { $Content.TrimStart([char]0xFEFF) } else { "" }
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($FilePath, $clean, $utf8NoBom)
 }
 
 function Set-EnvValue {
@@ -277,11 +422,7 @@ function Set-EnvValue {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         return
     }
-    $content = ""
-    if (Test-Path $FilePath) {
-        $raw = Get-Content -Path $FilePath -Raw -ErrorAction SilentlyContinue
-        if ($null -ne $raw) { $content = $raw }
-    }
+    $content = Read-Utf8FileClean -FilePath $FilePath
     $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=[^\r\n]*"
     if ([regex]::IsMatch($content, $pattern)) {
         $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) "$Key=$Value" })
@@ -292,13 +433,13 @@ function Set-EnvValue {
             $content = $content.TrimEnd("`r", "`n") + "`r`n$Key=$Value`r`n"
         }
     }
-    Set-Content -Path $FilePath -Value $content -Encoding UTF8
+    Write-Utf8NoBom -FilePath $FilePath -Content $content
 }
 
 function Clear-EnvValue {
     param([string]$FilePath, [string]$Key, [switch]$OnlyIfPlaceholder)
     if (-not (Test-Path $FilePath)) { return }
-    $content = Get-Content -Path $FilePath -Raw -ErrorAction SilentlyContinue
+    $content = Read-Utf8FileClean -FilePath $FilePath
     if ([string]::IsNullOrEmpty($content)) { return }
     $pattern = "(?m)^" + [regex]::Escape($Key) + "\s*=([^\r\n]*)"
     $m = [regex]::Match($content, $pattern)
@@ -306,13 +447,14 @@ function Clear-EnvValue {
     $current = $m.Groups[1].Value.Trim()
     if ($OnlyIfPlaceholder -and $current -ne "your_key_here" -and $current -ne "your_key") { return }
     $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($match) "$Key=" })
-    Set-Content -Path $FilePath -Value $content -Encoding UTF8
+    Write-Utf8NoBom -FilePath $FilePath -Content $content
 }
 
 function Get-EnvVal {
     param([string]$Content, [string]$Key)
     if ([string]::IsNullOrEmpty($Content)) { return "" }
-    $m = [regex]::Match($Content, "(?m)^" + [regex]::Escape($Key) + "\s*=([^\r\n]*)")
+    $clean = $Content.TrimStart([char]0xFEFF)
+    $m = [regex]::Match($clean, "(?m)^" + [regex]::Escape($Key) + "\s*=([^\r\n]*)")
     if ($m.Success) { return $m.Groups[1].Value.Trim() }
     return ""
 }
@@ -326,12 +468,40 @@ function Get-EffectiveDefault {
     return $FallbackDefault
 }
 
+function Save-OrPreserveEnvKey {
+    param(
+        [string]$FilePath,
+        [string]$Key,
+        [string]$NewValue,
+        [switch]$SilentSkip
+    )
+    if (-not [string]::IsNullOrWhiteSpace($NewValue)) {
+        Set-EnvValue -FilePath $FilePath -Key $Key -Value $NewValue
+        Write-Success "$Key set."
+        return @{ Configured = $true; EffectiveValue = $NewValue }
+    }
+    Clear-EnvValue -FilePath $FilePath -Key $Key -OnlyIfPlaceholder
+    $after = Get-EnvVal -Content (Read-Utf8FileClean -FilePath $FilePath) -Key $Key
+    if (-not [string]::IsNullOrWhiteSpace($after)) {
+        Write-Success "$Key kept existing value."
+        return @{ Configured = $true; EffectiveValue = $after }
+    }
+    if (-not $SilentSkip) {
+        Write-Warn "$Key skipped."
+    }
+    return @{ Configured = $false; EffectiveValue = $null }
+}
+
 function Read-EnvInput {
     param(
         [string]$Label,
         [string]$Default = "",
         [bool]$AllowSkip = $false
     )
+    if (-not [Environment]::UserInteractive) {
+        if (-not [string]::IsNullOrWhiteSpace($Default)) { return $Default }
+        return $null
+    }
     $prompt = "  $Label"
     if (-not [string]::IsNullOrWhiteSpace($Default)) {
         $prompt += " [default: $Default]"
@@ -348,8 +518,8 @@ function Read-EnvInput {
         }
         $trimmed = $userInput.Trim()
         if ($trimmed -eq "s" -or $trimmed -eq "skip") {
-            if (-not [string]::IsNullOrWhiteSpace($Default)) { return $Default }
             if ($AllowSkip) { return $null }
+            if (-not [string]::IsNullOrWhiteSpace($Default)) { return $Default }
             return $null
         }
         return $trimmed
@@ -361,12 +531,15 @@ function Read-YesNo {
         [string]$Question,
         [string]$Default = "N"
     )
+    if (-not [Environment]::UserInteractive) {
+        return $Default
+    }
     $hint = if ($Default -eq "Y") { "(Y/n)" } else { "(y/N)" }
     Clear-ConsoleInputBuffer
     while ($true) {
         $ans = Read-Host "  $Question $hint"
         if ([string]::IsNullOrWhiteSpace($ans)) { return $Default }
-        $ans = $ans.Trim().ToLower()
+        $ans = $ans.Trim().ToLowerInvariant()
         if ($ans -eq "y" -or $ans -eq "yes") { return "Y" }
         if ($ans -eq "n" -or $ans -eq "no") { return "N" }
         Write-Host "    [!] Please answer y or n." -ForegroundColor DarkYellow
@@ -401,10 +574,12 @@ function Install-Jarvis {
     Write-Host "   J.A.R.V.I.S. OS Agent - Production Automated Setup     " -ForegroundColor Cyan
     Write-Host "==========================================================" -ForegroundColor Cyan
 
+    Clear-VenvSessionVars
+
     Write-Step "1/7" "Verifying System Prerequisites..."
     Update-SessionPath
 
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command git -CommandType Application -ErrorAction SilentlyContinue)) {
         Write-Warn "Git not found."
         if (-not (Install-WithWinget -PackageId "Git.Git" -DisplayName "Git")) {
             Write-Fail "Git is required. Install from https://git-scm.com/download/win and re-run."
@@ -413,7 +588,7 @@ function Install-Jarvis {
         Start-Sleep -Seconds 2
         Update-SessionPath
     }
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command git -CommandType Application -ErrorAction SilentlyContinue)) {
         Write-Fail "Git executable still not detected in PATH. Please restart PowerShell and try again."
         return
     }
@@ -421,7 +596,7 @@ function Install-Jarvis {
 
     $vcRebootRequired = $false
     if (-not (Test-VcRedistInstalled)) {
-        Write-Warn "Microsoft Visual C++ Redistributable (x64) not found. Auto-installing..."
+        Write-Warn "Microsoft Visual C++ Redistributable (x64) not found or outdated. Auto-installing..."
         $vcUrl = "https://aka.ms/vs/16/release/vc_redist.x64.exe"
         $vcExe = Join-Path $env:TEMP "vc_redist.x64.exe"
         $vcInstalled = $false
@@ -472,7 +647,7 @@ function Install-Jarvis {
 
     $sysPython = Get-ValidPython
     if (-not $sysPython) {
-        Write-Warn "Python 3.11 not found. Auto-installing Python 3.11.4..."
+        Write-Warn "64-bit Python 3.11 not found. Auto-installing Python 3.11.4 (64-bit)..."
         $pyVersion = "3.11.4"
         $pyInstaller = Join-Path $env:TEMP "python-$pyVersion-amd64.exe"
         $pyUrl = "https://www.python.org/ftp/python/$pyVersion/python-$pyVersion-amd64.exe"
@@ -480,7 +655,7 @@ function Install-Jarvis {
         Write-Host "  -> Downloading Python $pyVersion (~25 MB)..." -ForegroundColor Cyan
         if (Download-FileFast -Url $pyUrl -OutFile $pyInstaller) {
             Write-Host "  -> Running silent Python $pyVersion installer..." -ForegroundColor Cyan
-            $proc = Start-Process -FilePath $pyInstaller -ArgumentList "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_test=0", "Include_launcher=1" -Wait -PassThru
+            Start-Process -FilePath $pyInstaller -ArgumentList "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_test=0", "Include_launcher=1" -Wait -PassThru | Out-Null
             Remove-Item $pyInstaller -Force -ErrorAction SilentlyContinue
             Update-SessionPath
             Start-Sleep -Seconds 2
@@ -500,7 +675,7 @@ function Install-Jarvis {
         }
 
         if (-not $sysPython) {
-            Write-Fail "Python 3.11.4 could not be installed automatically."
+            Write-Fail "Python 3.11 (64-bit) could not be installed automatically."
             Write-Fail "Manual install: https://www.python.org/ftp/python/3.11.4/python-3.11.4-amd64.exe"
             return
         }
@@ -509,46 +684,74 @@ function Install-Jarvis {
     Write-Success "Python detected ($pyVerStr at $sysPython)."
 
     if (-not (Test-NodeVersion)) {
-        Write-Warn "Node.js not found. Attempting auto-install of latest Node.js..."
+        Write-Warn "Node.js not found. Installing portable user-scope Node.js (no admin)..."
 
-        if (Test-WingetAvailable) {
-            if (-not (Install-WithWinget -PackageId "OpenJS.NodeJS" -DisplayName "Node.js (Latest)")) {
-                Install-WithWinget -PackageId "OpenJS.NodeJS.LTS" -DisplayName "Node.js LTS" | Out-Null
+        $nodeInfo = Get-LatestNodeMsiInfo
+        $nodeVer = $nodeInfo.Version
+        $nodeZipUrl = "https://nodejs.org/dist/v$nodeVer/node-v$nodeVer-win-x64.zip"
+        $nodeZipPath = Join-Path $env:TEMP "node-v$nodeVer-win-x64.zip"
+        $nodeInstallDir = Join-Path $env:LOCALAPPDATA "Programs\nodejs"
+
+        Write-Host "  -> Downloading Node.js v$nodeVer portable ZIP (~30 MB)..." -ForegroundColor Cyan
+        if (Download-FileFast -Url $nodeZipUrl -OutFile $nodeZipPath) {
+            Write-Host "  -> Extracting Node.js to $nodeInstallDir..." -ForegroundColor Cyan
+            if (Test-Path $nodeInstallDir) {
+                Remove-Item -Path $nodeInstallDir -Recurse -Force -ErrorAction SilentlyContinue
             }
-            Start-Sleep -Seconds 3
-            Update-SessionPath
-        }
+            New-Item -ItemType Directory -Path $nodeInstallDir -Force | Out-Null
 
-        if (-not (Test-NodeVersion)) {
-            Write-Warn "winget path failed or unavailable. Falling back to direct nodejs.org download..."
-            $nodeInfo = Get-LatestNodeMsiInfo
-            $nodeVer = $nodeInfo.Version
-            $nodeUrl = $nodeInfo.Url
-            $nodeMsi = Join-Path $env:TEMP "node-v$nodeVer-x64.msi"
-
-            Write-Host "  -> Downloading Node.js v$nodeVer (~30 MB)..." -ForegroundColor Cyan
-            if (Download-FileFast -Url $nodeUrl -OutFile $nodeMsi) {
-                Write-Host "  -> Running Node.js installer (accept UAC prompt if shown)..." -ForegroundColor Cyan
-                try {
-                    Start-Process msiexec.exe -ArgumentList "/i", "`"$nodeMsi`"", "/passive", "/norestart" -Verb RunAs -Wait -ErrorAction Stop
-                } catch {
-                    Start-Process msiexec.exe -ArgumentList "/i", "`"$nodeMsi`"", "/qn", "/norestart" -Wait
+            $nodeExtractTemp = Join-Path $env:TEMP "node-extract-$([Guid]::NewGuid().ToString('N'))"
+            try {
+                Expand-Archive -Path $nodeZipPath -DestinationPath $nodeExtractTemp -Force -ErrorAction Stop
+                $nodeInnerDir = Get-ChildItem -Path $nodeExtractTemp -Directory | Select-Object -First 1
+                if ($nodeInnerDir) {
+                    Copy-Item -Path (Join-Path $nodeInnerDir.FullName '*') -Destination $nodeInstallDir -Recurse -Force
+                } else {
+                    Copy-Item -Path (Join-Path $nodeExtractTemp '*') -Destination $nodeInstallDir -Recurse -Force
                 }
-                Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
-                Update-SessionPath
-                Start-Sleep -Seconds 2
-            } else {
-                Write-Warn "Direct Node.js download failed."
+            } catch {
+                Write-Warn "Node.js ZIP extraction failed: $($_.Exception.Message)"
+            } finally {
+                Remove-Item -Path $nodeExtractTemp -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path $nodeZipPath -Force -ErrorAction SilentlyContinue
             }
+
+            $nodeUserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if ($nodeUserPath -notlike "*$nodeInstallDir*") {
+                [System.Environment]::SetEnvironmentVariable("Path", "$nodeUserPath;$nodeInstallDir", "User")
+            }
+            $env:Path = "$nodeInstallDir;$env:Path"
+            Start-Sleep -Seconds 1
+        } else {
+            Write-Warn "Node.js portable ZIP download failed."
         }
 
         if (-not (Test-NodeVersion)) {
-            Write-Fail "Node.js could not be installed automatically."
-            Write-Fail "Manual install: https://nodejs.org/ and re-run."
+            Write-Fail "Node.js could not be installed automatically without admin."
+            Write-Fail "Manual install: https://nodejs.org/en/download (Windows Binary .zip), extract to $nodeInstallDir and add to user PATH."
             return
         }
     }
-    $nodeVerStr = & node --version 2>&1
+
+    $npmPrefix = Join-Path $env:APPDATA "npm"
+    $npmCache = Join-Path $env:LOCALAPPDATA "npm-cache"
+    if (-not (Test-Path $npmPrefix)) { New-Item -ItemType Directory -Path $npmPrefix -Force | Out-Null }
+    if (-not (Test-Path $npmCache)) { New-Item -ItemType Directory -Path $npmCache -Force | Out-Null }
+    $npmExeForConfig = Get-NpmExecutable
+    if ($npmExeForConfig) {
+        & $npmExeForConfig config set prefix "$npmPrefix" 2>&1 | Out-Null
+        & $npmExeForConfig config set cache "$npmCache" 2>&1 | Out-Null
+        Write-Success "npm global prefix set to $npmPrefix."
+    } else {
+        Write-Warn "npm executable not found; skipping global prefix configuration."
+    }
+    $npmUserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    if ($npmUserPath -notlike "*$npmPrefix*") {
+        [System.Environment]::SetEnvironmentVariable("Path", "$npmUserPath;$npmPrefix", "User")
+    }
+    $env:Path = "$npmPrefix;$env:Path"
+
+    $nodeVerStr = & node.exe --version 2>&1
     Write-Success "Node.js detected ($nodeVerStr)."
 
     Write-Step "2/7" "Syncing J.A.R.V.I.S. OS Agent Repository..."
@@ -557,16 +760,21 @@ function Install-Jarvis {
 
     Stop-RunningJarvis -TargetDir $installPath
 
-    if (Test-Path (Join-Path $installPath ".git")) {
+    $hasValidGitRepo = (Test-Path (Join-Path $installPath ".git")) -and (Test-Path (Join-Path $installPath "requirements.txt"))
+    if ($hasValidGitRepo) {
         Write-Host "  -> Existing repository found at $installPath. Fetching updates..." -ForegroundColor Cyan
         Push-Location $installPath
         try {
             & git fetch origin main 2>&1 | Out-Null
-            & git pull --ff-only origin main
             if ($LASTEXITCODE -ne 0) {
-                Write-Warn "Local modifications detected. Preserving local working tree."
+                Write-Warn "Could not reach remote repository; continuing with local codebase."
             } else {
-                Write-Success "Repository updated to latest commit."
+                & git pull --ff-only origin main
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warn "Local modifications detected. Preserving local working tree."
+                } else {
+                    Write-Success "Repository updated to latest commit."
+                }
             }
         } finally {
             Pop-Location
@@ -574,8 +782,8 @@ function Install-Jarvis {
     } else {
         if (Test-Path $installPath) {
             $backupPath = "${installPath}_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-            Write-Warn "Non-git folder exists at $installPath. Moving to $backupPath..."
-            Move-Item -Path $installPath -Destination $backupPath -Force
+            Write-Warn "Incomplete or non-git folder exists at $installPath. Moving to $backupPath..."
+            Move-Item -Path $installPath -Destination $backupPath -Force -ErrorAction Stop
         }
         Write-Host "  -> Cloning into $installPath..." -ForegroundColor Cyan
         & git clone --depth 1 $repoUrl $installPath
@@ -593,8 +801,11 @@ function Install-Jarvis {
 
         if (Test-Path $venvPython) {
             if (-not (Test-IsPython311 -ExePath $venvPython)) {
-                Write-Warn "Existing .venv is broken or not running Python 3.11. Recreating with Python 3.11..."
-                Remove-Item -Path ".venv" -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Warn "Existing .venv is broken or not running 64-bit Python 3.11. Recreating..."
+                & cmd.exe /c "rmdir /s /q `".venv`"" 2>$null
+                if (Test-Path ".venv") {
+                    Remove-Item -Path ".venv" -Recurse -Force -ErrorAction SilentlyContinue
+                }
             }
         }
 
@@ -611,13 +822,13 @@ function Install-Jarvis {
 
         Write-Step "4/7" "Installing Python Dependencies & AI Models (5-10 mins on first run)..."
         Write-Host "  -> Upgrading pip, setuptools, and wheel..." -ForegroundColor DarkGray
-        & $venvPython -m pip install --upgrade pip setuptools wheel --quiet
+        & $venvPython -m pip install --upgrade pip setuptools wheel --quiet --timeout 100 --retries 5
         if ($LASTEXITCODE -ne 0) {
             Write-Warn "Pip self-upgrade reported a warning; continuing with dependency installation..."
         }
 
         Write-Host "  -> Installing packages from requirements.txt (CPU-optimized PyTorch)..." -ForegroundColor DarkGray
-        & $venvPython -m pip install --prefer-binary -r requirements.txt
+        & $venvPython -m pip install --prefer-binary --timeout 100 --retries 5 -r requirements.txt
         if ($LASTEXITCODE -ne 0) {
             Write-Fail "Python dependency installation failed. Check the error output above."
             return
@@ -629,7 +840,12 @@ function Install-Jarvis {
         if (Test-Path $baileysPath) {
             Push-Location $baileysPath
             try {
-                & npm install --no-audit --no-fund
+                $npmExe = Get-NpmExecutable
+                if (-not $npmExe) {
+                    Write-Fail "npm executable not found in PATH."
+                    return
+                }
+                & $npmExe install --no-audit --no-fund
                 if ($LASTEXITCODE -ne 0) {
                     Write-Fail "npm install failed inside BaileysServer."
                     return
@@ -648,19 +864,22 @@ function Install-Jarvis {
 
         if (-not (Test-Path $envFile)) {
             if (Test-Path $envExample) {
-                Copy-Item -Path $envExample -Destination $envFile -Force
+                $exampleClean = Read-Utf8FileClean -FilePath $envExample
+                Write-Utf8NoBom -FilePath $envFile -Content $exampleClean
                 Write-Success "Initialized .env from .env.example."
             } else {
-                New-Item -ItemType File -Path $envFile -Force | Out-Null
+                Write-Utf8NoBom -FilePath $envFile -Content ""
                 Write-Warn "Created empty .env file (.env.example was not found)."
             }
         } else {
+            $existingClean = Read-Utf8FileClean -FilePath $envFile
+            Write-Utf8NoBom -FilePath $envFile -Content $existingClean
             Write-Success "Existing .env configuration preserved."
         }
 
         if ([Environment]::UserInteractive) {
             Clear-ConsoleInputBuffer
-            $existingRaw = Get-Content -Path $envFile -Raw -ErrorAction SilentlyContinue
+            $existingRaw = Read-Utf8FileClean -FilePath $envFile
             $existingFbKey = Get-EnvVal -Content $existingRaw -Key "FAST_BRAIN_API_KEY"
             $promptDefault = if ([string]::IsNullOrWhiteSpace($existingFbKey) -or $existingFbKey -eq "your_key_here" -or $existingFbKey -eq "your_key") { "Y" } else { "N" }
 
@@ -679,13 +898,8 @@ function Install-Jarvis {
                 Write-Host "--- Identity ---" -ForegroundColor Cyan
                 $defName = Get-EffectiveDefault $existingRaw "USER_NAME" ""
                 $userName = Read-EnvInput "Your name" $defName $true
-                if ($null -ne $userName) {
-                    Set-EnvValue -FilePath $envFile -Key "USER_NAME" -Value $userName
-                    Write-Success "USER_NAME set."
-                    $configuredCount++
-                } else {
-                    Write-Warn "USER_NAME skipped."
-                }
+                $resName = Save-OrPreserveEnvKey -FilePath $envFile -Key "USER_NAME" -NewValue $userName
+                if ($resName.Configured) { $configuredCount++ }
 
                 Write-Host ""
                 Write-Host "--- Fast Brain (MANDATORY) ---" -ForegroundColor Cyan
@@ -694,20 +908,13 @@ function Install-Jarvis {
                 $defFbMod = Get-EffectiveDefault $existingRaw "FAST_BRAIN_MODEL" "llama-3.3-70b-versatile"
                 $fbEndpoint = Read-EnvInput "Fast Brain Endpoint" $defFbEnd
                 $fbModel = Read-EnvInput "Fast Brain Model" $defFbMod
-                if ($null -ne $fbKey) {
-                    Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -Value $fbKey
-                    Write-Success "FAST_BRAIN_API_KEY set."
+                $resFb = Save-OrPreserveEnvKey -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -NewValue $fbKey -SilentSkip
+                if ($resFb.Configured) {
                     $configuredCount++
+                    $fbKey = $resFb.EffectiveValue
                 } else {
-                    Clear-EnvValue -FilePath $envFile -Key "FAST_BRAIN_API_KEY" -OnlyIfPlaceholder
-                    $afterFb = Get-EnvVal (Get-Content -Path $envFile -Raw -ErrorAction SilentlyContinue) "FAST_BRAIN_API_KEY"
-                    if ([string]::IsNullOrWhiteSpace($afterFb)) {
-                        Write-Warn "FAST_BRAIN_API_KEY skipped (agent may NOT boot)."
-                        $warnings += "FAST_BRAIN_API_KEY not configured"
-                    } else {
-                        Write-Success "FAST_BRAIN_API_KEY kept existing value."
-                        $fbKey = $afterFb
-                    }
+                    Write-Warn "FAST_BRAIN_API_KEY skipped (agent may NOT boot)."
+                    $warnings += "FAST_BRAIN_API_KEY not configured"
                 }
                 Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_ENDPOINT" -Value $fbEndpoint
                 Set-EnvValue -FilePath $envFile -Key "FAST_BRAIN_MODEL" -Value $fbModel
@@ -717,14 +924,8 @@ function Install-Jarvis {
                 $defRtrEnd = Get-EffectiveDefault $existingRaw "ROUTER_ENDPOINT" "https://api.groq.com/openai/v1"
                 $defRtrMod = Get-EffectiveDefault $existingRaw "ROUTER_MODEL" "llama-3.3-70b-versatile"
                 $rtr = Read-KeyWithReuse "Router" $fbKey $fbEndpoint $fbModel $defRtrEnd $defRtrMod
-                if ($null -ne $rtr.Key) {
-                    Set-EnvValue -FilePath $envFile -Key "ROUTER_API_KEY" -Value $rtr.Key
-                    Write-Success "ROUTER_API_KEY set."
-                    $configuredCount++
-                } else {
-                    Clear-EnvValue -FilePath $envFile -Key "ROUTER_API_KEY" -OnlyIfPlaceholder
-                    Write-Warn "ROUTER_API_KEY skipped."
-                }
+                $resRtr = Save-OrPreserveEnvKey -FilePath $envFile -Key "ROUTER_API_KEY" -NewValue $rtr.Key
+                if ($resRtr.Configured) { $configuredCount++ }
                 Set-EnvValue -FilePath $envFile -Key "ROUTER_ENDPOINT" -Value $rtr.Endpoint
                 Set-EnvValue -FilePath $envFile -Key "ROUTER_MODEL" -Value $rtr.Model
 
@@ -733,14 +934,8 @@ function Install-Jarvis {
                 $defLtmEnd = Get-EffectiveDefault $existingRaw "LTM_EXTRACTION_ENDPOINT" "https://api.groq.com/openai/v1"
                 $defLtmMod = Get-EffectiveDefault $existingRaw "LTM_EXTRACTION_MODEL" "llama-3.3-70b-versatile"
                 $ltm = Read-KeyWithReuse "LTM Extraction" $fbKey $fbEndpoint $fbModel $defLtmEnd $defLtmMod
-                if ($null -ne $ltm.Key) {
-                    Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_API_KEY" -Value $ltm.Key
-                    Write-Success "LTM_EXTRACTION_API_KEY set."
-                    $configuredCount++
-                } else {
-                    Clear-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_API_KEY" -OnlyIfPlaceholder
-                    Write-Warn "LTM_EXTRACTION_API_KEY skipped."
-                }
+                $resLtm = Save-OrPreserveEnvKey -FilePath $envFile -Key "LTM_EXTRACTION_API_KEY" -NewValue $ltm.Key
+                if ($resLtm.Configured) { $configuredCount++ }
                 Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_ENDPOINT" -Value $ltm.Endpoint
                 Set-EnvValue -FilePath $envFile -Key "LTM_EXTRACTION_MODEL" -Value $ltm.Model
 
@@ -749,14 +944,8 @@ function Install-Jarvis {
                 $defProEnd = Get-EffectiveDefault $existingRaw "PROACTIVE_ENDPOINT" "https://api.groq.com/openai/v1"
                 $defProMod = Get-EffectiveDefault $existingRaw "PROACTIVE_MODEL" "llama-3.3-70b-versatile"
                 $pro = Read-KeyWithReuse "Proactive" $fbKey $fbEndpoint $fbModel $defProEnd $defProMod
-                if ($null -ne $pro.Key) {
-                    Set-EnvValue -FilePath $envFile -Key "PROACTIVE_API_KEY" -Value $pro.Key
-                    Write-Success "PROACTIVE_API_KEY set."
-                    $configuredCount++
-                } else {
-                    Clear-EnvValue -FilePath $envFile -Key "PROACTIVE_API_KEY" -OnlyIfPlaceholder
-                    Write-Warn "PROACTIVE_API_KEY skipped."
-                }
+                $resPro = Save-OrPreserveEnvKey -FilePath $envFile -Key "PROACTIVE_API_KEY" -NewValue $pro.Key
+                if ($resPro.Configured) { $configuredCount++ }
                 Set-EnvValue -FilePath $envFile -Key "PROACTIVE_ENDPOINT" -Value $pro.Endpoint
                 Set-EnvValue -FilePath $envFile -Key "PROACTIVE_MODEL" -Value $pro.Model
 
@@ -768,13 +957,10 @@ function Install-Jarvis {
                 $priBase = Read-EnvInput "Primary Base URL" $defPriBase
                 $priModel = Read-EnvInput "Primary Model" $defPriMod
                 $priThink = Read-YesNo "Enable thinking for Primary?" "Y"
-                if ($null -ne $priKey) {
-                    Set-EnvValue -FilePath $envFile -Key "PRIMARY_API_KEY" -Value $priKey
-                    Write-Success "PRIMARY_API_KEY set."
+                $resPri = Save-OrPreserveEnvKey -FilePath $envFile -Key "PRIMARY_API_KEY" -NewValue $priKey
+                if ($resPri.Configured) {
                     $configuredCount++
-                } else {
-                    Clear-EnvValue -FilePath $envFile -Key "PRIMARY_API_KEY" -OnlyIfPlaceholder
-                    Write-Warn "PRIMARY_API_KEY skipped."
+                    $priKey = $resPri.EffectiveValue
                 }
                 Set-EnvValue -FilePath $envFile -Key "PRIMARY_BASE_URL" -Value $priBase
                 Set-EnvValue -FilePath $envFile -Key "PRIMARY_MODEL" -Value $priModel
@@ -792,14 +978,8 @@ function Install-Jarvis {
                     $fblModel = Read-EnvInput "Fallback Model" $defFblMod
                     $fblThink = Read-YesNo "Enable thinking for Fallback?" "Y"
                 }
-                if ($null -ne $fblKey) {
-                    Set-EnvValue -FilePath $envFile -Key "FALLBACK_API_KEY" -Value $fblKey
-                    Write-Success "FALLBACK_API_KEY set."
-                    $configuredCount++
-                } else {
-                    Clear-EnvValue -FilePath $envFile -Key "FALLBACK_API_KEY" -OnlyIfPlaceholder
-                    Write-Warn "FALLBACK_API_KEY skipped."
-                }
+                $resFbl = Save-OrPreserveEnvKey -FilePath $envFile -Key "FALLBACK_API_KEY" -NewValue $fblKey
+                if ($resFbl.Configured) { $configuredCount++ }
                 Set-EnvValue -FilePath $envFile -Key "FALLBACK_BASE_URL" -Value $fblBase
                 Set-EnvValue -FilePath $envFile -Key "FALLBACK_MODEL" -Value $fblModel
                 Set-EnvValue -FilePath $envFile -Key "FALLBACK_THINKING_ENABLED" -Value $(if ($fblThink -eq "Y") { "true" } else { "false" })
@@ -812,14 +992,8 @@ function Install-Jarvis {
                     $defImgMod = Get-EffectiveDefault $existingRaw "IMAGE_GEN_MODEL" "dall-e-3"
                     $imgEndpoint = Read-EnvInput "Image Gen Endpoint" $defImgEnd
                     $imgModel = Read-EnvInput "Image Gen Model" $defImgMod
-                    if ($null -ne $imgKey) {
-                        Set-EnvValue -FilePath $envFile -Key "IMAGE_GEN_API_KEY" -Value $imgKey
-                        Write-Success "IMAGE_GEN_API_KEY set."
-                        $configuredCount++
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "IMAGE_GEN_API_KEY" -OnlyIfPlaceholder
-                        Write-Warn "IMAGE_GEN_API_KEY skipped."
-                    }
+                    $resImg = Save-OrPreserveEnvKey -FilePath $envFile -Key "IMAGE_GEN_API_KEY" -NewValue $imgKey
+                    if ($resImg.Configured) { $configuredCount++ }
                     Set-EnvValue -FilePath $envFile -Key "IMAGE_GEN_ENDPOINT" -Value $imgEndpoint
                     Set-EnvValue -FilePath $envFile -Key "IMAGE_GEN_MODEL" -Value $imgModel
                 } else {
@@ -833,20 +1007,10 @@ function Install-Jarvis {
                 if ((Read-YesNo "Configure Gemini + Tavily?" "N") -eq "Y") {
                     $gem = Read-EnvInput "Gemini API Key" "" $true
                     $tav = Read-EnvInput "Tavily API Key" "" $true
-                    if ($null -ne $gem) {
-                        Set-EnvValue -FilePath $envFile -Key "GEMINI_API_KEY" -Value $gem
-                        Write-Success "GEMINI_API_KEY set."
-                        $configuredCount++
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "GEMINI_API_KEY" -OnlyIfPlaceholder
-                    }
-                    if ($null -ne $tav) {
-                        Set-EnvValue -FilePath $envFile -Key "TAVILY_API_KEY" -Value $tav
-                        Write-Success "TAVILY_API_KEY set."
-                        $configuredCount++
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "TAVILY_API_KEY" -OnlyIfPlaceholder
-                    }
+                    $resGem = Save-OrPreserveEnvKey -FilePath $envFile -Key "GEMINI_API_KEY" -NewValue $gem
+                    if ($resGem.Configured) { $configuredCount++ }
+                    $resTav = Save-OrPreserveEnvKey -FilePath $envFile -Key "TAVILY_API_KEY" -NewValue $tav
+                    if ($resTav.Configured) { $configuredCount++ }
                 } else {
                     Clear-EnvValue -FilePath $envFile -Key "GEMINI_API_KEY" -OnlyIfPlaceholder
                     Clear-EnvValue -FilePath $envFile -Key "TAVILY_API_KEY" -OnlyIfPlaceholder
@@ -858,14 +1022,8 @@ function Install-Jarvis {
                 Write-Host "--- Voice STT (optional) ---" -ForegroundColor Cyan
                 if ((Read-YesNo "Configure Deepgram (STT)?" "N") -eq "Y") {
                     $dg = Read-EnvInput "Deepgram API Key" "" $true
-                    if ($null -ne $dg) {
-                        Set-EnvValue -FilePath $envFile -Key "DEEPGRAM_API_KEY" -Value $dg
-                        Write-Success "DEEPGRAM_API_KEY set."
-                        $configuredCount++
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "DEEPGRAM_API_KEY" -OnlyIfPlaceholder
-                        Write-Warn "DEEPGRAM_API_KEY skipped."
-                    }
+                    $resDg = Save-OrPreserveEnvKey -FilePath $envFile -Key "DEEPGRAM_API_KEY" -NewValue $dg
+                    if ($resDg.Configured) { $configuredCount++ }
                 } else {
                     Clear-EnvValue -FilePath $envFile -Key "DEEPGRAM_API_KEY" -OnlyIfPlaceholder
                     Write-Warn "Deepgram skipped."
@@ -877,19 +1035,9 @@ function Install-Jarvis {
                 if ((Read-YesNo "Configure custom TTS?" "N") -eq "Y") {
                     $ttsKey = Read-EnvInput "TTS API Key" "" $true
                     $ttsEndpoint = Read-EnvInput "TTS Endpoint" "" $true
-                    if ($null -ne $ttsKey) {
-                        Set-EnvValue -FilePath $envFile -Key "TTS_API_KEY" -Value $ttsKey
-                        Write-Success "TTS_API_KEY set."
-                        $configuredCount++
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "TTS_API_KEY" -OnlyIfPlaceholder
-                    }
-                    if ($null -ne $ttsEndpoint) {
-                        Set-EnvValue -FilePath $envFile -Key "TTS_ENDPOINT" -Value $ttsEndpoint
-                        Write-Success "TTS_ENDPOINT set."
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "TTS_ENDPOINT" -OnlyIfPlaceholder
-                    }
+                    $resTtsKey = Save-OrPreserveEnvKey -FilePath $envFile -Key "TTS_API_KEY" -NewValue $ttsKey
+                    if ($resTtsKey.Configured) { $configuredCount++ }
+                    [void](Save-OrPreserveEnvKey -FilePath $envFile -Key "TTS_ENDPOINT" -NewValue $ttsEndpoint)
                 } else {
                     Clear-EnvValue -FilePath $envFile -Key "TTS_API_KEY" -OnlyIfPlaceholder
                     Clear-EnvValue -FilePath $envFile -Key "TTS_ENDPOINT" -OnlyIfPlaceholder
@@ -903,24 +1051,9 @@ function Install-Jarvis {
                     $tgId = Read-EnvInput "Telegram API ID" "" $true
                     $tgHash = Read-EnvInput "Telegram API Hash" "" $true
                     $tgBot = Read-EnvInput "Telegram Bot Username" "" $true
-                    if ($null -ne $tgId) {
-                        Set-EnvValue -FilePath $envFile -Key "TELEGRAM_API_ID" -Value $tgId
-                        Write-Success "TELEGRAM_API_ID set."
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_ID" -OnlyIfPlaceholder
-                    }
-                    if ($null -ne $tgHash) {
-                        Set-EnvValue -FilePath $envFile -Key "TELEGRAM_API_HASH" -Value $tgHash
-                        Write-Success "TELEGRAM_API_HASH set."
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_HASH" -OnlyIfPlaceholder
-                    }
-                    if ($null -ne $tgBot) {
-                        Set-EnvValue -FilePath $envFile -Key "TELEGRAM_BOT_USERNAME" -Value $tgBot
-                        Write-Success "TELEGRAM_BOT_USERNAME set."
-                    } else {
-                        Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_BOT_USERNAME" -OnlyIfPlaceholder
-                    }
+                    [void](Save-OrPreserveEnvKey -FilePath $envFile -Key "TELEGRAM_API_ID" -NewValue $tgId)
+                    [void](Save-OrPreserveEnvKey -FilePath $envFile -Key "TELEGRAM_API_HASH" -NewValue $tgHash)
+                    [void](Save-OrPreserveEnvKey -FilePath $envFile -Key "TELEGRAM_BOT_USERNAME" -NewValue $tgBot)
                 } else {
                     Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_ID" -OnlyIfPlaceholder
                     Clear-EnvValue -FilePath $envFile -Key "TELEGRAM_API_HASH" -OnlyIfPlaceholder
@@ -929,7 +1062,7 @@ function Install-Jarvis {
                     $skippedGroups += "Telegram"
                 }
 
-                $envContent = Get-Content -Path $envFile -Raw -ErrorAction SilentlyContinue
+                $envContent = Read-Utf8FileClean -FilePath $envFile
                 $priKeyCheck = Get-EnvVal $envContent "PRIMARY_API_KEY"
                 $priBaseCheck = Get-EnvVal $envContent "PRIMARY_BASE_URL"
                 $fblKeyCheck = Get-EnvVal $envContent "FALLBACK_API_KEY"
@@ -977,6 +1110,7 @@ function Install-Jarvis {
                 Write-Warn "SetupRegistry.py returned a non-zero exit code ($LASTEXITCODE)."
             } else {
                 Update-SessionPath
+                Broadcast-EnvironmentChange
                 Write-Success "Global 'jarvis' CLI command registered via SetupRegistry.py and activated."
             }
         } else {

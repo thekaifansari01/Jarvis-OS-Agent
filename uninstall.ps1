@@ -5,16 +5,40 @@ param(
 $ErrorActionPreference = "Continue"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-if (-not ("Win32Env" -as [type])) {
+if (-not ("JarvisWin32" -as [type])) {
     Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
-public class Win32Env {
+public class JarvisWin32 {
     [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
     public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern IntPtr GetStdHandle(int nStdHandle);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+    public static void DisableQuickEdit() {
+        IntPtr hIn = GetStdHandle(-10);
+        if (hIn != IntPtr.Zero && hIn != new IntPtr(-1)) {
+            uint mode;
+            if (GetConsoleMode(hIn, out mode)) {
+                mode = (mode & ~0x0040u) | 0x0080u;
+                SetConsoleMode(hIn, mode);
+            }
+        }
+    }
 }
 "@ -ErrorAction SilentlyContinue
 }
+
+function Disable-ConsoleQuickEdit {
+    try {
+        [JarvisWin32]::DisableQuickEdit()
+    } catch {}
+}
+
+Disable-ConsoleQuickEdit
 
 function Write-Step {
     param([string]$Step, [string]$Message)
@@ -37,23 +61,32 @@ function Write-Fail {
     Write-Host "  [X] $Message" -ForegroundColor Red
 }
 
+function Clear-ConsoleInputBuffer {
+    try {
+        while ([Console]::KeyAvailable) {
+            [void][Console]::ReadKey($true)
+        }
+    } catch {}
+}
+
 function Request-Confirmation {
     param([string]$Prompt, [bool]$DefaultYes = $false)
     if (-not [Environment]::UserInteractive) {
         return $DefaultYes
     }
+    Clear-ConsoleInputBuffer
     $suffix = if ($DefaultYes) { "(Y/n)" } else { "(y/N)" }
     $response = Read-Host "  [?] $Prompt $suffix"
     if ([string]::IsNullOrWhiteSpace($response)) {
         return $DefaultYes
     }
-    return ($response -match "^[Yy]")
+    return ($response.Trim() -match "^[Yy]")
 }
 
 function Broadcast-EnvironmentChange {
     try {
         $result = [UIntPtr]::Zero
-        [Win32Env]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
+        [JarvisWin32]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
     } catch {}
 }
 
@@ -85,19 +118,65 @@ function Set-UserPathRaw {
 }
 
 function Update-SessionPath {
+    param([string]$ExcludeRoot = "")
     try {
+        $normalizedExclude = ""
+        if (-not [string]::IsNullOrWhiteSpace($ExcludeRoot)) {
+            try { $normalizedExclude = [System.IO.Path]::GetFullPath($ExcludeRoot).TrimEnd('\').ToLowerInvariant() } catch {}
+        }
         $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
         $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-        $env:Path = "$machinePath;$userPath"
+        $currentPath = $env:Path
+        $combined = @()
+        $seen = @{}
+        foreach ($source in @($machinePath, $userPath, $currentPath)) {
+            if ([string]::IsNullOrWhiteSpace($source)) { continue }
+            foreach ($entry in ($source -split ";")) {
+                if ([string]::IsNullOrWhiteSpace($entry)) { continue }
+                $trimmed = $entry.Trim()
+                $expanded = [System.Environment]::ExpandEnvironmentVariables($trimmed).TrimEnd('\').ToLowerInvariant()
+                if (-not $expanded) { continue }
+                if ($normalizedExclude -and ($expanded -eq $normalizedExclude -or $expanded.StartsWith($normalizedExclude + '\'))) {
+                    continue
+                }
+                if ($expanded -match '\\\.venv\\scripts$' -and $expanded -match 'jarvis') {
+                    continue
+                }
+                if (-not $seen.ContainsKey($expanded)) {
+                    $seen[$expanded] = $true
+                    $combined += $trimmed
+                }
+            }
+        }
+        $env:Path = ($combined -join ";")
     } catch {}
 }
 
 function Clear-VenvSessionVars {
-    foreach ($v in @("VIRTUAL_ENV", "VIRTUAL_ENV_PROMPT", "PYTHONHOME")) {
+    foreach ($v in @("VIRTUAL_ENV", "VIRTUAL_ENV_PROMPT", "PYTHONHOME", "PYTHONPATH")) {
         if (Test-Path "Env:\$v") {
             Remove-Item "Env:\$v" -ErrorAction SilentlyContinue
         }
     }
+}
+
+function Find-RootFromCandidate {
+    param([string]$StartPath)
+    if ([string]::IsNullOrWhiteSpace($StartPath)) { return $null }
+    $current = $StartPath
+    if (Test-Path $current -PathType Leaf) {
+        $current = Split-Path -Parent $current
+    }
+    for ($i = 0; $i -lt 5; $i++) {
+        if ([string]::IsNullOrWhiteSpace($current) -or -not (Test-Path $current)) { break }
+        if ((Test-Path (Join-Path $current "JarvisProtocol.py")) -or (Test-Path (Join-Path $current "SetupRegistry.py"))) {
+            return $current
+        }
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { break }
+        $current = $parent
+    }
+    return $null
 }
 
 function Find-InstallPathFromRegistry {
@@ -107,10 +186,12 @@ function Find-InstallPathFromRegistry {
             try {
                 $cmd = [string]$key.GetValue("", $null)
             } finally { $key.Close() }
-            if ($cmd -and $cmd -match '"([^"]+?\.py)"') {
-                $scriptPath = $Matches[1]
-                if (Test-Path $scriptPath) {
-                    return (Split-Path -Parent $scriptPath)
+            if ($cmd) {
+                $matchesList = [regex]::Matches($cmd, '"([^"]+)"')
+                foreach ($m in $matchesList) {
+                    $candidate = $m.Groups[1].Value
+                    $root = Find-RootFromCandidate -StartPath $candidate
+                    if ($root) { return $root }
                 }
             }
         }
@@ -120,13 +201,20 @@ function Find-InstallPathFromRegistry {
 
 function Find-InstallPathFromShims {
     try {
-        $shim = (& where.exe jarvis 2>$null | Select-Object -First 1)
-        if ($shim -and (Test-Path $shim)) {
-            $scripts = Split-Path -Parent $shim
-            $venv = Split-Path -Parent $scripts
-            $root = Split-Path -Parent $venv
-            if ($venv -and (Split-Path -Leaf $venv) -match '^\.?venv$' -and $root -and (Test-Path (Join-Path $root "JarvisProtocol.py"))) {
-                return $root
+        $shims = @(& where.exe jarvis 2>$null)
+        foreach ($shim in $shims) {
+            if ([string]::IsNullOrWhiteSpace($shim) -or -not (Test-Path $shim)) { continue }
+            $root = Find-RootFromCandidate -StartPath $shim
+            if ($root) { return $root }
+            if ($shim -match '\.(cmd|bat|ps1)$') {
+                $raw = Get-Content -Path $shim -Raw -ErrorAction SilentlyContinue
+                if ($raw) {
+                    $pathMatches = [regex]::Matches($raw, '[A-Za-z]:\\[^"''\r\n]+')
+                    foreach ($pm in $pathMatches) {
+                        $foundRoot = Find-RootFromCandidate -StartPath $pm.Value
+                        if ($foundRoot) { return $foundRoot }
+                    }
+                }
             }
         }
     } catch {}
@@ -143,7 +231,9 @@ function Find-InstallPathFromCommon {
         (Join-Path ([Environment]::GetFolderPath("Desktop")) "jarvis-os-agent")
     )
     foreach ($c in $candidates) {
-        if ($c -and (Test-Path (Join-Path $c "JarvisProtocol.py"))) { return $c }
+        if ($c -and ((Test-Path (Join-Path $c "JarvisProtocol.py")) -or (Test-Path (Join-Path $c "SetupRegistry.py")))) {
+            return $c
+        }
     }
     return $null
 }
@@ -164,31 +254,50 @@ function Resolve-InstallPath {
 
 function Stop-JarvisProcesses {
     param([string]$TargetDir)
-    if (-not $TargetDir -or -not (Test-Path $TargetDir)) {
-        Write-Success "No install directory detected; skipping process scan."
-        return
+    $normalizedTarget = ""
+    $targetWithSlash = ""
+    if ($TargetDir -and (Test-Path $TargetDir)) {
+        try {
+            $normalizedTarget = [System.IO.Path]::GetFullPath($TargetDir).TrimEnd('\').ToLowerInvariant()
+            $targetWithSlash = $normalizedTarget + '\'
+        } catch {}
     }
-    $normalizedTarget = [System.IO.Path]::GetFullPath($TargetDir).TrimEnd('\').ToLowerInvariant()
-    $targetWithSlash = $normalizedTarget + '\'
+
+    $allowedNames = @("python.exe", "pythonw.exe", "node.exe", "jarvis.exe", "pip.exe")
     $killedCount = 0
 
     $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        ($_.ExecutablePath -and $_.ExecutablePath.ToLowerInvariant().StartsWith($targetWithSlash)) -or
-        ($_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($targetWithSlash))
+        if ($_.ProcessId -eq $PID) { return $false }
+        $procName = if ($_.Name) { $_.Name.ToLowerInvariant() } else { "" }
+        $exePath = if ($_.ExecutablePath) { $_.ExecutablePath.ToLowerInvariant() } else { "" }
+        $cmdLine = if ($_.CommandLine) { $_.CommandLine.ToLowerInvariant() } else { "" }
+
+        if ($targetWithSlash -and $exePath.StartsWith($targetWithSlash)) {
+            return $true
+        }
+        if ($allowedNames -contains $procName) {
+            if ($targetWithSlash -and $cmdLine.Contains($targetWithSlash)) {
+                return $true
+            }
+            if ($cmdLine.Contains("jarvisprotocol.py") -or $cmdLine.Contains("baileysserver")) {
+                return $true
+            }
+        }
+        return $false
     }
 
     foreach ($proc in $processes) {
-        if ($proc.ProcessId -ne $PID) {
-            try {
-                Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-                $killedCount++
-            } catch {}
-        }
+        try {
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+            $killedCount++
+        } catch {}
     }
 
-    $lockFile = Join-Path $TargetDir "jarvis.lock"
-    if (Test-Path $lockFile) {
-        Remove-Item -Path $lockFile -Force -ErrorAction SilentlyContinue
+    if ($TargetDir -and (Test-Path $TargetDir)) {
+        $lockFile = Join-Path $TargetDir "jarvis.lock"
+        if (Test-Path $lockFile) {
+            Remove-Item -Path $lockFile -Force -ErrorAction SilentlyContinue
+        }
     }
 
     if ($killedCount -gt 0) {
@@ -201,7 +310,7 @@ function Stop-JarvisProcesses {
 
 function Backup-UserData {
     param([string]$InstallPath)
-    if (-not (Test-Path $InstallPath)) { return $true }
+    if (-not $InstallPath -or -not (Test-Path $InstallPath)) { return $true }
 
     $envFile = Join-Path $InstallPath ".env"
     $memoryDir = Join-Path $InstallPath "Data\jarvis_memory"
@@ -209,7 +318,7 @@ function Backup-UserData {
     $mcpFile = Join-Path $InstallPath "Data\mcp_servers.json"
     $cookiesDir = Join-Path $InstallPath "Data\SessionCookies"
 
-    $hasUserData = (Test-Path $envFile) -or (Test-Path $memoryDir) -or (Test-Path $mcpFile) -or (Test-Path $cookiesDir)
+    $hasUserData = (Test-Path $envFile) -or (Test-Path $memoryDir) -or (Test-Path $indexerDir) -or (Test-Path $mcpFile) -or (Test-Path $cookiesDir)
     if (-not $hasUserData) {
         Write-Success "No custom user configuration found to back up."
         return $true
@@ -220,15 +329,20 @@ function Backup-UserData {
         return $true
     }
 
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $desktopDir = [Environment]::GetFolderPath("Desktop")
-    $backupFolder = Join-Path $desktopDir "Jarvis_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    if ([string]::IsNullOrWhiteSpace($desktopDir) -or -not (Test-Path $desktopDir)) {
+        $desktopDir = $HOME
+    }
+    $backupFolder = Join-Path $desktopDir "Jarvis_Backup_$timestamp"
+
     try {
-        New-Item -ItemType Directory -Path $backupFolder -Force | Out-Null
-        if (Test-Path $envFile) { Copy-Item -Path $envFile -Destination (Join-Path $backupFolder ".env") -Force }
-        if (Test-Path $mcpFile) { Copy-Item -Path $mcpFile -Destination (Join-Path $backupFolder "mcp_servers.json") -Force }
-        if (Test-Path $memoryDir) { Copy-Item -Path $memoryDir -Destination (Join-Path $backupFolder "jarvis_memory") -Recurse -Force }
-        if (Test-Path $indexerDir) { Copy-Item -Path $indexerDir -Destination (Join-Path $backupFolder "jarvis_indexer") -Recurse -Force }
-        if (Test-Path $cookiesDir) { Copy-Item -Path $cookiesDir -Destination (Join-Path $backupFolder "SessionCookies") -Recurse -Force }
+        New-Item -ItemType Directory -Path $backupFolder -Force -ErrorAction Stop | Out-Null
+        if (Test-Path $envFile) { Copy-Item -Path $envFile -Destination (Join-Path $backupFolder ".env") -Force -ErrorAction Stop }
+        if (Test-Path $mcpFile) { Copy-Item -Path $mcpFile -Destination (Join-Path $backupFolder "mcp_servers.json") -Force -ErrorAction Stop }
+        if (Test-Path $memoryDir) { Copy-Item -Path $memoryDir -Destination (Join-Path $backupFolder "jarvis_memory") -Recurse -Force -ErrorAction Stop }
+        if (Test-Path $indexerDir) { Copy-Item -Path $indexerDir -Destination (Join-Path $backupFolder "jarvis_indexer") -Recurse -Force -ErrorAction Stop }
+        if (Test-Path $cookiesDir) { Copy-Item -Path $cookiesDir -Destination (Join-Path $backupFolder "SessionCookies") -Recurse -Force -ErrorAction Stop }
         Write-Success "Backup saved to: $backupFolder"
         return $true
     } catch {
@@ -278,18 +392,48 @@ function Remove-GlobalCliRegistration {
         "$HOME\jarvis.ps1"
     )
 
+    $pyScriptRoots = @(
+        "$env:LOCALAPPDATA\Programs\Python",
+        "$env:APPDATA\Python",
+        "$env:ProgramFiles"
+    )
+    foreach ($pyRoot in $pyScriptRoots) {
+        if ($pyRoot -and (Test-Path $pyRoot)) {
+            $pyDirs = Get-ChildItem -Path $pyRoot -Filter "Python*" -Directory -ErrorAction SilentlyContinue
+            foreach ($pd in $pyDirs) {
+                $scriptsDir = Join-Path $pd.FullName "Scripts"
+                if (Test-Path $scriptsDir) {
+                    foreach ($ext in @("jarvis.exe", "jarvis.cmd", "jarvis.bat", "jarvis-script.py", "jarvis.ps1")) {
+                        $shimLocations += (Join-Path $scriptsDir $ext)
+                    }
+                }
+            }
+        }
+    }
+
     if ($TargetDir) {
         $shimLocations += @(
             (Join-Path $TargetDir ".venv\Scripts\jarvis.exe"),
             (Join-Path $TargetDir ".venv\Scripts\jarvis-script.py"),
             (Join-Path $TargetDir ".venv\Scripts\jarvis.cmd"),
-            (Join-Path $TargetDir ".venv\Scripts\jarvis.bat")
+            (Join-Path $TargetDir ".venv\Scripts\jarvis.bat"),
+            (Join-Path $TargetDir ".venv\Scripts\jarvis.ps1")
         )
     }
 
+    try {
+        $resolvedShims = @(& where.exe jarvis 2>$null)
+        foreach ($rs in $resolvedShims) {
+            if (-not [string]::IsNullOrWhiteSpace($rs) -and (Test-Path $rs)) {
+                $shimLocations += $rs.Trim()
+            }
+        }
+    } catch {}
+
     $removedShims = 0
-    foreach ($shim in $shimLocations) {
-        if ($shim -and (Test-Path $shim)) {
+    $uniqueShims = $shimLocations | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+    foreach ($shim in $uniqueShims) {
+        if (Test-Path $shim) {
             Remove-Item -Path $shim -Force -ErrorAction SilentlyContinue
             if (-not (Test-Path $shim)) {
                 Write-Success "Removed CLI shim: $shim"
@@ -325,6 +469,7 @@ function Remove-PathEntries {
 
     $rawPath = Get-UserPathRaw
     if ([string]::IsNullOrWhiteSpace($rawPath)) {
+        Update-SessionPath -ExcludeRoot $TargetDir
         Write-Success "User PATH is empty; nothing to clean."
         return
     }
@@ -372,38 +517,46 @@ function Remove-PathEntries {
         $newPath = $filtered -join ";"
         if (Set-UserPathRaw -Value $newPath) {
             Write-Success "Removed $removedCount J.A.R.V.I.S. entry/entries from User PATH."
-            Update-SessionPath
-            Broadcast-EnvironmentChange
         }
     } else {
         Write-Success "No J.A.R.V.I.S. entries found in User PATH."
     }
+
+    Update-SessionPath -ExcludeRoot $TargetDir
+    Broadcast-EnvironmentChange
 }
 
 function Remove-DirectoryTreeForce {
     param([string]$PathToRemove)
-    if (-not (Test-Path $PathToRemove)) { return $true }
-
-    Get-ChildItem -Path $PathToRemove -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
-        try {
-            if ($_.Attributes -band [System.IO.FileAttributes]::ReadOnly) {
-                $_.Attributes = $_.Attributes -bxor [System.IO.FileAttributes]::ReadOnly
-            }
-        } catch {}
+    if ([string]::IsNullOrWhiteSpace($PathToRemove) -or -not (Test-Path $PathToRemove)) {
+        return $true
     }
 
-    Remove-Item -Path $PathToRemove -Recurse -Force -ErrorAction SilentlyContinue
+    $fullPath = $PathToRemove
+    try { $fullPath = [System.IO.Path]::GetFullPath($PathToRemove) } catch {}
 
-    if (Test-Path $PathToRemove) {
-        & cmd.exe /c "rmdir /s /q `"$PathToRemove`"" 2>$null
+    & cmd.exe /c "rmdir /s /q `"$fullPath`"" 2>$null
+
+    if (Test-Path $fullPath) {
+        Get-ChildItem -LiteralPath $fullPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                if ($_.Attributes -band [System.IO.FileAttributes]::ReadOnly) {
+                    $_.Attributes = $_.Attributes -bxor [System.IO.FileAttributes]::ReadOnly
+                }
+            } catch {}
+        }
+        Remove-Item -LiteralPath $fullPath -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    if (Test-Path $PathToRemove) {
+    if (Test-Path $fullPath) {
         Start-Sleep -Milliseconds 750
-        Remove-Item -Path $PathToRemove -Recurse -Force -ErrorAction SilentlyContinue
+        & cmd.exe /c "rmdir /s /q `"\\?\$fullPath`"" 2>$null
+        if (Test-Path $fullPath) {
+            Remove-Item -LiteralPath $fullPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
-    return (-not (Test-Path $PathToRemove))
+    return (-not (Test-Path $fullPath))
 }
 
 function Test-UninstallComplete {
@@ -419,19 +572,20 @@ function Test-UninstallComplete {
     }
 
     try {
-        $found = (& where.exe jarvis 2>$null)
-        if ($found) {
+        $found = @(& where.exe jarvis 2>$null)
+        if ($found.Count -gt 0) {
             $issues += "Command 'jarvis' is still resolvable: $($found -join ', ')"
         }
     } catch {}
 
     $userPath = Get-UserPathRaw
-    if ($userPath) {
-        foreach ($p in ($userPath -split ";" | Where-Object { $_ })) {
-            $e = [System.Environment]::ExpandEnvironmentVariables($p).TrimEnd('\').ToLowerInvariant()
-            if ($InstallPath) {
-                $n = [System.IO.Path]::GetFullPath($InstallPath).TrimEnd('\').ToLowerInvariant()
-                if ($e.StartsWith($n + '\')) {
+    if ($userPath -and $InstallPath) {
+        $n = ""
+        try { $n = [System.IO.Path]::GetFullPath($InstallPath).TrimEnd('\').ToLowerInvariant() } catch {}
+        if ($n) {
+            foreach ($p in ($userPath -split ";" | Where-Object { $_ })) {
+                $e = [System.Environment]::ExpandEnvironmentVariables($p).TrimEnd('\').ToLowerInvariant()
+                if ($e -eq $n -or $e.StartsWith($n + '\')) {
                     $issues += "User PATH still contains entry: $p"
                     break
                 }
@@ -549,7 +703,7 @@ function Uninstall-Jarvis {
     }
 
     Broadcast-EnvironmentChange
-    Update-SessionPath
+    Update-SessionPath -ExcludeRoot $installPath
 
     Write-Host ""
     Write-Host "==========================================================" -ForegroundColor Cyan
