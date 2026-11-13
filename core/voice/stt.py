@@ -642,7 +642,10 @@ class UnifiedVoiceAssistant:
         self.is_awake = False
         self.connection_established = False
         self._dg_session_id = 0
-        self._vosk_silence_frames = 12
+        self._vosk_silence_frames = 15
+        self._vosk_speech_frames = 0
+        self._vosk_partial_matched = False
+        self._was_system_busy = False
         self.RATE = 16000
         self.CHUNK = 480
 
@@ -672,6 +675,7 @@ class UnifiedVoiceAssistant:
             self.strict_vad = webrtcvad.Vad(3)
             self.MAX_SILENCE_TIMEOUT = 1.0
             self.MAX_WAIT_TIMEOUT = 4.0
+            self.MAX_TRANSCRIPT_IDLE_TIMEOUT = 1.8
 
             self.WAKE_WORDS = ["jarvis", "hey jarvis"]
             self.DECOY_WORDS = [
@@ -694,9 +698,10 @@ class UnifiedVoiceAssistant:
             self.current_transcript = ""
             self.live_text = ""
             self.command_done = threading.Event()
-            self.last_speech_time = 0
-            self.wake_time = 0
-            self.first_speech_time = 0
+            self.last_speech_time = 0.0
+            self.last_transcript_time = 0.0
+            self.wake_time = 0.0
+            self.first_speech_time = 0.0
             self.has_spoken = False
 
             self.mic_available = True
@@ -713,6 +718,22 @@ class UnifiedVoiceAssistant:
             return is_popup_active()
         except Exception:
             return False
+
+    @staticmethod
+    def _is_tts_or_processor_active():
+        try:
+            from core.voice import tts
+            if tts.is_currently_speaking():
+                return True
+        except Exception:
+            pass
+        try:
+            from core.main.CommandHandler import is_jarvis_busy
+            if is_jarvis_busy():
+                return True
+        except Exception:
+            pass
+        return False
 
     def _init_wake_engine(self):
         if os.path.exists(AZURE_KEYWORD_MODEL_PATH):
@@ -738,15 +759,35 @@ class UnifiedVoiceAssistant:
         self.vosk_model = VoskModel(VOSK_MODEL_PATH)
         grammar = json.dumps(self.WAKE_WORDS + self.DECOY_WORDS + ["[unk]"])
         self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.RATE, grammar)
+        try:
+            self.vosk_recognizer.SetWords(True)
+        except Exception:
+            pass
         logger.info("✅ Vosk wake word engine ENABLED (fallback)")
 
     def _reset_dsp_state(self):
         self._hp_prev_x = 0.0
         self._hp_prev_y = 0.0
         self._pre_prev_y = 0.0
+        self._vosk_silence_frames = 15
+        self._vosk_speech_frames = 0
+        self._vosk_partial_matched = False
         self.frame_history.clear()
         for _ in range(10):
             self.frame_history.append((False, False, 0.0, 0.0, 0.0))
+
+    @staticmethod
+    def _compute_raw_rms(pcm_data):
+        samples = array.array("h")
+        samples.frombytes(pcm_data)
+        n_samples = len(samples)
+        if n_samples == 0:
+            return 0.0
+        sum_sq = 0.0
+        for s in samples:
+            x = float(s)
+            sum_sq += x * x
+        return math.sqrt(sum_sq / n_samples)
 
     def _condition_deepgram_audio(self, pcm_data):
         samples = array.array("h")
@@ -827,10 +868,10 @@ class UnifiedVoiceAssistant:
         raw_rms = math.sqrt(sum_sq / n_samples)
         zcr = zero_crossings / float(n_samples)
 
-        if not is_speech_v2 and raw_rms < max(450.0, self._noise_floor_rms * 1.8):
+        if not is_speech_v3 and raw_rms < max(450.0, self._noise_floor_rms * 1.8):
             self._noise_floor_rms = (0.96 * self._noise_floor_rms) + (0.04 * max(25.0, raw_rms))
 
-        if is_speech_v2 or raw_rms > (self._noise_floor_rms * 1.4):
+        if is_speech_v3 or raw_rms > (self._noise_floor_rms * 1.4):
             if raw_rms > 60.0:
                 desired_gain = 2300.0 / raw_rms
                 desired_gain = max(1.0, min(2.6, desired_gain))
@@ -865,19 +906,19 @@ class UnifiedVoiceAssistant:
             return float(dur)
         return 0.0
 
-    def _verify_azure_wake(self, text, duration_ms):
+    def _verify_wake_acoustics(self, text, duration_ms):
         now = time.time()
-        if (now - self._last_reset_time) < 0.65:
-            logger.debug("Azure wake rejected: post-reset cooldown active.")
+        if (now - self._last_reset_time) < 0.85:
+            logger.debug("Wake rejected: post-reset cooldown active.")
             return False
 
         clean_text = (text or "").strip().lower()
         if clean_text and "jarvis" not in clean_text:
-            logger.debug(f"Azure wake rejected: mismatched keyword text '{clean_text}'.")
+            logger.debug(f"Wake rejected: mismatched keyword text '{clean_text}'.")
             return False
 
         if duration_ms > 0.0 and (duration_ms < 210.0 or duration_ms > 1950.0):
-            logger.debug(f"Azure wake rejected: invalid duration {duration_ms:.1f}ms.")
+            logger.debug(f"Wake rejected: invalid duration {duration_ms:.1f}ms.")
             return False
 
         frames = list(self.frame_history)
@@ -893,7 +934,8 @@ class UnifiedVoiceAssistant:
         speech_zcr_values = []
 
         for is_v2, is_v3, raw_rms, cond_rms, zcr in frames:
-            if is_v2:
+            is_real_vocal = is_v3 or (is_v2 and raw_rms > max(110.0, self._noise_floor_rms * 1.25))
+            if is_real_vocal:
                 v2_count += 1
                 current_run += 1
                 gap_allowance = 0
@@ -907,12 +949,12 @@ class UnifiedVoiceAssistant:
                 else:
                     current_run = 0
                     gap_allowance = 0
-            if is_v3:
+            if is_v3 and raw_rms > max(120.0, self._noise_floor_rms * 1.30):
                 v3_count += 1
 
         if v2_count < 6 or v3_count < 2 or max_contiguous_v2 < 4:
             logger.debug(
-                f"Azure wake rejected: insufficient VAD density "
+                f"Wake rejected: insufficient VAD density "
                 f"(v2={v2_count}, v3={v3_count}, run={max_contiguous_v2})."
             )
             return False
@@ -924,21 +966,62 @@ class UnifiedVoiceAssistant:
         mean_rms = sum(speech_rms_values) / len(speech_rms_values)
         mean_zcr = sum(speech_zcr_values) / len(speech_zcr_values)
 
-        min_peak_required = max(130.0, self._noise_floor_rms * 1.32)
-        min_mean_required = max(85.0, self._noise_floor_rms * 1.12)
+        min_peak_required = max(145.0, self._noise_floor_rms * 1.40)
+        min_mean_required = max(95.0, self._noise_floor_rms * 1.18)
 
         if peak_rms < min_peak_required or mean_rms < min_mean_required:
             logger.debug(
-                f"Azure wake rejected: low vocal SNR "
+                f"Wake rejected: low vocal SNR "
                 f"(peak={peak_rms:.1f}, mean={mean_rms:.1f}, floor={self._noise_floor_rms:.1f})."
             )
             return False
 
         if mean_zcr < 0.012 or mean_zcr > 0.46:
-            logger.debug(f"Azure wake rejected: out-of-bounds ZCR ({mean_zcr:.3f}).")
+            logger.debug(f"Wake rejected: out-of-bounds ZCR ({mean_zcr:.3f}).")
             return False
 
         return True
+
+    def _verify_azure_wake(self, text, duration_ms):
+        return self._verify_wake_acoustics(text, duration_ms)
+
+    def _evaluate_vosk_result_json(self, res_json_str):
+        try:
+            res = json.loads(res_json_str)
+        except Exception:
+            return False, ""
+
+        text = (res.get("text") or "").strip().lower()
+        if not self._check_wake_word(text):
+            return False, ""
+
+        duration_ms = float(self._vosk_speech_frames) * 30.0
+        words = res.get("result")
+        if isinstance(words, list) and words:
+            jarvis_words = [
+                w for w in words
+                if isinstance(w, dict) and "jarvis" in str(w.get("word", "")).lower()
+            ]
+            if not jarvis_words:
+                return False, ""
+            best_w = max(jarvis_words, key=lambda w: float(w.get("conf", 0.0) or 0.0))
+            conf = float(best_w.get("conf", 0.0) or 0.0)
+            w_start = float(best_w.get("start", 0.0) or 0.0)
+            w_end = float(best_w.get("end", 0.0) or 0.0)
+            if w_end > w_start:
+                duration_ms = (w_end - w_start) * 1000.0
+            if conf < 0.58:
+                logger.debug(f"Vosk wake rejected: low confidence ({conf:.2f}) for '{text}'.")
+                return False, ""
+
+        if self._vosk_speech_frames < 6:
+            logger.debug(f"Vosk wake rejected: too few vocal frames ({self._vosk_speech_frames}).")
+            return False, ""
+
+        if not self._verify_wake_acoustics(text, duration_ms):
+            return False, ""
+
+        return True, text
 
     def _start_azure_listening(self):
         if not self.use_azure_wake or self.azure_speechsdk is None:
@@ -1068,6 +1151,7 @@ class UnifiedVoiceAssistant:
                 sentence = assistant.vocab_manager.select_best_transcript(alternatives)
                 if sentence:
                     repaired_sentence = assistant.vocab_manager.repair_transcript(sentence)
+                    prev_live = assistant.live_text
                     if result.is_final:
                         assistant.current_transcript = assistant.vocab_manager.repair_transcript(
                             (assistant.current_transcript + " " + repaired_sentence).strip()
@@ -1077,6 +1161,11 @@ class UnifiedVoiceAssistant:
                         assistant.live_text = assistant.vocab_manager.repair_transcript(
                             (assistant.current_transcript + " " + repaired_sentence).strip()
                         )
+                    if assistant.live_text.strip() and assistant.live_text != prev_live:
+                        now_ts = time.time()
+                        assistant.last_transcript_time = now_ts
+                        assistant.last_speech_time = now_ts
+                        assistant.has_spoken = True
                     if (
                         assistant.is_awake
                         and not assistant.command_done.is_set()
@@ -1133,13 +1222,10 @@ class UnifiedVoiceAssistant:
             return False
 
     def _check_wake_word(self, text):
-        clean_text = text.lower().strip()
+        clean_text = (text or "").lower().strip()
         if not clean_text:
             return False
-        for wake in self.WAKE_WORDS:
-            if wake in clean_text:
-                return True
-        return False
+        return bool(re.search(r"\bjarvis\b", clean_text))
 
     def _audio_loop(self):
         if not self.mic_available:
@@ -1153,13 +1239,32 @@ class UnifiedVoiceAssistant:
                 pcm_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
 
                 if not self.is_awake:
-                    if self._is_input_popup_active():
+                    if self._is_input_popup_active() or self._is_tts_or_processor_active():
+                        self._was_system_busy = True
                         if self.azure_wake_detected.is_set():
                             self.azure_wake_detected.clear()
-                        if self.vosk_recognizer and self._vosk_silence_frames < 12:
+                        if self.vosk_recognizer and (self._vosk_speech_frames > 0 or self._vosk_silence_frames < 15):
                             self.vosk_recognizer.Reset()
-                            self._vosk_silence_frames = 12
+                        self._vosk_speech_frames = 0
+                        self._vosk_silence_frames = 15
+                        self._vosk_partial_matched = False
                         self._last_reset_time = time.time()
+                        continue
+
+                    if self._was_system_busy:
+                        self._was_system_busy = False
+                        self._flush_audio_buffer()
+                        self._reset_dsp_state()
+                        if self.vosk_recognizer:
+                            self.vosk_recognizer.Reset()
+                        self._last_reset_time = time.time()
+                        continue
+
+                    conditioned_pcm = self._analyze_and_condition_audio(pcm_data)
+
+                    if (time.time() - self._last_reset_time) < 0.85:
+                        if self.azure_wake_detected.is_set():
+                            self.azure_wake_detected.clear()
                         continue
 
                     triggered = False
@@ -1170,8 +1275,6 @@ class UnifiedVoiceAssistant:
                             self.azure_needs_restart.clear()
                             self._stop_azure_listening()
                             self._start_azure_listening()
-
-                        conditioned_pcm = self._analyze_and_condition_audio(pcm_data)
 
                         if self.azure_push_stream is not None:
                             try:
@@ -1187,37 +1290,57 @@ class UnifiedVoiceAssistant:
                             matched_text = self.azure_matched_text
                             self.azure_wake_detected.clear()
                     else:
-                        if (time.time() - self._last_reset_time) < 0.65:
-                            continue
+                        is_v2, is_v3, raw_rms, cond_rms, zcr = self.frame_history[-1]
+                        is_vocal_frame = is_v3 or (is_v2 and raw_rms > max(125.0, self._noise_floor_rms * 1.35))
 
-                        is_speech = self.vad.is_speech(pcm_data, self.RATE)
-
-                        if is_speech:
+                        if is_vocal_frame:
                             self._vosk_silence_frames = 0
+                            self._vosk_speech_frames += 1
                             if self.vosk_recognizer.AcceptWaveform(pcm_data):
-                                res = json.loads(self.vosk_recognizer.Result())
-                                text = res.get("text", "")
+                                ok, matched = self._evaluate_vosk_result_json(self.vosk_recognizer.Result())
+                                if ok:
+                                    triggered = True
+                                    matched_text = matched
+                                self.vosk_recognizer.Reset()
+                                self._vosk_speech_frames = 0
+                                self._vosk_partial_matched = False
                             else:
-                                res = json.loads(self.vosk_recognizer.PartialResult())
-                                text = res.get("partial", "")
-
-                            if self._check_wake_word(text):
-                                triggered = True
-                                matched_text = text
-                        elif self._vosk_silence_frames < 12:
+                                try:
+                                    pres = json.loads(self.vosk_recognizer.PartialResult())
+                                    ptext = pres.get("partial", "")
+                                except Exception:
+                                    ptext = ""
+                                if self._check_wake_word(ptext):
+                                    self._vosk_partial_matched = True
+                        elif self._vosk_speech_frames > 0 and self._vosk_silence_frames < 15:
                             self._vosk_silence_frames += 1
                             if self.vosk_recognizer.AcceptWaveform(pcm_data):
-                                res = json.loads(self.vosk_recognizer.Result())
-                                text = res.get("text", "")
-                            else:
-                                res = json.loads(self.vosk_recognizer.PartialResult())
-                                text = res.get("partial", "")
-
-                            if self._check_wake_word(text):
-                                triggered = True
-                                matched_text = text
-                            elif self._vosk_silence_frames == 12:
+                                ok, matched = self._evaluate_vosk_result_json(self.vosk_recognizer.Result())
+                                if ok:
+                                    triggered = True
+                                    matched_text = matched
                                 self.vosk_recognizer.Reset()
+                                self._vosk_speech_frames = 0
+                                self._vosk_silence_frames = 15
+                                self._vosk_partial_matched = False
+                            elif self._vosk_silence_frames >= 4 and self._vosk_partial_matched:
+                                ok, matched = self._evaluate_vosk_result_json(self.vosk_recognizer.FinalResult())
+                                if ok:
+                                    triggered = True
+                                    matched_text = matched
+                                self.vosk_recognizer.Reset()
+                                self._vosk_speech_frames = 0
+                                self._vosk_silence_frames = 15
+                                self._vosk_partial_matched = False
+                            elif self._vosk_silence_frames >= 12:
+                                ok, matched = self._evaluate_vosk_result_json(self.vosk_recognizer.FinalResult())
+                                if ok:
+                                    triggered = True
+                                    matched_text = matched
+                                self.vosk_recognizer.Reset()
+                                self._vosk_speech_frames = 0
+                                self._vosk_silence_frames = 15
+                                self._vosk_partial_matched = False
 
                     if triggered:
                         logger.info(f"🎯 Wake word detected | matched_text='{matched_text}'")
@@ -1236,7 +1359,9 @@ class UnifiedVoiceAssistant:
 
                         if self.vosk_recognizer:
                             self.vosk_recognizer.Reset()
-                            self._vosk_silence_frames = 12
+                        self._vosk_speech_frames = 0
+                        self._vosk_silence_frames = 15
+                        self._vosk_partial_matched = False
 
                         self.play_wake_sound()
                         update_stt_status("connecting", "Listening...")
@@ -1252,20 +1377,22 @@ class UnifiedVoiceAssistant:
                                 self.is_awake = False
                                 self.command_done.clear()
                                 self._flush_audio_buffer()
+                                self._reset_dsp_state()
                                 self._last_reset_time = time.time()
                                 update_stt_status("idle", "")
                                 if self.use_azure_wake:
                                     self._start_azure_listening()
                                 elif self.vosk_recognizer:
                                     self.vosk_recognizer.Reset()
-                                    self._vosk_silence_frames = 12
                                 continue
 
                         self._flush_audio_buffer()
                         self.command_done.clear()
-                        self.wake_time = time.time()
-                        self.first_speech_time = 0
-                        self.last_speech_time = time.time()
+                        now_ts = time.time()
+                        self.wake_time = now_ts
+                        self.first_speech_time = 0.0
+                        self.last_speech_time = now_ts
+                        self.last_transcript_time = 0.0
                         self.has_spoken = False
                         self.is_awake = True
                         logger.info("👂 User command listening STARTED (max wait 4.0s, silence timeout 1.0s).")
@@ -1276,7 +1403,13 @@ class UnifiedVoiceAssistant:
                         self._force_sleep_reset()
                         continue
 
-                    is_speech = self.vad.is_speech(pcm_data, self.RATE)
+                    raw_rms = self._compute_raw_rms(pcm_data)
+                    try:
+                        is_strict_speech = self.strict_vad.is_speech(pcm_data, self.RATE)
+                    except Exception:
+                        is_strict_speech = False
+
+                    is_speech = is_strict_speech and (raw_rms > max(145.0, self._noise_floor_rms * 1.45))
                     current_time = time.time()
 
                     if is_speech:
@@ -1285,12 +1418,22 @@ class UnifiedVoiceAssistant:
                         self.last_speech_time = current_time
                         self.has_spoken = True
 
-                    if not self.has_spoken and (current_time - self.wake_time > self.MAX_WAIT_TIMEOUT):
+                    has_transcript = bool(self.live_text.strip())
+
+                    if not has_transcript and (current_time - self.wake_time > self.MAX_WAIT_TIMEOUT):
                         logger.info("⏱️ No speech detected within 4.0s after wake word. Ending command capture.")
                         self.command_done.set()
 
-                    elif self.has_spoken and (current_time - self.last_speech_time > self.MAX_SILENCE_TIMEOUT):
+                    elif has_transcript and (current_time - self.last_speech_time > self.MAX_SILENCE_TIMEOUT):
                         logger.info("⏱️ Silence timeout (1.0s) reached after speech. Finalizing command.")
+                        self.command_done.set()
+
+                    elif (
+                        has_transcript
+                        and self.last_transcript_time > 0.0
+                        and (current_time - self.last_transcript_time > self.MAX_TRANSCRIPT_IDLE_TIMEOUT)
+                    ):
+                        logger.info("⏱️ Transcript idle timeout reached. Finalizing command.")
                         self.command_done.set()
 
                     if self.dg_connection and not self.command_done.is_set():
@@ -1331,7 +1474,6 @@ class UnifiedVoiceAssistant:
 
         if self.vosk_recognizer:
             self.vosk_recognizer.Reset()
-            self._vosk_silence_frames = 12
 
         if self.use_azure_wake:
             self._stop_azure_listening()
@@ -1374,7 +1516,6 @@ class UnifiedVoiceAssistant:
 
         if self.vosk_recognizer:
             self.vosk_recognizer.Reset()
-            self._vosk_silence_frames = 12
 
         if self.use_azure_wake:
             self._stop_azure_listening()
