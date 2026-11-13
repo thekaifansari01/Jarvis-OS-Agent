@@ -207,11 +207,13 @@ class ContextMemory:
             return False
 
         profile_pattern = re.compile(
-            r"\b(mera|meri|mere)\s+"
-            r"(naam|age|umar|email|number|phone|laptop|computer|pc|college|school|university|"
+            r"\b(mera|meri|mere|mere\s+paas|my)\s+"
+            r"(naam|age|umar|email|mail|gmail|number|phone|mobile|contact|whatsapp|telegram|"
+            r"instagram|handle|username|laptop|computer|pc|device|model|college|school|university|"
             r"city|shehar|gaon|village|job|kaam|profession|project|bhai|behen|dost|friend|"
             r"father|mother|papa|mummy|mom|dad|gf|bf|girlfriend|boyfriend|birthday|janamdin|"
-            r"janmdin|anniversary|wife|husband|address|location|surname|sirname|nickname)\b",
+            r"janmdin|anniversary|wife|husband|address|location|surname|sirname|nickname|"
+            r"roll|aadhar|pan|id)\b",
             re.IGNORECASE,
         )
 
@@ -1229,8 +1231,11 @@ CRITICAL EXTRACTION RULES:
 
 SYSTEM 1: LTM GRAPH TRIPLETS (`ltm_triplets`) - Static entity facts:
 - Always represent the user as the exact string "User" in `source`.
-- Identity (name, age, city, college, profession), Relationships (family, friends), Contact (phone, email), Assets (laptop, phone, vehicle), Projects (things user builds).
-- Set `is_singular: true` for one-value relations (LIVES_IN, AGE, FATHER, MOTHER, WORKS_AT, HAS_PHONE, COLLEGE).
+- Identity (name, age, city, college, profession), Relationships (family, friends), Assets (laptop model, phone, vehicle), Projects.
+- HIGH PRIORITY — CONTACT INFO: Extract EVERY email address as `[User] --(HAS_EMAIL)--> [actual_email]` (is_singular=true). Extract EVERY phone number as `[User] --(HAS_PHONE)--> [actual_number]` (is_singular=true). If multiple emails or phones appear in the same message, emit ONE triplet per value.
+- DEVICES: Laptop/PC/phone model goes as `[User] --(USES_LAPTOP)--> [Model]` or `[User] --(HAS_DEVICE)--> [Model]` (is_singular=true).
+- Set `is_singular: true` for one-value relations (LIVES_IN, AGE, FATHER, MOTHER, WORKS_AT, HAS_PHONE, HAS_EMAIL, COLLEGE, USES_LAPTOP).
+- If the message contains MULTIPLE distinct durable facts (e.g., device AND email AND phone), you MUST emit MULTIPLE triplets — one per fact. NEVER drop facts.
 
 SYSTEM 2: BEHAVIORAL PATTERNS (`behavioral_patterns`) - Recurring habits and preferences:
 - Time routines, coding/UI preferences, communication tone, workflow habits.

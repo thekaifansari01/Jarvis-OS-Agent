@@ -75,7 +75,19 @@ class LifetimeMemoryEngine:
         self.relation_embeddings = {}
 
         self._load_graph()
+        self._warmup_embedder()
         self._start_auto_cleanup()
+
+    def _warmup_embedder(self):
+        try:
+            self.embedder.encode(
+                ["warmup text for latency reduction"],
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+            logger.info("LTM embedder warmed up (latency preloaded).")
+        except Exception as e:
+            logger.warning(f"LTM embedder warmup failed (non-fatal): {e}")
 
     def _normalize_entity(self, raw_entity: str) -> str:
         s = str(raw_entity or "").strip()
