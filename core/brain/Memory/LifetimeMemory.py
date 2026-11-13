@@ -12,7 +12,142 @@ from scipy.spatial.distance import cosine
 from core.logger.logger import logger
 
 
+CANONICAL_RELATIONS = {
+    "HAS_NAME": "HAS_NAME",
+    "NAME": "HAS_NAME",
+    "CALLED": "HAS_NAME",
+    "NAMED": "HAS_NAME",
+    "FULL_NAME": "HAS_NAME",
+    "USERNAME": "HAS_NAME",
+
+    "HOMETOWN": "LIVES_IN",
+    "HOME_CITY": "LIVES_IN",
+    "FROM_CITY": "LIVES_IN",
+    "CURRENT_CITY": "LIVES_IN",
+    "CITY": "LIVES_IN",
+    "LIVES_AT": "LIVES_IN",
+    "STAYS_IN": "LIVES_IN",
+    "RESIDES_IN": "LIVES_IN",
+    "LOCATED_IN": "LIVES_IN",
+    "BASED_IN": "LIVES_IN",
+
+    "AGE": "HAS_AGE",
+    "YEARS_OLD": "HAS_AGE",
+    "OLD": "HAS_AGE",
+
+    "DATE_OF_BIRTH": "DOB",
+    "BIRTHDAY": "DOB",
+    "BIRTH_DATE": "DOB",
+    "BORN_ON": "DOB",
+    "BIRTH": "DOB",
+
+    "DAD": "FATHER",
+    "PAPA": "FATHER",
+    "HAS_FATHER": "FATHER",
+    "FATHER_NAME": "FATHER",
+    "DADS_NAME": "FATHER",
+
+    "MOM": "MOTHER",
+    "MUMMY": "MOTHER",
+    "HAS_MOTHER": "MOTHER",
+    "MOTHER_NAME": "MOTHER",
+    "MOMS_NAME": "MOTHER",
+
+    "HAS_BROTHER": "BROTHER",
+    "BROTHER_NAME": "BROTHER",
+
+    "HAS_SISTER": "SISTER",
+    "SISTER_NAME": "SISTER",
+
+    "WIFE": "SPOUSE",
+    "HUSBAND": "SPOUSE",
+    "MARRIED_TO": "SPOUSE",
+    "PARTNER": "SPOUSE",
+
+    "FRIEND": "HAS_FRIEND",
+    "BEST_FRIEND": "HAS_FRIEND",
+
+    "COMPANY": "WORKS_AT",
+    "EMPLOYER": "WORKS_AT",
+    "EMPLOYED_AT": "WORKS_AT",
+    "WORKING_AT": "WORKS_AT",
+    "JOB_AT": "WORKS_AT",
+
+    "PROFESSION": "WORKS_AS",
+    "OCCUPATION": "WORKS_AS",
+    "ROLE": "WORKS_AS",
+    "JOB": "WORKS_AS",
+    "JOB_TITLE": "WORKS_AS",
+    "DESIGNATION": "WORKS_AS",
+
+    "STUDIES_AT": "COLLEGE",
+    "SCHOOL": "COLLEGE",
+    "UNIVERSITY": "COLLEGE",
+    "INSTITUTE": "COLLEGE",
+    "STUDYING_AT": "COLLEGE",
+    "COLLEGE_NAME": "COLLEGE",
+
+    "COURSE": "DEGREE",
+    "MAJOR": "DEGREE",
+    "BRANCH": "DEGREE",
+    "STUDIES": "DEGREE",
+    "FIELD_OF_STUDY": "DEGREE",
+
+    "CURRENT_PROJECT": "DEVELOPS",
+    "PROJECT": "DEVELOPS",
+    "PROJECTS": "DEVELOPS",
+    "BUILDS": "DEVELOPS",
+    "BUILDING": "DEVELOPS",
+    "WORKING_ON": "DEVELOPS",
+    "CREATED": "DEVELOPS",
+    "AUTHOR_OF": "DEVELOPS",
+
+    "PHONE": "HAS_PHONE",
+    "PHONE_NUMBER": "HAS_PHONE",
+    "MOBILE": "HAS_PHONE",
+    "MOBILE_NUMBER": "HAS_PHONE",
+    "MOBILE_NO": "HAS_PHONE",
+    "CONTACT": "HAS_PHONE",
+    "CONTACT_NUMBER": "HAS_PHONE",
+    "WHATSAPP": "HAS_PHONE",
+    "WHATSAPP_NUMBER": "HAS_PHONE",
+    "CELL": "HAS_PHONE",
+
+    "EMAIL": "HAS_EMAIL",
+    "EMAIL_ADDRESS": "HAS_EMAIL",
+    "GMAIL": "HAS_EMAIL",
+    "MAIL": "HAS_EMAIL",
+    "EMAIL_ID": "HAS_EMAIL",
+
+    "LAPTOP": "USES_LAPTOP",
+    "HAS_LAPTOP": "USES_LAPTOP",
+    "LAPTOP_MODEL": "USES_LAPTOP",
+    "LAPTOP_NAME": "USES_LAPTOP",
+    "USES_PC": "USES_LAPTOP",
+    "PC": "USES_LAPTOP",
+    "COMPUTER": "USES_LAPTOP",
+    "DESKTOP": "USES_LAPTOP",
+
+    "DEVICE": "HAS_DEVICE",
+    "PHONE_MODEL": "HAS_DEVICE",
+    "MOBILE_MODEL": "HAS_DEVICE",
+    "SMARTPHONE": "HAS_DEVICE",
+
+    "LOVES": "LIKES",
+    "PREFERS": "LIKES",
+    "FAVORITE": "LIKES",
+    "FAVOURITE": "LIKES",
+    "INTERESTED_IN": "LIKES",
+    "ENJOYS": "LIKES",
+
+    "HATES": "DISLIKES",
+    "AVOIDS": "DISLIKES",
+    "DOES_NOT_LIKE": "DISLIKES",
+    "NOT_FOND_OF": "DISLIKES",
+}
+
 SINGULAR_RELATIONS = {
+    "HAS_NAME",
     "LIVES_IN",
     "LOCATED_IN",
     "AGE",
@@ -34,6 +169,7 @@ SINGULAR_RELATIONS = {
     "HAS_EMAIL",
     "LAPTOP",
     "USES_LAPTOP",
+    "HAS_DEVICE",
 }
 
 RELATION_STOP_TOKENS = {
@@ -89,6 +225,13 @@ class LifetimeMemoryEngine:
         except Exception as e:
             logger.warning(f"LTM embedder warmup failed (non-fatal): {e}")
 
+    @staticmethod
+    def _canonicalize_relation(raw_rel) -> str:
+        if not raw_rel:
+            return ""
+        clean = re.sub(r"[^A-Z0-9]+", "_", str(raw_rel).upper().strip()).strip("_")
+        return CANONICAL_RELATIONS.get(clean, clean)
+
     def _normalize_entity(self, raw_entity: str) -> str:
         s = str(raw_entity or "").strip()
         if not s:
@@ -123,8 +266,8 @@ class LifetimeMemoryEngine:
 
     @staticmethod
     def _are_relations_opposite(rel_a: str, rel_b: str) -> bool:
-        a_clean = rel_a.upper().strip()
-        b_clean = rel_b.upper().strip()
+        a_clean = LifetimeMemoryEngine._canonicalize_relation(rel_a)
+        b_clean = LifetimeMemoryEngine._canonicalize_relation(rel_b)
         a_tokens = set(a_clean.split("_")) | {a_clean}
         b_tokens = set(b_clean.split("_")) | {b_clean}
         for group_1, group_2 in OPPOSITE_RELATION_PAIRS:
@@ -214,15 +357,15 @@ class LifetimeMemoryEngine:
             return True
         overlap = len(q_tokens & t_tokens)
         union = len(q_tokens | t_tokens)
-        if overlap > 0 and (overlap / union) >= 0.75:
+        if overlap > 0 and (overlap / union) >= 0.70:
             return True
         return False
 
-    def _relation_matches(self, edge_rel: str, requested_rel: str, threshold: float = 0.80) -> bool:
+    def _relation_matches(self, edge_rel: str, requested_rel: str, threshold: float = 0.75) -> bool:
         if not requested_rel:
             return True
-        e_rel = (edge_rel or "").strip().upper()
-        r_rel = (requested_rel or "").strip().upper()
+        e_rel = self._canonicalize_relation(edge_rel)
+        r_rel = self._canonicalize_relation(requested_rel)
         if not e_rel:
             return False
         if e_rel == r_rel:
@@ -296,10 +439,12 @@ class LifetimeMemoryEngine:
 
             return result
 
-    def _deduplicate_relation(self, rel, threshold=0.88):
+    def _deduplicate_relation(self, rel, threshold=0.85):
         if not rel:
             return rel
-        rel = re.sub(r"\s+", "_", rel.upper().strip())
+        rel = self._canonicalize_relation(rel)
+        if not rel:
+            return rel
 
         with self._lock:
             if rel in self.relation_embeddings or rel in SINGULAR_RELATIONS:
@@ -563,7 +708,7 @@ class LifetimeMemoryEngine:
 
                     edge_rel = data.get("relation", "RELATES_TO")
 
-                    if req_rel and not self._relation_matches(edge_rel, req_rel, threshold=0.80):
+                    if req_rel and not self._relation_matches(edge_rel, req_rel, threshold=0.75):
                         continue
 
                     weight = float(data.get("weight", 1))
@@ -582,7 +727,7 @@ class LifetimeMemoryEngine:
 
                     time_penalty = 0.5 if days_diff > 180 else 1.0
                     count_boost = min(1.0 + (count - 1) * 0.15, 2.0)
-                    rel_boost = 2.0 if (req_rel and self._relation_matches(edge_rel, req_rel, threshold=0.84)) else 1.0
+                    rel_boost = 2.0 if (req_rel and self._relation_matches(edge_rel, req_rel, threshold=0.80)) else 1.0
 
                     adjusted_weight = weight * time_penalty * count_boost * rel_boost
 

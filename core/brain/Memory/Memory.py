@@ -1128,6 +1128,7 @@ class ContextMemory:
         beh_saved = int(result.get("behavioral_saved", 0)) if result else 0
         reason = (result.get("reason", "") if result else "") or ""
         skipped = bool(result.get("skipped", False)) if result else False
+        is_task_only = bool(result.get("is_task_only", False)) if result else False
 
         edges_after = edges_before
         patterns_after = patterns_before
@@ -1154,6 +1155,13 @@ class ContextMemory:
             logger.info(
                 f"Force extraction VERIFIED: ltm={ltm_saved} (delta_edges={edges_delta}) "
                 f"behavioral={beh_saved} (delta_patterns={patterns_delta})"
+            )
+            return True
+
+        if is_task_only:
+            self.ephemeral.pop("extraction_failed", None)
+            logger.info(
+                f"Force extraction evaluated as pure task instruction (no durable facts): '{message[:80]}'"
             )
             return True
 
@@ -1192,6 +1200,7 @@ class ContextMemory:
             "ltm_saved": 0,
             "behavioral_saved": 0,
             "skipped": False,
+            "is_task_only": False,
             "reason": "",
         }
 
@@ -1217,15 +1226,18 @@ class ContextMemory:
             except Exception as e:
                 logger.error(f"Failed to fetch LTM nodes or relations: {e}")
 
-            confidence_gate = 0.60 if is_force else 0.70
+            confidence_gate = 0.60 if is_force else 0.68
 
             prompt = f"""You are the Unified Hybrid Memory Extractor for Jarvis (an AI assistant).
 Analyze the user's latest message using the recent conversation context and classify durable knowledge into TWO STRICTLY SEPARATE memory systems.
 
 CRITICAL EXTRACTION RULES:
 - Report your actual confidence between 0.0 and 1.0. Do NOT pre-filter based on confidence; the caller applies its own threshold.
-- If the message is BOTH a task instruction AND contains a durable fact (name, relationship, entity, project, preference), STILL extract the durable fact. Set `is_current_task_instruction: true` to indicate immediate intent, but also set `has_ltm_facts` / `has_behavioral_patterns` appropriately and extract the content.
-- Example: "Mera GhostVault project banao" -> `is_current_task_instruction: true`, `has_ltm_facts: true` (triplet: [User] --(DEVELOPS)--> [GhostVault]), `has_behavioral_patterns: false`.
+- Set `is_task_only: true` ONLY when the message is a PURE action command with ZERO durable personal facts, relationships, preferences, or entities. Example: "Chrome kholo", "Screenshot lo", "Volume badha do". If TRUE, all other extraction fields MUST be false/empty.
+- If the message is BOTH a task instruction AND contains a durable fact (name, relationship, entity, project, preference), STILL extract the durable fact. Set `is_current_task_instruction: true` to indicate immediate intent, but ALSO set `has_ltm_facts` / `has_behavioral_patterns` appropriately and extract the content. In this mixed case, `is_task_only` MUST be false.
+- Example 1 (pure task): "Chrome kholo" -> `is_task_only: true`, `has_ltm_facts: false`, `has_behavioral_patterns: false`.
+- Example 2 (mixed): "Mera GhostVault project banao" -> `is_task_only: false`, `is_current_task_instruction: true`, `has_ltm_facts: true` (triplet: [User] --(DEVELOPS)--> [GhostVault]), `has_behavioral_patterns: false`.
+- Example 3 (mixed with preference): "Mere liye ek dashboard banao, mujhe dark mode pasand hai" -> `is_task_only: false`, `is_current_task_instruction: true`, `has_behavioral_patterns: true` (domain: ui_design, topic: ui_theme).
 - Questions and casual addressing ("bhai", "bro") are NOT facts. Never extract Jarvis as a brother or friend.
 - Only extract durable knowledge that will still be true 6-12 months from now. Skip temporary moods or one-off plans.
 
@@ -1254,6 +1266,7 @@ Return STRICT JSON:
 {{
   "reasoning": "Brief explanation",
   "is_current_task_instruction": boolean,
+  "is_task_only": boolean,
   "has_ltm_facts": boolean,
   "ltm_triplets": [
     {{
@@ -1306,9 +1319,11 @@ Return STRICT JSON:
                     data = json.loads(clean_text)
 
                     is_task = data.get("is_current_task_instruction") is True
+                    is_task_only = data.get("is_task_only") is True
+                    result["is_task_only"] = is_task_only
 
                     logger.info(
-                        f"Hybrid Extraction | task={is_task} | "
+                        f"Hybrid Extraction | task={is_task} | task_only={is_task_only} | "
                         f"LTM={data.get('has_ltm_facts')} ({len(data.get('ltm_triplets', []))}) | "
                         f"Behavioral={data.get('has_behavioral_patterns')} ({len(data.get('behavioral_patterns', []))})"
                     )
