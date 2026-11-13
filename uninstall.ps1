@@ -252,6 +252,29 @@ function Resolve-InstallPath {
     return $null
 }
 
+function Get-AncestorPids {
+    $ancestors = @{}
+    $parentMap = @{}
+    try {
+        foreach ($p in (Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+            $parentMap[[int]$p.ProcessId] = [int]$p.ParentProcessId
+        }
+        $curr = [int]$PID
+        for ($i = 0; $i -lt 16; $i++) {
+            if (-not $curr -or $ancestors.ContainsKey($curr)) { break }
+            $ancestors[$curr] = $true
+            if ($parentMap.ContainsKey($curr)) {
+                $curr = $parentMap[$curr]
+            } else {
+                break
+            }
+        }
+    } catch {
+        $ancestors[[int]$PID] = $true
+    }
+    return $ancestors
+}
+
 function Stop-JarvisProcesses {
     param([string]$TargetDir)
     $normalizedTarget = ""
@@ -263,11 +286,12 @@ function Stop-JarvisProcesses {
         } catch {}
     }
 
+    $ancestorPids = Get-AncestorPids
     $allowedNames = @("python.exe", "pythonw.exe", "node.exe", "jarvis.exe", "pip.exe")
     $killedCount = 0
 
     $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        if ($_.ProcessId -eq $PID) { return $false }
+        if ($ancestorPids.ContainsKey([int]$_.ProcessId)) { return $false }
         $procName = if ($_.Name) { $_.Name.ToLowerInvariant() } else { "" }
         $exePath = if ($_.ExecutablePath) { $_.ExecutablePath.ToLowerInvariant() } else { "" }
         $cmdLine = if ($_.CommandLine) { $_.CommandLine.ToLowerInvariant() } else { "" }
@@ -294,9 +318,11 @@ function Stop-JarvisProcesses {
     }
 
     if ($TargetDir -and (Test-Path $TargetDir)) {
-        $lockFile = Join-Path $TargetDir "jarvis.lock"
-        if (Test-Path $lockFile) {
-            Remove-Item -Path $lockFile -Force -ErrorAction SilentlyContinue
+        foreach ($lf in @(".jarvis.lock", "jarvis.lock", ".jarvis_update.lock")) {
+            $lockFile = Join-Path $TargetDir $lf
+            if (Test-Path $lockFile) {
+                Remove-Item -Path $lockFile -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 
@@ -526,8 +552,10 @@ function Remove-PathEntries {
     Broadcast-EnvironmentChange
 }
 
+$script:DeferredCleanupScheduled = $false
+
 function Remove-DirectoryTreeForce {
-    param([string]$PathToRemove)
+    param([string]$PathToRemove, [switch]$AllowDeferred)
     if ([string]::IsNullOrWhiteSpace($PathToRemove) -or -not (Test-Path $PathToRemove)) {
         return $true
     }
@@ -556,6 +584,14 @@ function Remove-DirectoryTreeForce {
         }
     }
 
+    if ((Test-Path $fullPath) -and $AllowDeferred) {
+        try {
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c ping 127.0.0.1 -n 3 >nul & rmdir /s /q `"$fullPath`" 2>nul & rmdir /s /q `"\\?\$fullPath`" 2>nul" -WindowStyle Hidden -ErrorAction SilentlyContinue | Out-Null
+            $script:DeferredCleanupScheduled = $true
+            return $true
+        } catch {}
+    }
+
     return (-not (Test-Path $fullPath))
 }
 
@@ -567,7 +603,7 @@ function Test-UninstallComplete {
         $issues += "URL protocol 'jarvis://' is still registered in the registry."
     }
 
-    if ($InstallPath -and (Test-Path $InstallPath)) {
+    if ($InstallPath -and (Test-Path $InstallPath) -and -not $script:DeferredCleanupScheduled) {
         $issues += "Install directory still exists: $InstallPath"
     }
 
@@ -662,13 +698,18 @@ function Uninstall-Jarvis {
             Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
         }
         Write-Host "  -> Deleting $installPath ..." -ForegroundColor DarkGray
-        if (Remove-DirectoryTreeForce -PathToRemove $installPath) {
+        if (Remove-DirectoryTreeForce -PathToRemove $installPath -AllowDeferred) {
             Write-Success "Removed $installPath completely."
         } else {
             Write-Fail "Could not delete all files in $installPath. Close all terminals/editors and remove manually."
         }
     } else {
         Write-Success "Core directory already absent."
+    }
+
+    $localAppDataJarvis = Join-Path $env:LOCALAPPDATA "Jarvis"
+    if (Test-Path $localAppDataJarvis) {
+        [void](Remove-DirectoryTreeForce -PathToRemove $localAppDataJarvis)
     }
 
     Write-Step "6/7" "Checking External MediaVault & Shared Files..."

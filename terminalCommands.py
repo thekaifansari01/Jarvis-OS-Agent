@@ -492,6 +492,14 @@ USAGE:
     jarvis                     Start Jarvis AI Voice Assistant
     jarvis --help              Show this help menu
 
+UPDATE & SYSTEM MAINTENANCE:
+    jarvis update                                        Check and apply updates
+    jarvis update --check                                Check for updates without installing
+    jarvis update --channel <stable|edge|pinned>         Switch release channel
+    jarvis update --rollback                             Restore previous working version
+    jarvis update --force                                Force re-sync codebase and packages
+    jarvis uninstall                                     Run complete system uninstaller
+
 MCP SERVER COMMANDS (Works Live with Zero-Restart Hot-Reload):
     jarvis mcp list                                      List all MCP servers
     jarvis mcp add <name> <cmd/url> [args...] [-e K=V]   Add or update an MCP server
@@ -934,6 +942,157 @@ def _handle_mcp_command(raw_args: list[str]) -> None:
     )
 
 
+def _find_powershell_exe() -> str | None:
+    for candidate in ("powershell.exe", "powershell", "pwsh.exe", "pwsh"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+    sys_root = os.environ.get("SystemRoot", r"C:\Windows")
+    fallback = os.path.join(sys_root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+    if os.path.exists(fallback):
+        return fallback
+    return None
+
+
+def _handle_update_command(raw_args: list[str]) -> None:
+    if platform.system() != "Windows":
+        logger.error("Automated PowerShell update manager is only supported on Windows.")
+        sys.exit(1)
+
+    ps_exe = _find_powershell_exe()
+    if not ps_exe:
+        logger.error("PowerShell executable not found on this system.")
+        sys.exit(1)
+
+    script_path = os.path.join(PROJECT_ROOT, "update.ps1")
+    if not os.path.exists(script_path):
+        logger.error(f"update.ps1 not found in {PROJECT_ROOT}.")
+        sys.exit(1)
+
+    upd_idx = -1
+    for i, token in enumerate(raw_args):
+        if token.lower() == "update":
+            upd_idx = i
+            break
+
+    tokens = raw_args[upd_idx + 1 :] if upd_idx >= 0 else []
+    ps_args = ["-InstallPath", PROJECT_ROOT]
+    valid_channels = {"stable", "edge", "pinned"}
+
+    idx = 0
+    while idx < len(tokens):
+        tok = tokens[idx]
+        low = tok.lower()
+
+        if low in ("--check", "-check", "check", "--status", "status"):
+            ps_args.append("-Check")
+            idx += 1
+            continue
+        if low in ("--silent", "-silent", "--quiet", "-q"):
+            ps_args.append("-Silent")
+            idx += 1
+            continue
+        if low in ("--auto-update", "--autoupdate", "-autoupdate", "--auto", "--yes", "-y"):
+            ps_args.append("-AutoUpdate")
+            idx += 1
+            continue
+        if low in ("--rollback", "-rollback", "rollback", "--revert", "revert"):
+            ps_args.append("-Rollback")
+            idx += 1
+            continue
+        if low in ("--force", "-force", "-f"):
+            ps_args.append("-Force")
+            idx += 1
+            continue
+        if low in ("--stable", "--edge", "--pinned"):
+            ps_args.extend(["-Channel", low.lstrip("-")])
+            idx += 1
+            continue
+        if low in ("--channel", "-channel") and idx + 1 < len(tokens):
+            ch_val = tokens[idx + 1].strip().lower()
+            if ch_val not in valid_channels:
+                logger.error(f"Invalid channel '{ch_val}'. Choose from: stable, edge, pinned.")
+                sys.exit(1)
+            ps_args.extend(["-Channel", ch_val])
+            idx += 2
+            continue
+        if low.startswith("--channel="):
+            ch_val = low.split("=", 1)[1].strip()
+            if ch_val not in valid_channels:
+                logger.error(f"Invalid channel '{ch_val}'. Choose from: stable, edge, pinned.")
+                sys.exit(1)
+            ps_args.extend(["-Channel", ch_val])
+            idx += 1
+            continue
+        if low in ("--cooldown", "-edgepromptcooldowndays") and idx + 1 < len(tokens):
+            days_str = tokens[idx + 1].strip()
+            if not days_str.isdigit():
+                logger.error("Cooldown days must be an integer.")
+                sys.exit(1)
+            ps_args.extend(["-EdgePromptCooldownDays", days_str])
+            idx += 2
+            continue
+        if low.startswith("--cooldown="):
+            days_str = low.split("=", 1)[1].strip()
+            if not days_str.isdigit():
+                logger.error("Cooldown days must be an integer.")
+                sys.exit(1)
+            ps_args.extend(["-EdgePromptCooldownDays", days_str])
+            idx += 1
+            continue
+
+        logger.error(f"Unknown update option: {tok}")
+        logger.info("Usage: jarvis update [--check] [--channel stable|edge|pinned] [--rollback] [--force] [--auto-update] [--silent]")
+        sys.exit(1)
+
+    cmd = [ps_exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script_path, *ps_args]
+    try:
+        res = subprocess.run(cmd, cwd=os.path.expanduser("~"))
+        sys.exit(res.returncode)
+    except KeyboardInterrupt:
+        print()
+        logger.info("Update cancelled by user.")
+        sys.exit(130)
+    except Exception as e:
+        logger.error(f"Failed to execute update manager: {e}")
+        sys.exit(1)
+
+
+def _handle_uninstall_command(raw_args: list[str]) -> None:
+    if platform.system() != "Windows":
+        logger.error("Automated PowerShell uninstaller is only supported on Windows.")
+        sys.exit(1)
+
+    ps_exe = _find_powershell_exe()
+    if not ps_exe:
+        logger.error("PowerShell executable not found on this system.")
+        sys.exit(1)
+
+    script_path = os.path.join(PROJECT_ROOT, "uninstall.ps1")
+    if not os.path.exists(script_path):
+        logger.error(f"uninstall.ps1 not found in {PROJECT_ROOT}.")
+        sys.exit(1)
+
+    import tempfile
+    temp_script = os.path.join(tempfile.gettempdir(), f"jarvis_uninstall_{os.getpid()}.ps1")
+    try:
+        shutil.copy2(script_path, temp_script)
+    except Exception:
+        temp_script = script_path
+
+    cmd = [ps_exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", temp_script, "-InstallPath", PROJECT_ROOT]
+    try:
+        res = subprocess.run(cmd, cwd=os.path.expanduser("~"))
+        os._exit(res.returncode)
+    except KeyboardInterrupt:
+        print()
+        logger.info("Uninstallation cancelled by user.")
+        os._exit(130)
+    except Exception as e:
+        logger.error(f"Failed to execute uninstaller: {e}")
+        os._exit(1)
+
+
 def handle_cli_commands() -> bool:
     raw_args = [arg.strip() for arg in sys.argv[1:] if arg.strip()]
     args = [arg.lower() for arg in raw_args]
@@ -957,7 +1116,7 @@ def handle_cli_commands() -> bool:
         show_help_menu()
         return True
 
-    subcommands = {"login", "logout", "memory", "reset", "bot", "mcp"}
+    subcommands = {"login", "logout", "memory", "reset", "bot", "mcp", "update", "uninstall"}
     matched_subcommands = [cmd for cmd in non_dev_args if cmd in subcommands]
 
     if not matched_subcommands:
@@ -972,6 +1131,12 @@ def handle_cli_commands() -> bool:
             "purge": "jarvis reset --hard",
             "factory": "jarvis reset --hard",
             "--hard": "jarvis reset --hard",
+            "--update": "jarvis update",
+            "upgrade": "jarvis update",
+            "--upgrade": "jarvis update",
+            "--rollback": "jarvis update --rollback",
+            "rollback": "jarvis update --rollback",
+            "--uninstall": "jarvis uninstall",
         }
         logger.error("Invalid command. Type 'jarvis --help' to view the available commands.")
         for arg in non_dev_args:
@@ -993,6 +1158,14 @@ def handle_cli_commands() -> bool:
 
     if primary_cmd == "mcp":
         _handle_mcp_command(non_dev_raw)
+        return True
+
+    if primary_cmd == "update":
+        _handle_update_command(non_dev_raw)
+        return True
+
+    if primary_cmd == "uninstall":
+        _handle_uninstall_command(non_dev_raw)
         return True
 
     if is_jarvis_running():

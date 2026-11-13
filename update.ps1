@@ -11,6 +11,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $script:ExitCode = 0
 
@@ -224,6 +225,29 @@ function Resolve-InstallPath {
     return $null
 }
 
+function Get-AncestorPids {
+    $ancestors = @{}
+    $parentMap = @{}
+    try {
+        foreach ($p in (Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+            $parentMap[[int]$p.ProcessId] = [int]$p.ParentProcessId
+        }
+        $curr = [int]$PID
+        for ($i = 0; $i -lt 16; $i++) {
+            if (-not $curr -or $ancestors.ContainsKey($curr)) { break }
+            $ancestors[$curr] = $true
+            if ($parentMap.ContainsKey($curr)) {
+                $curr = $parentMap[$curr]
+            } else {
+                break
+            }
+        }
+    } catch {
+        $ancestors[[int]$PID] = $true
+    }
+    return $ancestors
+}
+
 function Stop-JarvisProcesses {
     param([string]$TargetDir)
     $normalizedTarget = ""
@@ -234,10 +258,11 @@ function Stop-JarvisProcesses {
             $targetWithSlash = $normalizedTarget + '\'
         } catch {}
     }
+    $ancestorPids = Get-AncestorPids
     $allowedNames = @("python.exe", "pythonw.exe", "node.exe", "jarvis.exe", "pip.exe")
     $killedCount = 0
     $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        if ($_.ProcessId -eq $PID) { return $false }
+        if ($ancestorPids.ContainsKey([int]$_.ProcessId)) { return $false }
         $procName = if ($_.Name) { $_.Name.ToLowerInvariant() } else { "" }
         $exePath = if ($_.ExecutablePath) { $_.ExecutablePath.ToLowerInvariant() } else { "" }
         $cmdLine = if ($_.CommandLine) { $_.CommandLine.ToLowerInvariant() } else { "" }
@@ -253,6 +278,14 @@ function Stop-JarvisProcesses {
             Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
             $killedCount++
         } catch {}
+    }
+    if ($TargetDir -and (Test-Path $TargetDir)) {
+        foreach ($lf in @(".jarvis.lock", "jarvis.lock")) {
+            $lockFile = Join-Path $TargetDir $lf
+            if (Test-Path $lockFile) {
+                Remove-Item -Path $lockFile -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
     if ($killedCount -gt 0) {
         Start-Sleep -Seconds 2
@@ -322,15 +355,44 @@ function Get-StatePath {
     return Join-Path $TargetDir ".jarvis_state.json"
 }
 
+function New-DefaultState {
+    return [pscustomobject]@{
+        channel                       = "stable"
+        version                       = ""
+        commit                        = ""
+        previous_version              = ""
+        previous_commit               = ""
+        previous_channel              = ""
+        last_backup_path              = ""
+        deps_hash                     = ""
+        npm_hash                      = ""
+        last_edge_prompt_at           = $null
+        edge_prompt_snooze_until      = $null
+        edge_prompt_dismissed_count   = 0
+        edge_prompt_permanently_muted = $false
+        last_rollback_at              = $null
+        last_updated_at               = $null
+    }
+}
+
 function Read-StateFile {
     param([string]$TargetDir)
+    $defaults = New-DefaultState
     $path = Get-StatePath -TargetDir $TargetDir
-    if (-not (Test-Path $path)) { return $null }
+    if (-not (Test-Path $path)) { return $defaults }
     try {
         $raw = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8).TrimStart([char]0xFEFF)
-        if ([string]::IsNullOrWhiteSpace($raw)) { return $null }
-        return ($raw | ConvertFrom-Json)
-    } catch { return $null }
+        if ([string]::IsNullOrWhiteSpace($raw)) { return $defaults }
+        $loaded = $raw | ConvertFrom-Json
+        if (-not $loaded) { return $defaults }
+        foreach ($prop in $defaults.PSObject.Properties) {
+            $name = $prop.Name
+            if ($null -ne $loaded.PSObject.Properties[$name]) {
+                $defaults.$name = $loaded.$name
+            }
+        }
+        return $defaults
+    } catch { return $defaults }
 }
 
 function Write-StateFile {
@@ -342,21 +404,6 @@ function Write-StateFile {
         [System.IO.File]::WriteAllText($path, $json, $utf8)
         return $true
     } catch { return $false }
-}
-
-function New-DefaultState {
-    return [pscustomobject]@{
-        channel                      = "stable"
-        version                      = ""
-        commit                       = ""
-        deps_hash                    = ""
-        npm_hash                     = ""
-        last_edge_prompt_at          = $null
-        edge_prompt_dismissed_count  = 0
-        edge_prompt_permanently_muted = $false
-        last_rollback_at             = $null
-        last_updated_at              = $null
-    }
 }
 
 function Invoke-GitCommand {
@@ -373,6 +420,18 @@ function Invoke-GitCommand {
     } finally {
         Pop-Location
     }
+}
+
+function Update-RemoteMetadata {
+    param([string]$TargetDir)
+    $shallowR = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("rev-parse", "--is-shallow-repository")
+    if ($shallowR.ExitCode -eq 0 -and "$($shallowR.Output)".Trim() -eq "true") {
+        [void](Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("remote", "set-branches", "origin", "*"))
+        $unshallowR = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("fetch", "--unshallow", "--tags", "--prune", "origin")
+        if ($unshallowR.ExitCode -eq 0) { return $true }
+    }
+    $fetchR = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("fetch", "--tags", "--prune", "origin")
+    return ($fetchR.ExitCode -eq 0)
 }
 
 function Get-CurrentCommit {
@@ -393,13 +452,25 @@ function Get-CurrentTag {
 
 function Get-LatestStableTag {
     param([string]$TargetDir)
-    $r = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("describe", "--tags", "--abbrev=0", "--match", "v*", "--exclude", "*-*")
-    if ($r.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace("$($r.Output)")) {
-        return "$($r.Output)".Trim()
+    $r = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("tag", "-l", "v*", "--sort=-v:refname")
+    if ($r.ExitCode -eq 0 -and $r.Output) {
+        foreach ($line in $r.Output) {
+            $t = "$line".Trim()
+            if ($t -and $t -notmatch "-") {
+                return $t
+            }
+        }
     }
-    $r2 = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("describe", "--tags", "--abbrev=0")
+    $r2 = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("describe", "--tags", "--abbrev=0", "--match", "v*", "--exclude", "*-*", "origin/main")
     if ($r2.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace("$($r2.Output)")) {
         return "$($r2.Output)".Trim()
+    }
+    $r3 = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("tag", "-l", "--sort=-v:refname")
+    if ($r3.ExitCode -eq 0 -and $r3.Output) {
+        foreach ($line in $r3.Output) {
+            $t = "$line".Trim()
+            if ($t) { return $t }
+        }
     }
     return $null
 }
@@ -484,6 +555,52 @@ function Get-NpmHash {
     } finally { $sha.Dispose() }
 }
 
+function Sync-EnvTemplate {
+    param([string]$TargetDir)
+    $envFile = Join-Path $TargetDir ".env"
+    $exampleFile = Join-Path $TargetDir ".env.example"
+    if (-not (Test-Path $envFile) -or -not (Test-Path $exampleFile)) { return }
+    try {
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        $envRaw = [System.IO.File]::ReadAllText($envFile, [System.Text.Encoding]::UTF8).TrimStart([char]0xFEFF)
+        $exRaw = [System.IO.File]::ReadAllText($exampleFile, [System.Text.Encoding]::UTF8).TrimStart([char]0xFEFF)
+        $existingKeys = @{}
+        foreach ($m in [regex]::Matches($envRaw, "(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")) {
+            $existingKeys[$m.Groups[1].Value] = $true
+        }
+        $addedLines = @()
+        foreach ($line in ($exRaw -split "`r?`n")) {
+            $m = [regex]::Match($line, "^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$")
+            if ($m.Success) {
+                $k = $m.Groups[1].Value
+                $v = $m.Groups[2].Value.Trim()
+                if (-not $existingKeys.ContainsKey($k)) {
+                    if ($v -eq "your_key_here" -or $v -eq "your_key") { $v = "" }
+                    $addedLines += "$k=$v"
+                    $existingKeys[$k] = $true
+                }
+            }
+        }
+        if ($addedLines.Count -gt 0) {
+            $updated = $envRaw.TrimEnd("`r", "`n") + "`r`n" + ($addedLines -join "`r`n") + "`r`n"
+            [System.IO.File]::WriteAllText($envFile, $updated, $utf8NoBom)
+            Write-Success "Merged $($addedLines.Count) new configuration key(s) from .env.example."
+        }
+    } catch {}
+}
+
+function Prune-OldBackups {
+    param([string]$BackupRoot, [int]$RetainCount = 5)
+    try {
+        $dirs = Get-ChildItem -Path $BackupRoot -Directory -Filter "Update_*" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+        if ($dirs.Count -le $RetainCount) { return }
+        $toRemove = $dirs | Select-Object -Skip $RetainCount
+        foreach ($d in $toRemove) {
+            Remove-Item -Path $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
+}
+
 function Backup-UserDataForUpdate {
     param([string]$InstallPath)
     if (-not $InstallPath -or -not (Test-Path $InstallPath)) { return $null }
@@ -519,27 +636,60 @@ function Backup-UserDataForUpdate {
     }
 }
 
-function Prune-OldBackups {
-    param([string]$BackupRoot, [int]$RetainCount = 5)
+function Restore-UserDataFromBackup {
+    param([string]$InstallPath, [string]$BackupFolder)
+    if (-not $BackupFolder -or -not (Test-Path $BackupFolder)) { return }
     try {
-        $dirs = Get-ChildItem -Path $BackupRoot -Directory -Filter "Update_*" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
-        if ($dirs.Count -le $RetainCount) { return }
-        $toRemove = $dirs | Select-Object -Skip $RetainCount
-        foreach ($d in $toRemove) {
-            Remove-Item -Path $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        $dataDir = Join-Path $InstallPath "Data"
+        if (-not (Test-Path $dataDir)) {
+            New-Item -ItemType Directory -Path $dataDir -Force -ErrorAction SilentlyContinue | Out-Null
         }
-    } catch {}
+        $envBackup = Join-Path $BackupFolder ".env"
+        if (Test-Path $envBackup) {
+            Copy-Item -Path $envBackup -Destination (Join-Path $InstallPath ".env") -Force -ErrorAction SilentlyContinue
+        }
+        $mcpBackup = Join-Path $BackupFolder "mcp_servers.json"
+        if (Test-Path $mcpBackup) {
+            Copy-Item -Path $mcpBackup -Destination (Join-Path $dataDir "mcp_servers.json") -Force -ErrorAction SilentlyContinue
+        }
+        foreach ($folderName in @("jarvis_memory", "jarvis_indexer", "SessionCookies")) {
+            $srcDir = Join-Path $BackupFolder $folderName
+            $dstDir = Join-Path $dataDir $folderName
+            if (Test-Path $srcDir) {
+                if (Test-Path $dstDir) {
+                    Remove-Item -Path $dstDir -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                Copy-Item -Path $srcDir -Destination $dstDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+        Write-Success "User configuration and data restored from backup."
+    } catch {
+        Write-Warn "Partial issue while restoring backup data: $($_.Exception.Message)"
+    }
 }
 
 function Invoke-GitStashIfDirty {
     param([string]$TargetDir)
     $statusR = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("status", "--porcelain")
     if ($statusR.ExitCode -ne 0) { return $null }
-    $out = "$($statusR.Output)".Trim()
-    if ([string]::IsNullOrWhiteSpace($out)) { return $null }
+    $ignoredFiles = @(".jarvis_state.json", ".jarvis_update.lock", ".jarvis.lock", "jarvis.lock")
+    $relevantLines = @()
+    foreach ($line in $statusR.Output) {
+        $trimmed = "$line".Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) { continue }
+        $isIgnored = $false
+        foreach ($ig in $ignoredFiles) {
+            if ($trimmed.EndsWith($ig)) { $isIgnored = $true; break }
+        }
+        if (-not $isIgnored) { $relevantLines += $trimmed }
+    }
+    if ($relevantLines.Count -eq 0) { return $null }
     $stashMsg = "jarvis-pre-update-$(Get-Date -Format 'yyyyMMddHHmmss')"
-    $r = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("stash", "push", "-u", "-m", $stashMsg)
-    if ($r.ExitCode -eq 0) {
+    $r = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @(
+        "stash", "push", "-u", "-m", $stashMsg, "--", ".",
+        ":!.jarvis_state.json", ":!.jarvis_update.lock", ":!.jarvis.lock", ":!jarvis.lock"
+    )
+    if ($r.ExitCode -eq 0 -and "$($r.Output)" -notmatch "No local changes to save") {
         Write-Success "Local modifications stashed as '$stashMsg'."
         return $stashMsg
     }
@@ -553,23 +703,25 @@ function Invoke-GitStashRestore {
     if ($listR.ExitCode -ne 0) { return }
     $matching = @($listR.Output | Where-Object { "$_" -match [regex]::Escape($StashMessage) })
     if ($matching.Count -eq 0) { return }
-    $r = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("stash", "pop")
+    $stashRef = ("$($matching[0])" -split ":")[0].Trim()
+    if (-not $stashRef) { $stashRef = "stash@{0}" }
+    $r = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("stash", "pop", $stashRef)
     if ($r.ExitCode -eq 0) {
         Write-Success "Local modifications restored."
     } else {
-        Write-Warn "Could not restore local modifications due to conflicts. Stash kept at 'stash@{0}'."
+        Write-Warn "Could not restore local modifications due to conflicts. Stash kept at '$stashRef'."
     }
 }
 
 function Sync-PythonDependencies {
-    param([string]$TargetDir, [string]$OldHash)
+    param([string]$TargetDir, [string]$OldHash, [bool]$ForceSync = $false)
     $venvPython = Join-Path $TargetDir ".venv\Scripts\python.exe"
     if (-not (Test-Path $venvPython)) {
         Write-Warn "Virtual environment missing; skipping Python dependency sync."
         return @{ Success = $false; NewHash = "" }
     }
     $newHash = Get-DependencyHash -TargetDir $TargetDir
-    if ($newHash -and $newHash -eq $OldHash) {
+    if (-not $ForceSync -and $newHash -and $newHash -eq $OldHash) {
         Write-Success "Python dependencies unchanged; skipping pip install."
         return @{ Success = $true; NewHash = $newHash }
     }
@@ -578,7 +730,7 @@ function Sync-PythonDependencies {
         Write-Warn "requirements.txt not found; skipping pip install."
         return @{ Success = $true; NewHash = "" }
     }
-    Write-Host "  -> requirements.txt changed; syncing Python packages..." -ForegroundColor Cyan
+    Write-Host "  -> Synchronizing Python packages from requirements.txt..." -ForegroundColor Cyan
     Push-Location $TargetDir
     try {
         & $venvPython -m pip install --prefer-binary --timeout 100 --retries 5 -r requirements.txt 2>&1 | Out-Host
@@ -593,14 +745,14 @@ function Sync-PythonDependencies {
 }
 
 function Sync-NodeDependencies {
-    param([string]$TargetDir, [string]$OldHash)
+    param([string]$TargetDir, [string]$OldHash, [bool]$ForceSync = $false)
     $baileysPath = Join-Path $TargetDir "tools\Messanger\whatsapp\BaileysServer"
     if (-not (Test-Path $baileysPath)) {
         Write-Success "Baileys server not present; skipping Node dependency sync."
         return @{ Success = $true; NewHash = "" }
     }
     $newHash = Get-NpmHash -TargetDir $TargetDir
-    if ($newHash -and $newHash -eq $OldHash) {
+    if (-not $ForceSync -and $newHash -and $newHash -eq $OldHash) {
         Write-Success "Node dependencies unchanged; skipping npm install."
         return @{ Success = $true; NewHash = $newHash }
     }
@@ -609,7 +761,7 @@ function Sync-NodeDependencies {
         Write-Warn "npm not found; skipping Node dependency sync."
         return @{ Success = $true; NewHash = $newHash }
     }
-    Write-Host "  -> package.json changed; syncing Node packages..." -ForegroundColor Cyan
+    Write-Host "  -> Synchronizing Node packages..." -ForegroundColor Cyan
     $lockPath = Join-Path $baileysPath "package-lock.json"
     Push-Location $baileysPath
     try {
@@ -698,36 +850,48 @@ function Invoke-Rollback {
     param(
         [string]$TargetDir,
         [string]$TargetRef,
+        [string]$DisplayVersion,
         [string]$BackupFolder,
-        $PreviousState
+        $StateToRestore
     )
-    Write-Step "Rollback" "Restoring previous version ($TargetRef)..."
-    Push-Location $TargetDir
-    try {
-        & git reset --hard $TargetRef 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
+    $label = if ($DisplayVersion) { "$DisplayVersion ($TargetRef)" } else { $TargetRef }
+    Write-Step "Rollback" "Restoring previous version $label..."
+    $checkoutR = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("checkout", "--force", $TargetRef)
+    if ($checkoutR.ExitCode -ne 0) {
+        $resetR = Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("reset", "--hard", $TargetRef)
+        if ($resetR.ExitCode -ne 0) {
             Write-Fail "Git reset to $TargetRef failed."
             return $false
         }
-    } finally {
-        Pop-Location
+    } else {
+        [void](Invoke-GitCommand -WorkingDir $TargetDir -Arguments @("reset", "--hard", $TargetRef))
     }
     Write-Success "Code restored to $TargetRef."
     if ($BackupFolder -and (Test-Path $BackupFolder)) {
-        $envBackup = Join-Path $BackupFolder ".env"
-        if (Test-Path $envBackup) {
-            Copy-Item -Path $envBackup -Destination (Join-Path $TargetDir ".env") -Force -ErrorAction SilentlyContinue
-            Write-Success "User configuration restored from backup."
-        }
+        Restore-UserDataFromBackup -InstallPath $TargetDir -BackupFolder $BackupFolder
     }
-    $syncR = Sync-PythonDependencies -TargetDir $TargetDir -OldHash ""
-    if (-not $syncR.Success) {
-        Write-Fail "Dependency reinstall after rollback failed."
+    $pySync = Sync-PythonDependencies -TargetDir $TargetDir -OldHash "" -ForceSync $true
+    if (-not $pySync.Success) {
+        Write-Fail "Python dependency reinstall after rollback failed."
         return $false
     }
-    if ($PreviousState) {
-        $PreviousState.last_rollback_at = (Get-Date).ToUniversalTime().ToString("o")
-        [void](Write-StateFile -TargetDir $TargetDir -State $PreviousState)
+    $npmSync = Sync-NodeDependencies -TargetDir $TargetDir -OldHash "" -ForceSync $false
+    if (-not $npmSync.Success) {
+        Write-Warn "Node dependency sync after rollback reported a warning."
+    }
+    if ($StateToRestore) {
+        $restoredCommit = Get-CurrentCommit -TargetDir $TargetDir
+        $restoredTag = Get-CurrentTag -TargetDir $TargetDir
+        $StateToRestore.commit = $restoredCommit
+        if ($DisplayVersion) {
+            $StateToRestore.version = $DisplayVersion
+        } elseif ($restoredTag) {
+            $StateToRestore.version = $restoredTag
+        }
+        $StateToRestore.deps_hash = $pySync.NewHash
+        $StateToRestore.npm_hash = $npmSync.NewHash
+        $StateToRestore.last_rollback_at = (Get-Date).ToUniversalTime().ToString("o")
+        [void](Write-StateFile -TargetDir $TargetDir -State $StateToRestore)
     }
     Write-Success "Rollback completed."
     return $true
@@ -744,6 +908,12 @@ function Show-EdgePrompt {
     )
     if (-not [Environment]::UserInteractive) { return "skip" }
     if ($State.edge_prompt_permanently_muted) { return "skip" }
+    if ($State.edge_prompt_snooze_until) {
+        try {
+            $snoozeUntil = [DateTime]::Parse($State.edge_prompt_snooze_until).ToUniversalTime()
+            if ((Get-Date).ToUniversalTime() -lt $snoozeUntil) { return "skip" }
+        } catch {}
+    }
     if ($State.last_edge_prompt_at) {
         try {
             $lastPrompt = [DateTime]::Parse($State.last_edge_prompt_at)
@@ -793,14 +963,15 @@ function Show-EdgePrompt {
 function Invoke-CheckMode {
     param([string]$InstallPath, [bool]$SilentMode)
     $state = Read-StateFile -TargetDir $InstallPath
-    if (-not $state) { $state = New-DefaultState }
     if (-not $state.channel) { $state.channel = "stable" }
     $currentCommit = Get-CurrentCommit -TargetDir $InstallPath
     $currentTag = Get-CurrentTag -TargetDir $InstallPath
     $currentVersion = if ($currentTag) { $currentTag } elseif ($state.version) { $state.version } else { $currentCommit.Substring(0, [Math]::Min(8, $currentCommit.Length)) }
-    [void](Invoke-GitCommand -WorkingDir $InstallPath -Arguments @("fetch", "--tags", "--prune", "origin"))
+    [void](Update-RemoteMetadata -TargetDir $InstallPath)
     $latestTag = Get-LatestStableTag -TargetDir $InstallPath
     $edgeInfo = Get-EdgeInfo -TargetDir $InstallPath
+    $aheadCount = if ($edgeInfo) { $edgeInfo.AheadCount } else { 0 }
+    $hasStableUpdate = ($latestTag -and $currentTag -ne $latestTag -and $currentVersion -ne $latestTag)
 
     if (-not $SilentMode) {
         Write-Host ""
@@ -813,16 +984,18 @@ function Invoke-CheckMode {
         Write-Host "  Channel         : $($state.channel)" -ForegroundColor White
         Write-Host ""
         Write-Host "  Latest stable   : $(if ($latestTag) { $latestTag } else { 'not found' })" -ForegroundColor White
-        if ($currentTag -and $latestTag -and $currentTag -ne $latestTag) {
-            Write-Host "  Status          : Update available" -ForegroundColor Yellow
+        if ($state.channel -eq "stable" -and $hasStableUpdate) {
+            Write-Host "  Status          : Update available ($latestTag)" -ForegroundColor Yellow
+        } elseif ($state.channel -eq "edge" -and $aheadCount -gt 0) {
+            Write-Host "  Status          : Edge update available ($aheadCount new commit(s))" -ForegroundColor Yellow
         } elseif ($state.channel -eq "edge") {
-            Write-Host "  Status          : On edge channel" -ForegroundColor Yellow
+            Write-Host "  Status          : Up to date on edge channel" -ForegroundColor Green
         } else {
             Write-Host "  Status          : Up to date" -ForegroundColor Green
         }
         if ($edgeInfo) {
             Write-Host ""
-            Write-Host "  Edge channel    : $($edgeInfo.AheadCount) commit(s) ahead of current build" -ForegroundColor Gray
+            Write-Host "  Edge channel    : $aheadCount commit(s) ahead of current build" -ForegroundColor Gray
             if ($edgeInfo.LatestMessage) {
                 Write-Host "  Latest commit   : $($edgeInfo.LatestMessage)" -ForegroundColor Gray
             }
@@ -831,8 +1004,16 @@ function Invoke-CheckMode {
         Write-Host "  Run 'jarvis update' to apply any available updates." -ForegroundColor Cyan
         Write-Host ""
     } else {
-        $status = if ($currentTag -and $latestTag -and $currentTag -ne $latestTag) { "update_available" } elseif ($state.channel -eq "edge") { "on_edge" } else { "up_to_date" }
-        Write-Output "STATUS=$status CURRENT=$currentVersion LATEST=$latestTag CHANNEL=$($state.channel) EDGE_AHEAD=$($edgeInfo.AheadCount)"
+        $status = if ($state.channel -eq "stable" -and $hasStableUpdate) {
+            "update_available"
+        } elseif ($state.channel -eq "edge" -and $aheadCount -gt 0) {
+            "update_available"
+        } elseif ($state.channel -eq "edge") {
+            "on_edge"
+        } else {
+            "up_to_date"
+        }
+        Write-Output "STATUS=$status CURRENT=$currentVersion LATEST=$latestTag CHANNEL=$($state.channel) EDGE_AHEAD=$aheadCount"
     }
 }
 
@@ -881,7 +1062,6 @@ function Update-Jarvis {
 
     try {
         $state = Read-StateFile -TargetDir $installPath
-        if (-not $state) { $state = New-DefaultState }
         if (-not $state.channel) { $state.channel = "stable" }
 
         if ($ChannelOverride) {
@@ -906,22 +1086,44 @@ function Update-Jarvis {
         }
 
         if ($RollbackMode) {
-            if (-not $state.version -or -not $state.commit) {
+            $rollbackCommit = if ($state.previous_commit) { $state.previous_commit } elseif ($state.commit -and $state.commit -ne $currentCommit) { $state.commit } else { "" }
+            $rollbackVersion = if ($state.previous_version) { $state.previous_version } elseif ($state.version -and $state.version -ne $currentVersion) { $state.version } else { "" }
+            $targetRef = if ($rollbackCommit) { $rollbackCommit } elseif ($rollbackVersion) { $rollbackVersion } else { "" }
+
+            if (-not $targetRef) {
                 Write-Fail "No previous version recorded; cannot rollback automatically."
                 Write-Warn "Inspect '$installPath' with 'git log' to identify a manual target."
                 $script:ExitCode = 1
                 return
             }
-            $targetRef = $state.version
+
+            $displayTarget = if ($rollbackVersion) { $rollbackVersion } else { $targetRef.Substring(0, [Math]::Min(8, $targetRef.Length)) }
             if (-not $SilentMode) {
-                if (-not (Request-Confirmation -Prompt "Rollback to $targetRef?" -DefaultYes $false)) {
+                if (-not (Request-Confirmation -Prompt "Rollback to $displayTarget?" -DefaultYes $false)) {
                     Write-Warn "Rollback cancelled."
                     return
                 }
             }
-            $backupFolder = Backup-UserDataForUpdate -InstallPath $installPath
+
+            $restoreBackup = $state.last_backup_path
+            if (-not $restoreBackup -or -not (Test-Path $restoreBackup)) {
+                $backupRoot = Join-Path $env:LOCALAPPDATA "Jarvis\Backups"
+                if (Test-Path $backupRoot) {
+                    $latestDir = Get-ChildItem -Path $backupRoot -Directory -Filter "Update_*" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                    if ($latestDir) { $restoreBackup = $latestDir.FullName }
+                }
+            }
+
+            [void](Backup-UserDataForUpdate -InstallPath $installPath)
             Stop-JarvisProcesses -TargetDir $installPath
-            $ok = Invoke-Rollback -TargetDir $installPath -TargetRef $targetRef -BackupFolder $backupFolder -PreviousState $state
+
+            if ($state.previous_channel) {
+                $state.channel = $state.previous_channel
+            }
+            $state.previous_version = $currentVersion
+            $state.previous_commit = $currentCommit
+
+            $ok = Invoke-Rollback -TargetDir $installPath -TargetRef $targetRef -DisplayVersion $displayTarget -BackupFolder $restoreBackup -StateToRestore $state
             if (-not $ok) {
                 Write-Fail "Rollback failed. Manual recovery may be required."
                 $script:ExitCode = 1
@@ -930,8 +1132,7 @@ function Update-Jarvis {
         }
 
         Write-Step "1/7" "Fetching latest repository metadata..."
-        $fetchR = Invoke-GitCommand -WorkingDir $installPath -Arguments @("fetch", "--tags", "--prune", "origin")
-        if ($fetchR.ExitCode -ne 0) {
+        if (-not (Update-RemoteMetadata -TargetDir $installPath)) {
             Write-Fail "Failed to reach the remote repository. Check your internet connection."
             $script:ExitCode = 1
             return
@@ -950,8 +1151,11 @@ function Update-Jarvis {
             "stable" {
                 if (-not $latestTag) {
                     Write-Warn "No stable release tag found on remote."
-                    $targetRef = ""
-                } elseif ($currentTag -eq $latestTag) {
+                    if ($ForceMode) {
+                        $targetRef = "origin/main"
+                        $targetVersion = $currentVersion
+                    }
+                } elseif ($currentTag -eq $latestTag -and -not $ForceMode) {
                     $targetRef = ""
                 } else {
                     $targetRef = $latestTag
@@ -959,12 +1163,12 @@ function Update-Jarvis {
                 }
             }
             "edge" {
-                if (-not $edgeInfo -or $edgeInfo.AheadCount -eq 0) {
+                if ((-not $edgeInfo -or $edgeInfo.AheadCount -eq 0) -and -not $ForceMode) {
                     $targetRef = ""
                     if ($latestTag -and $currentTag -ne $latestTag) {
                         Write-Warn "A newer stable release ($latestTag) is available."
                         if (-not $SilentMode -and -not $AutoUpdateMode) {
-                            if (Read-YesNo "Switch to stable release $latestTag?" "N" -eq "Y") {
+                            if ((Read-YesNo "Switch to stable release $latestTag?" "N") -eq "Y") {
                                 $pendingChannelSwitch = "stable"
                                 $targetRef = $latestTag
                                 $targetVersion = $latestTag
@@ -977,8 +1181,13 @@ function Update-Jarvis {
                 }
             }
             "pinned" {
-                if (-not $SilentMode) { Write-Success "Channel is pinned. No automatic updates applied." }
-                return
+                if ($ForceMode) {
+                    $targetRef = $currentCommit
+                    $targetVersion = $currentVersion
+                } else {
+                    if (-not $SilentMode) { Write-Success "Channel is pinned. No automatic updates applied." }
+                    return
+                }
             }
         }
 
@@ -1005,8 +1214,9 @@ function Update-Jarvis {
                     }
                     "remind" {
                         $state.last_edge_prompt_at = $nowIso
+                        $state.edge_prompt_snooze_until = (Get-Date).ToUniversalTime().AddDays(30).ToString("o")
                         [void](Write-StateFile -TargetDir $installPath -State $state)
-                        Write-Success "Reminder set. Stable channel is up to date."
+                        Write-Success "Reminder set for 30 days. Stable channel is up to date."
                         return
                     }
                     "mute" {
@@ -1044,7 +1254,8 @@ function Update-Jarvis {
         }
 
         if ($currentChannel -eq "stable" -and $latestTag -and $currentTag -ne $latestTag) {
-            $changelogR = Invoke-GitCommand -WorkingDir $installPath -Arguments @("log", "$currentTag..$latestTag", "--oneline", "--no-merges", "-n", "15")
+            $logRange = if ($currentTag) { "$currentTag..$latestTag" } else { "HEAD..$latestTag" }
+            $changelogR = Invoke-GitCommand -WorkingDir $installPath -Arguments @("log", $logRange, "--oneline", "--no-merges", "-n", "15")
             if ($changelogR.ExitCode -eq 0 -and $changelogR.Output) {
                 Write-Host ""
                 Write-Host "  Changes in this release:" -ForegroundColor Cyan
@@ -1056,34 +1267,36 @@ function Update-Jarvis {
             }
         }
 
-        if (-not $SilentMode -and -not $AutoUpdateMode) {
+        if (-not $SilentMode -and -not $AutoUpdateMode -and -not $ForceMode) {
             if (-not (Request-Confirmation -Prompt "Proceed with update to $targetVersion?" -DefaultYes $true)) {
                 Write-Warn "Update cancelled."
                 return
             }
         }
 
-        $stashMessage = $null
-        if ($currentChannel -eq "edge") {
-            $stashMessage = Invoke-GitStashIfDirty -TargetDir $installPath
-        }
+        $stashMessage = Invoke-GitStashIfDirty -TargetDir $installPath
 
         Write-Step "3/7" "Creating safety backup of user data..."
         $backupFolder = Backup-UserDataForUpdate -InstallPath $installPath
 
         $previousState = [pscustomobject]@{
-            channel                     = $state.channel
-            version                     = $currentVersion
-            commit                      = $currentCommit
-            deps_hash                   = $state.deps_hash
-            npm_hash                    = $state.npm_hash
-            last_edge_prompt_at         = $state.last_edge_prompt_at
-            edge_prompt_dismissed_count = $state.edge_prompt_dismissed_count
+            channel                       = $state.channel
+            version                       = $currentVersion
+            commit                        = $currentCommit
+            previous_version              = $state.previous_version
+            previous_commit               = $state.previous_commit
+            previous_channel              = $state.previous_channel
+            last_backup_path              = if ($backupFolder) { $backupFolder } else { $state.last_backup_path }
+            deps_hash                     = $state.deps_hash
+            npm_hash                      = $state.npm_hash
+            last_edge_prompt_at           = $state.last_edge_prompt_at
+            edge_prompt_snooze_until      = $state.edge_prompt_snooze_until
+            edge_prompt_dismissed_count   = $state.edge_prompt_dismissed_count
             edge_prompt_permanently_muted = $state.edge_prompt_permanently_muted
-            last_rollback_at            = $state.last_rollback_at
-            last_updated_at             = $state.last_updated_at
+            last_rollback_at              = $state.last_rollback_at
+            last_updated_at               = $state.last_updated_at
         }
-        $rollbackRef = if ($currentTag) { $currentTag } else { $currentCommit }
+        $rollbackRef = if ($currentCommit) { $currentCommit } elseif ($currentTag) { $currentTag } else { "HEAD" }
 
         Write-Step "4/7" "Stopping active J.A.R.V.I.S. processes..."
         Stop-JarvisProcesses -TargetDir $installPath
@@ -1094,24 +1307,28 @@ function Update-Jarvis {
             $resetR = Invoke-GitCommand -WorkingDir $installPath -Arguments @("reset", "--hard", $targetRef)
             if ($resetR.ExitCode -ne 0) {
                 Write-Fail "Failed to apply update. Manual recovery may be required."
-                Write-Warn "Reverting to $rollbackRef ..."
-                [void](Invoke-Rollback -TargetDir $installPath -TargetRef $rollbackRef -BackupFolder $backupFolder -PreviousState $previousState)
+                Write-Warn "Reverting to $currentVersion ..."
+                [void](Invoke-Rollback -TargetDir $installPath -TargetRef $rollbackRef -DisplayVersion $currentVersion -BackupFolder $backupFolder -StateToRestore $previousState)
                 $script:ExitCode = 1
                 return
             }
+        } else {
+            [void](Invoke-GitCommand -WorkingDir $installPath -Arguments @("reset", "--hard", $targetRef))
         }
         $appliedCommit = Get-CurrentCommit -TargetDir $installPath
         Write-Success "Code updated to $targetVersion ($($appliedCommit.Substring(0, [Math]::Min(8, $appliedCommit.Length))))."
 
+        Sync-EnvTemplate -TargetDir $installPath
+
         Write-Step "6/7" "Synchronizing dependencies..."
-        $pySync = Sync-PythonDependencies -TargetDir $installPath -OldHash $state.deps_hash
+        $pySync = Sync-PythonDependencies -TargetDir $installPath -OldHash $state.deps_hash -ForceSync $ForceMode
         if (-not $pySync.Success) {
             Write-Fail "Python dependency sync failed; rolling back..."
-            [void](Invoke-Rollback -TargetDir $installPath -TargetRef $rollbackRef -BackupFolder $backupFolder -PreviousState $previousState)
+            [void](Invoke-Rollback -TargetDir $installPath -TargetRef $rollbackRef -DisplayVersion $currentVersion -BackupFolder $backupFolder -StateToRestore $previousState)
             $script:ExitCode = 1
             return
         }
-        $npmSync = Sync-NodeDependencies -TargetDir $installPath -OldHash $state.npm_hash
+        $npmSync = Sync-NodeDependencies -TargetDir $installPath -OldHash $state.npm_hash -ForceSync $ForceMode
         if (-not $npmSync.Success) {
             Write-Warn "Node dependency sync reported issues. Continuing with health check."
         }
@@ -1120,8 +1337,8 @@ function Update-Jarvis {
         $health = Test-Health -TargetDir $installPath
         if (-not $health.Healthy) {
             Write-Fail "Health check failed: $($health.Reason)"
-            Write-Warn "Rolling back to $rollbackRef ..."
-            $rbOk = Invoke-Rollback -TargetDir $installPath -TargetRef $rollbackRef -BackupFolder $backupFolder -PreviousState $previousState
+            Write-Warn "Rolling back to $currentVersion ..."
+            $rbOk = Invoke-Rollback -TargetDir $installPath -TargetRef $rollbackRef -DisplayVersion $currentVersion -BackupFolder $backupFolder -StateToRestore $previousState
             if ($rbOk) {
                 Write-Success "System restored to previous working state."
             } else {
@@ -1142,16 +1359,21 @@ function Update-Jarvis {
         }
 
         $newState = [pscustomobject]@{
-            channel                     = if ($pendingChannelSwitch) { $pendingChannelSwitch } else { $currentChannel }
-            version                     = if ($targetVersion -and $targetVersion -notlike "edge-*") { $targetVersion } else { $currentVersion }
-            commit                      = $appliedCommit
-            deps_hash                   = $pySync.NewHash
-            npm_hash                    = $npmSync.NewHash
-            last_edge_prompt_at         = $state.last_edge_prompt_at
-            edge_prompt_dismissed_count = $state.edge_prompt_dismissed_count
+            channel                       = if ($pendingChannelSwitch) { $pendingChannelSwitch } else { $currentChannel }
+            version                       = if ($targetVersion) { $targetVersion } else { $currentVersion }
+            commit                        = $appliedCommit
+            previous_version              = $currentVersion
+            previous_commit               = $currentCommit
+            previous_channel              = $state.channel
+            last_backup_path              = if ($backupFolder) { $backupFolder } else { $state.last_backup_path }
+            deps_hash                     = $pySync.NewHash
+            npm_hash                      = $npmSync.NewHash
+            last_edge_prompt_at           = $state.last_edge_prompt_at
+            edge_prompt_snooze_until      = $state.edge_prompt_snooze_until
+            edge_prompt_dismissed_count   = $state.edge_prompt_dismissed_count
             edge_prompt_permanently_muted = $state.edge_prompt_permanently_muted
-            last_rollback_at            = $state.last_rollback_at
-            last_updated_at             = (Get-Date).ToUniversalTime().ToString("o")
+            last_rollback_at              = $state.last_rollback_at
+            last_updated_at               = (Get-Date).ToUniversalTime().ToString("o")
         }
         [void](Write-StateFile -TargetDir $installPath -State $newState)
 

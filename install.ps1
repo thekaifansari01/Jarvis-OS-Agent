@@ -393,6 +393,13 @@ function Stop-RunningJarvis {
         } catch {}
     }
 
+    foreach ($lf in @(".jarvis.lock", "jarvis.lock")) {
+        $lockFile = Join-Path $TargetDir $lf
+        if (Test-Path $lockFile) {
+            Remove-Item -Path $lockFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     if ($killedCount -gt 0) {
         Start-Sleep -Seconds 2
     }
@@ -765,7 +772,7 @@ function Install-Jarvis {
         Write-Host "  -> Existing repository found at $installPath. Fetching updates..." -ForegroundColor Cyan
         Push-Location $installPath
         try {
-            & git fetch origin main 2>&1 | Out-Null
+            & git fetch --tags --prune origin main 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 Write-Warn "Could not reach remote repository; continuing with local codebase."
             } else {
@@ -790,6 +797,12 @@ function Install-Jarvis {
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $installPath "requirements.txt"))) {
             Write-Fail "Failed to clone repository. Check your internet connection."
             return
+        }
+        Push-Location $installPath
+        try {
+            & git fetch --tags origin 2>&1 | Out-Null
+        } finally {
+            Pop-Location
         }
         Write-Success "Repository cloned successfully."
     }
@@ -1116,6 +1129,48 @@ function Install-Jarvis {
         } else {
             Write-Fail "SetupRegistry.py not found in $installPath."
         }
+
+        try {
+            $initCommit = (& git rev-parse HEAD 2>$null | Out-String).Trim()
+            $initTag = (& git describe --tags --exact-match HEAD 2>$null | Out-String).Trim()
+            if (-not $initTag) {
+                $initTag = (& git describe --tags --abbrev=0 2>$null | Out-String).Trim()
+            }
+            $initVersion = if ($initTag) { $initTag } elseif ($initCommit) { $initCommit.Substring(0, [Math]::Min(8, $initCommit.Length)) } else { "v1.0.0" }
+            $reqFile = Join-Path $installPath "requirements.txt"
+            $depsHash = if (Test-Path $reqFile) { (Get-FileHash -Path $reqFile -Algorithm SHA256).Hash.ToLowerInvariant() } else { "" }
+            $npmCombined = ""
+            $pkgJson = Join-Path $baileysPath "package.json"
+            $pkgLock = Join-Path $baileysPath "package-lock.json"
+            if (Test-Path $pkgJson) { $npmCombined += (Get-FileHash -Path $pkgJson -Algorithm SHA256).Hash }
+            if (Test-Path $pkgLock) { $npmCombined += (Get-FileHash -Path $pkgLock -Algorithm SHA256).Hash }
+            $npmHash = ""
+            if ($npmCombined) {
+                $sha = [System.Security.Cryptography.SHA256]::Create()
+                try {
+                    $hb = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($npmCombined))
+                    $npmHash = -join ($hb | ForEach-Object { $_.ToString("x2") })
+                } finally { $sha.Dispose() }
+            }
+            $stateObj = [pscustomobject]@{
+                channel                       = "stable"
+                version                       = $initVersion
+                commit                        = $initCommit
+                previous_version              = ""
+                previous_commit               = ""
+                previous_channel              = ""
+                last_backup_path              = ""
+                deps_hash                     = $depsHash
+                npm_hash                      = $npmHash
+                last_edge_prompt_at           = $null
+                edge_prompt_snooze_until      = $null
+                edge_prompt_dismissed_count   = 0
+                edge_prompt_permanently_muted = $false
+                last_rollback_at              = $null
+                last_updated_at               = (Get-Date).ToUniversalTime().ToString("o")
+            }
+            Write-Utf8NoBom -FilePath (Join-Path $installPath ".jarvis_state.json") -Content ($stateObj | ConvertTo-Json -Depth 10)
+        } catch {}
 
         Write-Host ""
         Write-Host "==========================================================" -ForegroundColor Green

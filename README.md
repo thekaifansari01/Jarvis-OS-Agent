@@ -255,6 +255,11 @@ Run memory, login, and reset commands with JARVIS **stopped**.
 
 | Command | Action |
 |---|---|
+| `jarvis update` | Check for updates and upgrade to the latest release |
+| `jarvis update --check` | Check update status without applying changes |
+| `jarvis update --channel <stable\|edge\|pinned>` | Switch update release channel |
+| `jarvis update --rollback` | Roll back to the previous working version and restore backup |
+| `jarvis uninstall` | Run the complete system uninstaller |
 | `jarvis login --all` | Batch authenticate all integrations |
 | `jarvis logout --all` | Revoke every session |
 | `jarvis mcp list` | List MCP servers and live status |
