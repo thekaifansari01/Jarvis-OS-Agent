@@ -51,13 +51,27 @@ def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: C
         preview = raw[:150].replace("\n", " ⏎ ")
         logging.info(
             "[%s] Processing command (%d chars, %d lines): %s",
-            source, len(raw), line_count, preview
+            source, len(raw), line_count, preview,
         )
 
         if source == "telegram_bot":
             if not hasattr(memory, "ephemeral") or not isinstance(memory.ephemeral, dict):
                 memory.ephemeral = {}
             memory.ephemeral["force_silent_agentic"] = True
+
+        try:
+            memory.add_message("USER", raw)
+        except Exception as exc:
+            logging.error("Memory add USER failed: %s", exc, exc_info=True)
+
+        extraction_warning = None
+        if hasattr(memory, "ephemeral") and memory.ephemeral.get("extraction_failed"):
+            extraction_warning = memory.ephemeral.pop("extraction_failed", None)
+            if extraction_warning:
+                logging.warning(
+                    "Extraction failed for USER message: '%s'",
+                    str(extraction_warning)[:80],
+                )
 
         result = process_command(raw, memory_instance=memory)
 
@@ -67,7 +81,7 @@ def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: C
         if not isinstance(result, dict):
             logging.error(
                 "[%s] process_command returned non-dict (%r). Coercing to error result.",
-                source, type(result)
+                source, type(result),
             )
             result = {
                 "response": "Internal error: invalid process_command result",
@@ -83,6 +97,28 @@ def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: C
 
         if "response" not in result:
             result["response"] = "Action executed."
+
+        if extraction_warning:
+            base_response = str(result.get("response", "")).strip()
+            warning_text = (
+                f" [sad] Sir, maine aapka message yaad rakhne ki koshish ki lekin save nahi ho payi. "
+                f"Please ek baar phir bolo: '{str(extraction_warning)[:120]}'"
+            )
+            modified_response = base_response + warning_text
+            result["response"] = modified_response
+            result["extraction_warning"] = True
+
+            try:
+                from core.ui.typing_status import update_typing_status
+                update_typing_status("completed", modified_response)
+            except Exception as e:
+                logging.debug("Could not re-update typing status: %s", e)
+
+            try:
+                from core.ui.telegram_status import send_telegram_update
+                send_telegram_update(final_response=modified_response)
+            except Exception as e:
+                logging.debug("Could not re-update telegram status: %s", e)
 
         metadata = result.get("metadata", {})
         if not metadata:
@@ -106,14 +142,13 @@ def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: C
                 }
 
         try:
-            memory.add_message("USER", raw)
             memory.add_message(
                 "JARVIS",
                 result.get("response", ""),
                 metadata=metadata if metadata else None,
             )
         except Exception as exc:
-            logging.error("Memory update failed: %s", exc, exc_info=True)
+            logging.error("Memory update JARVIS failed: %s", exc, exc_info=True)
 
         if result.get("response"):
             time.sleep(0.1)

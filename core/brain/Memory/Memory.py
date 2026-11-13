@@ -8,6 +8,7 @@ import socket
 import subprocess
 import platform
 import sys
+import concurrent.futures
 from datetime import datetime, timedelta
 from pathlib import Path
 import openai
@@ -60,7 +61,7 @@ class ContextMemory:
     )
 
     _SELF_PRONOUN_PATTERN = re.compile(
-        r"\b(mai|main|mein|hum|mujhe|mera|meri|mere|i|my|me)\b",
+        r"\b(mai|main|mein|hum|mujhe|mera|meri|mere|hu|hun|i|my|me)\b",
         re.IGNORECASE,
     )
 
@@ -125,31 +126,131 @@ class ContextMemory:
             logger.error(f"Failed to initialize summary client: {e}")
             self.summary_client = None
 
+        self._retry_queue_path = self.memory_path / "extraction_retry_queue.jsonl"
+        self._retry_lock = threading.Lock()
+        self._retry_queue = []
+        try:
+            self._retry_queue = self._load_retry_queue()
+        except Exception as e:
+            logger.error(f"Retry queue load failed at startup: {e}")
+
+        self._start_retry_drainer()
         self._start_background_pruning()
 
-    def _should_run_hybrid_extraction(self, message: str) -> bool:
+    def _classify_message_priority(self, message: str) -> str:
+        if self._is_hard_skip(message):
+            return "skip"
+        if self._is_force_include(message):
+            return "force"
+        return "llm"
+
+    def _is_hard_skip(self, message: str) -> bool:
         if not message or not message.strip():
-            return False
+            return True
+
         low = message.lower().strip()
         cleaned = self._LEADING_FILLERS.sub("", low).strip()
-        if not cleaned or len(cleaned.split()) < 3:
-            return False
 
-        explicit_remember = bool(self._EXPLICIT_PERMANENT_PATTERN.search(cleaned))
+        if not cleaned:
+            return True
 
-        if (cleaned.endswith("?") or self._QUESTION_STARTERS.search(cleaned)) and not explicit_remember:
-            return False
-
-        if any(cleaned.startswith(prefix) for prefix in self._COMMAND_PREFIXES) and not explicit_remember:
-            return False
-
-        if self._ONE_TIME_TASK_PATTERN.search(cleaned) and not explicit_remember:
+        if self._EXPLICIT_PERMANENT_PATTERN.search(cleaned):
             return False
 
         has_self_ref = bool(self._SELF_PRONOUN_PATTERN.search(cleaned))
-        has_durable_signal = any(re.search(p, cleaned, re.IGNORECASE) for p in self._DURABLE_FACT_OR_HABIT_PATTERNS)
 
-        return bool(explicit_remember or (has_self_ref and has_durable_signal))
+        if re.match(
+            r"^(hi|hello|hey|namaste|sup|whatsup|what'?s\s+up|hola|salam|good\s+(morning|evening|afternoon|night))[\s!?.,]*$",
+            cleaned,
+        ):
+            return True
+
+        if re.match(
+            r"^(ok|okay|sure|cool|nice|thanks|thank\s+you|thik\s+hai|theek\s+hai|accha|acha|hmm|done|got\s+it|samajh\s+gaya|haan|han|nahi|yes|no|yeah|yup|nope|right|correct)[\s!?.,]*$",
+            cleaned,
+        ):
+            return True
+
+        command_verb_pattern = re.compile(
+            r"\b(open|kholo|close|band|play|chalao|bajao|send|bhej\w*|write|likho|run|execute|search|find|check|screenshot|volume|brightness|lock|sleep|mute|unmute)\b",
+            re.IGNORECASE,
+        )
+
+        if has_self_ref:
+            return False
+
+        if command_verb_pattern.search(cleaned):
+            return True
+
+        if self._QUESTION_STARTERS.search(cleaned):
+            return True
+
+        if any(cleaned.startswith(prefix) for prefix in self._COMMAND_PREFIXES):
+            return True
+
+        return True
+
+    def _is_force_include(self, message: str) -> bool:
+        if not message or not message.strip():
+            return False
+
+        raw_msg = message.strip()
+        low = raw_msg.lower()
+        cleaned = self._LEADING_FILLERS.sub("", low).strip()
+        clean_raw = self._LEADING_FILLERS.sub("", raw_msg).strip()
+
+        if not cleaned:
+            return False
+
+        is_question = bool(cleaned.endswith("?")) or bool(self._QUESTION_STARTERS.search(cleaned))
+        if is_question:
+            return False
+
+        profile_pattern = re.compile(
+            r"\b(mera|meri|mere)\s+"
+            r"(naam|age|umar|email|number|phone|laptop|computer|pc|college|school|university|"
+            r"city|shehar|gaon|village|job|kaam|profession|project|bhai|behen|dost|friend|"
+            r"father|mother|papa|mummy|mom|dad|gf|bf|girlfriend|boyfriend|birthday|janamdin|"
+            r"janmdin|anniversary|wife|husband|address|location|surname|sirname|nickname)\b",
+            re.IGNORECASE,
+        )
+
+        identity_pattern = re.compile(
+            r"\b(mai|main|mein|i\s+am|i'?m)\s+"
+            r"(?:\d+\s+(?:saal|year|years)|.{0,40}?\b(?:developer|engineer|student|designer|coder|"
+            r"freelancer|teacher|doctor|manager|writer|artist|programmer)\b)",
+            re.IGNORECASE,
+        )
+
+        preference_pattern = re.compile(
+            r"\b(mujhe|mujhko|mera|meri)\s+\w+\s+(pasand|nahi\s*pasand|prefer|like|love|hate|dislike)\b",
+            re.IGNORECASE,
+        )
+
+        has_profile = bool(profile_pattern.search(cleaned))
+        has_identity = bool(identity_pattern.search(cleaned))
+        has_preference = bool(preference_pattern.search(cleaned))
+        has_explicit_remember = bool(self._EXPLICIT_PERMANENT_PATTERN.search(cleaned))
+
+        if has_profile or has_identity or has_preference:
+            return True
+
+        if has_explicit_remember:
+            return False
+
+        project_verb = re.search(
+            r"\b(mai|main|mein)\s+(\S+)\s+(bana|bana\s+raha|bana\s+rahi|develop|building|build)\b",
+            clean_raw,
+            re.IGNORECASE,
+        )
+        if project_verb:
+            entity = project_verb.group(2)
+            if entity and entity[0].isupper() and entity.lower() not in {
+                "ek", "a", "an", "ye", "yeh", "wo", "woh", "kuch",
+            }:
+                return True
+
+        return False
 
     def _is_valid_triplet(self, src, rel, tgt):
         if not src or not rel or not tgt:
@@ -162,7 +263,7 @@ class ContextMemory:
             "agent", "info", "system", "jarvis", "data", "unknown",
             "yes", "no", "today", "tomorrow", "now", "thing", "stuff",
             "morning", "evening", "night", "afternoon", "subah", "raat", "shaam",
-            "none", "null", "true", "false", "bhai", "sir", "bro"
+            "none", "null", "true", "false", "bhai", "sir", "bro",
         }
         if src_clean.lower() in invalid_entities or tgt_clean.lower() in invalid_entities:
             return False
@@ -173,7 +274,7 @@ class ContextMemory:
 
         family_relations = {
             "father", "mother", "brother", "sister", "son",
-            "daughter", "spouse", "uncle", "aunt"
+            "daughter", "spouse", "uncle", "aunt",
         }
         if rel_clean in family_relations:
             if len(src_clean.split()) > 4 or len(tgt_clean.split()) > 4:
@@ -184,7 +285,7 @@ class ContextMemory:
             "status_update", "remember", "searching", "asking", "said",
             "talking_to", "wants_to", "planning_to", "habit", "has_habit",
             "routine", "has_routine", "daily_routine", "prefers_time",
-            "works_at_time", "coding_time", "schedule"
+            "works_at_time", "coding_time", "schedule",
         }
         if rel_clean in ephemeral_or_behavioral_relations:
             return False
@@ -317,8 +418,10 @@ class ContextMemory:
         self._prune_expired_sys_net_cache()
         with self._lock:
             cached = dict(self._sys_info_cache)
-        needed = ("os_name", "os_release", "username", "hostname",
-                  "home", "desktop", "downloads", "timezone", "python")
+        needed = (
+            "os_name", "os_release", "username", "hostname",
+            "home", "desktop", "downloads", "timezone", "python",
+        )
         if all(k in cached for k in needed):
             return cached
 
@@ -362,7 +465,7 @@ class ContextMemory:
                     result = subprocess.run(
                         ["netsh", "wlan", "show", "interfaces"],
                         capture_output=True, text=True, timeout=3,
-                        creationflags=0x08000000
+                        creationflags=0x08000000,
                     )
                     for line in result.stdout.splitlines():
                         if "SSID" in line and "BSSID" not in line:
@@ -378,7 +481,7 @@ class ContextMemory:
                 try:
                     result = subprocess.run(
                         ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
-                        capture_output=True, text=True, timeout=3
+                        capture_output=True, text=True, timeout=3,
                     )
                     for line in result.stdout.splitlines():
                         if line.startswith("yes:"):
@@ -390,7 +493,7 @@ class ContextMemory:
                 try:
                     result = subprocess.run(
                         ["/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I"],
-                        capture_output=True, text=True, timeout=3
+                        capture_output=True, text=True, timeout=3,
                     )
                     for line in result.stdout.splitlines():
                         if " SSID:" in line:
@@ -434,6 +537,19 @@ class ContextMemory:
             self._net_info_expiry["ip"] = now + 60
         return ip
 
+    def _get_ltm_facts_block(self) -> str:
+        try:
+            from core.brain.Memory.LifetimeMemory import ltm_engine
+            top_facts = ltm_engine.get_top_relations_for_user(limit=6)
+            if top_facts:
+                lines = ["[LTM_KNOWN_FACTS]"]
+                for fact in top_facts:
+                    lines.append(f"- {fact}")
+                return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"LTM facts block error: {e}")
+        return ""
+
     def get_ephemeral_context(self, mode: str = "agentic", current_command: str = "") -> str:
         with self._lock:
             self._prune_expired_ephemeral()
@@ -464,6 +580,8 @@ class ContextMemory:
             logger.error(f"Behavioral ephemeral inject error ({mode}): {e}")
             beh_block = ""
 
+        ltm_block = self._get_ltm_facts_block()
+
         user_name = os.getenv("USER_NAME", "Sir")
         now = datetime.now()
         time_str = now.strftime("%A, %d %B %Y | %I:%M %p")
@@ -489,6 +607,8 @@ class ContextMemory:
             blocks.append(f"[RUNTIME] Time: {time_str} | Mode: {current_mode}")
             if beh_block:
                 blocks.append(f"[BEHAVIORAL_PATTERNS]\n{beh_block}")
+            if ltm_block:
+                blocks.append(ltm_block)
             return "\n\n".join(blocks) + "\n"
 
         blocks = []
@@ -520,6 +640,8 @@ class ContextMemory:
         )
         if beh_block:
             blocks.append(f"[BEHAVIORAL_PATTERNS — VERIFIED USER PREFERENCES]\n{beh_block}")
+        if ltm_block:
+            blocks.append(ltm_block)
 
         return "\n\n".join(blocks)
 
@@ -546,6 +668,8 @@ class ContextMemory:
             logger.error(f"Behavioral ephemeral inject error (static): {e}")
             beh_block = ""
 
+        ltm_block = self._get_ltm_facts_block()
+
         os_line = f"{sys_info.get('os_name', 'Unknown')} {sys_info.get('os_release', '')}".strip()
         user_name = os.getenv("USER_NAME", "Sir")
 
@@ -565,6 +689,8 @@ class ContextMemory:
         )
         if beh_block:
             blocks.append(f"[BEHAVIORAL_PATTERNS — VERIFIED USER PREFERENCES]\n{beh_block}")
+        if ltm_block:
+            blocks.append(ltm_block)
 
         return "\n\n".join(blocks)
 
@@ -593,6 +719,8 @@ class ContextMemory:
         now = datetime.now()
         time_str = now.strftime("%A, %d %B %Y | %I:%M %p")
 
+        ltm_block = self._get_ltm_facts_block()
+
         blocks = []
         blocks.append(
             "[NETWORK]\n"
@@ -607,6 +735,8 @@ class ContextMemory:
             f"- Mode: {current_mode}\n"
             f"- Pending Confirmation: {confirm_str}"
         )
+        if ltm_block:
+            blocks.append(ltm_block)
 
         return "\n\n".join(blocks)
 
@@ -676,7 +806,7 @@ class ContextMemory:
                                 summaries[date_key] = {
                                     "summary": entry.get("summary", ""),
                                     "message_count": entry.get("message_count", 0),
-                                    "generated_at": entry.get("generated_at", "")
+                                    "generated_at": entry.get("generated_at", ""),
                                 }
             except Exception as e:
                 logger.error(f"Failed to load daily summaries: {e}")
@@ -689,14 +819,14 @@ class ContextMemory:
                     "date": date_str,
                     "summary": summary,
                     "message_count": message_count,
-                    "generated_at": datetime.now().isoformat()
+                    "generated_at": datetime.now().isoformat(),
                 }
                 with open(self.daily_summaries_file, "a", encoding="utf-8") as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 self.daily_summaries[date_str] = {
                     "summary": summary,
                     "message_count": message_count,
-                    "generated_at": entry["generated_at"]
+                    "generated_at": entry["generated_at"],
                 }
             except Exception as e:
                 logger.error(f"Failed to save daily summary for {date_str}: {e}")
@@ -711,7 +841,7 @@ class ContextMemory:
                             "date": date_key,
                             "summary": data.get("summary", ""),
                             "message_count": data.get("message_count", 0),
-                            "generated_at": data.get("generated_at", "")
+                            "generated_at": data.get("generated_at", ""),
                         }
                         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
             except Exception as e:
@@ -783,10 +913,10 @@ class ContextMemory:
                     model=MEMORY_SUMMARY_MODEL,
                     messages=[
                         {"role": "system", "content": "You are a precise, faithful conversation summarizer. Output plain text only."},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
                     temperature=0.0,
-                    max_tokens=300
+                    max_tokens=300,
                 )
 
                 summary = response.choices[0].message.content.strip()
@@ -836,20 +966,232 @@ class ContextMemory:
         except Exception as e:
             logger.error(f"Catchup summaries error: {e}")
 
-    def _async_extract_hybrid_memory(self, message):
-        if not self._should_run_hybrid_extraction(message):
-            logger.debug(f"Hybrid memory prefilter: SKIP | msg='{message[:60]}'")
-            return
+    def _load_retry_queue(self):
+        queue = []
+        if not self._retry_queue_path.exists():
+            return queue
         try:
-            thread = threading.Thread(target=self._extract_hybrid_memory_ai, args=(message,))
-            thread.daemon = True
-            thread.start()
+            with open(self._retry_queue_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        if isinstance(entry, dict) and entry.get("message"):
+                            queue.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            logger.error(f"Retry queue load error: {e}")
+        return queue
+
+    def _save_retry_queue(self):
+        with self._retry_lock:
+            try:
+                tmp_path = self._retry_queue_path.with_suffix(".jsonl.tmp")
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    for entry in self._retry_queue:
+                        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                os.replace(tmp_path, self._retry_queue_path)
+            except Exception as e:
+                logger.error(f"Retry queue save error: {e}")
+
+    def _queue_for_retry(self, message, reason):
+        if not message:
+            return
+        with self._retry_lock:
+            for entry in self._retry_queue:
+                if entry.get("message") == message:
+                    entry["attempts"] = int(entry.get("attempts", 1))
+                    entry["last_attempt"] = datetime.now().isoformat()
+                    entry["reason"] = reason
+                    self._save_retry_queue()
+                    return
+            self._retry_queue.append({
+                "message": message,
+                "timestamp": datetime.now().isoformat(),
+                "last_attempt": datetime.now().isoformat(),
+                "attempts": 1,
+                "reason": reason,
+            })
+            self._save_retry_queue()
+
+    def _remove_from_retry_queue(self, message):
+        with self._retry_lock:
+            self._retry_queue = [e for e in self._retry_queue if e.get("message") != message]
+            self._save_retry_queue()
+
+    def _start_retry_drainer(self):
+        def drain_loop():
+            while True:
+                time.sleep(300)
+                try:
+                    self._drain_retry_queue()
+                except Exception as e:
+                    logger.error(f"Retry drain error: {e}")
+
+        threading.Thread(target=drain_loop, daemon=True).start()
+
+    def _drain_retry_queue(self):
+        with self._retry_lock:
+            to_process = list(self._retry_queue)
+
+        if not to_process:
+            return
+
+        logger.info(f"Draining extraction retry queue ({len(to_process)} items)...")
+
+        remaining = []
+        for entry in to_process:
+            message = entry.get("message", "")
+            attempts = int(entry.get("attempts", 1))
+            reason = entry.get("reason", "unknown")
+
+            if attempts >= 3:
+                logger.warning(f"Dropping extraction retry (3 attempts exhausted): '{message[:80]}' | reason={reason}")
+                continue
+
+            try:
+                result = self._extract_hybrid_memory_ai(message, is_force=True)
+                ltm_saved = int(result.get("ltm_saved", 0)) if result else 0
+                beh_saved = int(result.get("behavioral_saved", 0)) if result else 0
+                if ltm_saved > 0 or beh_saved > 0:
+                    logger.info(f"Retry extraction succeeded: '{message[:80]}'")
+                    continue
+            except Exception as e:
+                logger.error(f"Retry extraction failed: {e}")
+
+            entry["attempts"] = attempts + 1
+            entry["last_attempt"] = datetime.now().isoformat()
+            remaining.append(entry)
+
+        with self._retry_lock:
+            self._retry_queue = remaining
+            self._save_retry_queue()
+
+    def _async_extract_hybrid_memory(self, message):
+        def _worker():
+            try:
+                result = self._extract_hybrid_memory_ai(message)
+                if result and str(result.get("reason", "")).startswith("api_error"):
+                    self._queue_for_retry(message, result.get("reason"))
+            except Exception as e:
+                logger.error(f"Async extraction worker failed: {e}")
+                self._queue_for_retry(message, f"async_error: {str(e)[:150]}")
+
+        try:
+            threading.Thread(target=_worker, daemon=True).start()
         except Exception as e:
             logger.error(f"Hybrid memory thread starting error: {e}")
+            self._queue_for_retry(message, f"thread_error: {str(e)[:150]}")
 
-    def _extract_hybrid_memory_ai(self, message):
+    def _sync_extract_and_verify(self, message):
+        edges_before = -1
+        patterns_before = -1
+
+        try:
+            from core.brain.Memory.LifetimeMemory import ltm_engine
+            edges_before = ltm_engine.graph.number_of_edges()
+        except Exception:
+            pass
+
+        try:
+            from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
+            patterns_before = len(behavioral_pattern_engine.patterns)
+        except Exception:
+            pass
+
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(self._extract_hybrid_memory_ai, message, True)
+
+        result = None
+        try:
+            result = future.result(timeout=8.0)
+        except concurrent.futures.TimeoutError:
+            logger.warning(f"Force extraction timeout after 8s: '{message[:80]}'")
+            self.ephemeral["extraction_failed"] = message
+            self._queue_for_retry(message, "force_timeout")
+            future.add_done_callback(lambda f: self._on_late_extraction(f, message))
+            return False
+        except Exception as e:
+            logger.error(f"Force extraction raised: {e}")
+            self.ephemeral["extraction_failed"] = message
+            self._queue_for_retry(message, f"force_raised: {str(e)[:150]}")
+            return False
+        finally:
+            executor.shutdown(wait=False)
+
+        ltm_saved = int(result.get("ltm_saved", 0)) if result else 0
+        beh_saved = int(result.get("behavioral_saved", 0)) if result else 0
+        reason = (result.get("reason", "") if result else "") or ""
+        skipped = bool(result.get("skipped", False)) if result else False
+
+        edges_after = edges_before
+        patterns_after = patterns_before
+
+        try:
+            from core.brain.Memory.LifetimeMemory import ltm_engine
+            edges_after = ltm_engine.graph.number_of_edges()
+        except Exception:
+            pass
+
+        try:
+            from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
+            patterns_after = len(behavioral_pattern_engine.patterns)
+        except Exception:
+            pass
+
+        edges_delta = (edges_after - edges_before) if edges_before >= 0 else 0
+        patterns_delta = (patterns_after - patterns_before) if patterns_before >= 0 else 0
+
+        verified = (ltm_saved > 0) or (beh_saved > 0) or (edges_delta > 0) or (patterns_delta > 0)
+
+        if verified:
+            self.ephemeral.pop("extraction_failed", None)
+            logger.info(
+                f"Force extraction VERIFIED: ltm={ltm_saved} (delta_edges={edges_delta}) "
+                f"behavioral={beh_saved} (delta_patterns={patterns_delta})"
+            )
+            return True
+
+        if skipped:
+            logger.warning(f"Force extraction skipped by LLM (reason={reason}): '{message[:80]}'")
+        else:
+            logger.warning(f"Force extraction completed empty: '{message[:80]}'")
+
+        self.ephemeral["extraction_failed"] = message
+        self._queue_for_retry(message, f"force_empty: {reason}")
+        return False
+
+    def _on_late_extraction(self, future, message):
+        try:
+            result = future.result(timeout=30)
+            ltm_saved = int(result.get("ltm_saved", 0)) if result else 0
+            beh_saved = int(result.get("behavioral_saved", 0)) if result else 0
+            if ltm_saved > 0 or beh_saved > 0:
+                logger.info(f"Late extraction succeeded for: '{message[:80]}'")
+                if self.ephemeral.get("extraction_failed") == message:
+                    self.ephemeral.pop("extraction_failed", None)
+                    self._remove_from_retry_queue(message)
+        except Exception as e:
+            logger.warning(f"Late extraction failed: {e}")
+
+    def _extract_hybrid_memory_ai(self, message, is_force=False):
         if not self.ltm_client:
-            return
+            return {
+                "ltm_saved": 0,
+                "behavioral_saved": 0,
+                "skipped": True,
+                "reason": "no_ltm_client",
+            }
+
+        result = {
+            "ltm_saved": 0,
+            "behavioral_saved": 0,
+            "skipped": False,
+            "reason": "",
+        }
 
         with self._extract_lock:
             recent_history = ""
@@ -873,66 +1215,51 @@ class ContextMemory:
             except Exception as e:
                 logger.error(f"Failed to fetch LTM nodes or relations: {e}")
 
+            confidence_gate = 0.60 if is_force else 0.70
+
             prompt = f"""You are the Unified Hybrid Memory Extractor for Jarvis (an AI assistant).
-Analyze the user's latest message using the recent conversation context and classify durable knowledge into TWO STRICTLY SEPARATE memory systems based on HOW Jarvis will retrieve and use it in the future:
+Analyze the user's latest message using the recent conversation context and classify durable knowledge into TWO STRICTLY SEPARATE memory systems.
 
-======================================================================
-CRITICAL ZERO-FALSE-POSITIVE GATE (CHECK THIS FIRST!)
-======================================================================
-- ONE-TIME TASK INSTRUCTIONS ARE NOT MEMORIES: If the user is giving instructions, constraints, or styling for a CURRENT task right now (e.g., "ek dark mode website banao", "is mail ko short rakhna", "mere desktop par test.py banao"), set `is_current_task_instruction`: true, `has_ltm_facts`: false, and `has_behavioral_patterns`: false!
-- QUESTIONS & CASUAL ADDRESSING ARE NOT MEMORIES: Never extract facts from a user question. Note that in Hinglish, the user casually addresses Jarvis as "bhai" or "dost" (e.g., "bhai mera code dekh") — NEVER extract Jarvis as a brother or friend!
-- 1-YEAR STABILITY TEST: Only extract facts/habits that will still be true 6-12 months from now. Ignore temporary moods ("aaj thak gaya hu") or today's one-off plans ("aaj raat movie dekhunga").
+CRITICAL EXTRACTION RULES:
+- Report your actual confidence between 0.0 and 1.0. Do NOT pre-filter based on confidence; the caller applies its own threshold.
+- If the message is BOTH a task instruction AND contains a durable fact (name, relationship, entity, project, preference), STILL extract the durable fact. Set `is_current_task_instruction: true` to indicate immediate intent, but also set `has_ltm_facts` / `has_behavioral_patterns` appropriately and extract the content.
+- Example: "Mera GhostVault project banao" -> `is_current_task_instruction: true`, `has_ltm_facts: true` (triplet: [User] --(DEVELOPS)--> [GhostVault]), `has_behavioral_patterns: false`.
+- Questions and casual addressing ("bhai", "bro") are NOT facts. Never extract Jarvis as a brother or friend.
+- Only extract durable knowledge that will still be true 6-12 months from now. Skip temporary moods or one-off plans.
 
-======================================================================
-SYSTEM 1: LTM GRAPH TRIPLETS (`ltm_triplets`) — Active "Pull" Lookup
-======================================================================
-EXTRACT INTO `ltm_triplets` ONLY IF IT IS A STATIC ENTITY FACT (confidence >= 0.85):
-- ALWAYS represent the user himself as the exact string `"User"` in `source` (e.g., `source: "User"`, `relation: "HAS_NAME"`, `target: "Kaif Ansari"`). Never use the user's first name as `source` when referring to the user.
-- Identity & Demographics (Name, Age, City, College, Degree, Profession).
-- Relationships (Family, Friends, Boss, Colleagues — e.g., "Rahul mera saga bhai hai" -> `[User] --(BROTHER)--> [Rahul]`).
-- Contact Info (Phone numbers, Emails, Handles — use HAS_PHONE, HAS_EMAIL, HAS_HANDLE, LIVES_IN). Preserve exact casing for emails, handles, and acronyms (e.g., BCA, RAG, i5-3210M).
-- Owned Assets & Hardware Specs (Laptop model, RAM, Phone model, Vehicles).
-- Named Projects & Creations (e.g., "Mai GhostVault project bana raha hu" -> `[User] --(DEVELOPS)--> [GhostVault]`).
-- Set `is_singular`: true if only ONE value can be true at a time (e.g., LIVES_IN, AGE, FATHER, MOTHER, WORKS_AT, HAS_PHONE, COLLEGE).
+SYSTEM 1: LTM GRAPH TRIPLETS (`ltm_triplets`) - Static entity facts:
+- Always represent the user as the exact string "User" in `source`.
+- Identity (name, age, city, college, profession), Relationships (family, friends), Contact (phone, email), Assets (laptop, phone, vehicle), Projects (things user builds).
+- Set `is_singular: true` for one-value relations (LIVES_IN, AGE, FATHER, MOTHER, WORKS_AT, HAS_PHONE, COLLEGE).
 
-======================================================================
-SYSTEM 2: BEHAVIORAL PATTERNS (`behavioral_patterns`) — Passive "Push" Auto-RAG
-======================================================================
-EXTRACT INTO `behavioral_patterns` ONLY IF IT IS A RECURRING HABIT OR GENERAL WORKFLOW PREFERENCE (confidence >= 0.85):
-- Time & Energy Routines: When the user generally likes to code, study, work, wake up, or rest.
-- Workflow, Coding & UI Preferences: General preferred tech stack, UI style, theme, or coding habits (including negative preferences like "mere code me comments mat daala karo").
-- Communication & Tone Preferences: How the user generally wants emails, messages, or AI replies formatted.
-- Classify `domain` strictly into ONE of: `"coding"`, `"scheduling"`, `"communication"`, `"ui_design"`, `"lifestyle"`.
-- Assign a normalized snake_case `topic` key representing the exact preference slot (e.g., `"ui_theme"`, `"code_comments"`, `"coding_schedule"`, `"study_schedule"`, `"reply_length"`, `"email_tone"`, `"code_structure"`) so future changes to the same preference automatically override the old one.
-- Set `is_explicit_permanent`: true ONLY if the user explicitly used permanent words like "hamesha", "roz", "daily", "always", "never", "kabhi mat", "yaad rakhna", "aage se", "meri aadat hai".
-- Write `meaning` and `trigger_contexts` in 100% PURE ENGLISH (no Hinglish words).
+SYSTEM 2: BEHAVIORAL PATTERNS (`behavioral_patterns`) - Recurring habits and preferences:
+- Time routines, coding/UI preferences, communication tone, workflow habits.
+- Domain must be exactly one of: coding, scheduling, communication, ui_design, lifestyle.
+- Topic must be normalized snake_case (e.g., ui_theme, code_comments, coding_schedule).
+- Set `is_explicit_permanent: true` ONLY if user used words like "hamesha", "roz", "always", "never", "yaad rakhna".
+- Write `meaning` and `trigger_contexts` in PURE ENGLISH.
 
-[EXISTING GRAPH RELATIONS (Reuse if applicable for LTM)]:
-{existing_relations_str}
-
-[EXISTING GRAPH NODES (Reuse exact node name if applicable for LTM)]:
-{existing_nodes_str}
-
+[EXISTING GRAPH RELATIONS]: {existing_relations_str}
+[EXISTING GRAPH NODES]: {existing_nodes_str}
 [Recent Conversation Context]:
 {recent_history if recent_history else 'No recent history.'}
-
 [User's Latest Message]: "{message}"
 
-Return STRICT JSON matching this exact schema:
+Return STRICT JSON:
 {{
-  "reasoning": "Brief 1-sentence explanation of why this is a one-time task instruction, LTM fact, Behavioral pattern, or neither.",
+  "reasoning": "Brief explanation",
   "is_current_task_instruction": boolean,
   "has_ltm_facts": boolean,
   "ltm_triplets": [
     {{
       "source": "User",
       "relation": "UPPERCASE_RELATION",
-      "target": "Entity2",
+      "target": "Entity",
       "is_singular": boolean,
       "metadata": {{
-        "confidence": 0.9,
+        "confidence": 0.0,
         "context": "Brief context",
-        "source_message": "Exact user snippet"
+        "source_message": "User snippet"
       }},
       "inverse": {{
         "relation": "INVERSE_RELATION",
@@ -945,101 +1272,125 @@ Return STRICT JSON matching this exact schema:
     {{
       "type": "routine|preference|habit|dislike",
       "domain": "coding|scheduling|communication|ui_design|lifestyle",
-      "topic": "snake_case_preference_slot",
+      "topic": "snake_case_slot",
       "is_explicit_permanent": boolean,
-      "raw_statement": "Verbatim user quote from the message",
-      "meaning": "Clear one-line PURE ENGLISH interpretation of the behavior/preference",
-      "trigger_contexts": "4-6 specific pure English task scenarios where Jarvis should apply this pattern",
-      "confidence": 0.9
+      "raw_statement": "Verbatim user quote",
+      "meaning": "Pure English interpretation",
+      "trigger_contexts": "4-6 scenarios",
+      "confidence": 0.0
     }}
   ]
 }}"""
 
-            for _ in range(3):
+            last_error = None
+
+            for attempt in range(3):
                 try:
                     response = self.ltm_client.chat.completions.create(
                         model=LTM_EXTRACTION_MODEL,
                         messages=[
-                            {"role": "system", "content": "You are a precise hybrid memory classification and extraction engine. Output strictly valid JSON."},
-                            {"role": "user", "content": prompt}
+                            {"role": "system", "content": "You are a precise hybrid memory extraction engine. Output strictly valid JSON."},
+                            {"role": "user", "content": prompt},
                         ],
                         temperature=0.0,
                         max_tokens=800,
-                        response_format={"type": "json_object"}
+                        response_format={"type": "json_object"},
                     )
                     raw_text = response.choices[0].message.content.strip()
                     clean_text = re.sub(r"^```json\n|```$", "", raw_text, flags=re.MULTILINE).strip()
                     data = json.loads(clean_text)
 
-                    if data.get("is_current_task_instruction") is True:
-                        logger.info(f"Hybrid Extraction skipped (Current Task Instruction): {data.get('reasoning', '')}")
-                        break
+                    is_task = data.get("is_current_task_instruction") is True
 
                     logger.info(
-                        f"Hybrid Extraction | LTM={data.get('has_ltm_facts')} ({len(data.get('ltm_triplets', []))}) "
-                        f"| Behavioral={data.get('has_behavioral_patterns')} ({len(data.get('behavioral_patterns', []))})"
+                        f"Hybrid Extraction | task={is_task} | "
+                        f"LTM={data.get('has_ltm_facts')} ({len(data.get('ltm_triplets', []))}) | "
+                        f"Behavioral={data.get('has_behavioral_patterns')} ({len(data.get('behavioral_patterns', []))})"
                     )
 
                     if data.get("has_ltm_facts") is True:
-                        triplets = data.get("ltm_triplets", [])
-                        if triplets:
-                            try:
-                                from core.brain.Memory.LifetimeMemory import ltm_engine
-                                for t in triplets:
-                                    src = str(t.get("source", "")).strip()
-                                    rel = str(t.get("relation", "")).strip().upper()
-                                    tgt = str(t.get("target", "")).strip()
-                                    is_singular = bool(t.get("is_singular", False))
-                                    metadata = t.get("metadata", {}) or {}
+                        triplets = data.get("ltm_triplets", []) or []
+                        try:
+                            from core.brain.Memory.LifetimeMemory import ltm_engine
+                            for t in triplets:
+                                if not isinstance(t, dict):
+                                    continue
+                                src = str(t.get("source", "")).strip()
+                                rel = str(t.get("relation", "")).strip().upper()
+                                tgt = str(t.get("target", "")).strip()
+                                is_singular = bool(t.get("is_singular", False))
+                                metadata = t.get("metadata", {}) or {}
+                                try:
                                     conf = float(metadata.get("confidence", 0.0))
-                                    inverse = t.get("inverse")
+                                except (ValueError, TypeError):
+                                    conf = 0.0
+                                inverse = t.get("inverse")
 
-                                    if conf < 0.85:
-                                        logger.debug(f"LTM Triplet rejected (conf={conf:.2f} < 0.85): [{src}] --({rel})--> [{tgt}]")
-                                        continue
+                                if conf < confidence_gate:
+                                    logger.debug(f"LTM Triplet rejected (conf={conf:.2f} < {confidence_gate}): [{src}] --({rel})--> [{tgt}]")
+                                    continue
 
-                                    if not self._is_valid_triplet(src, rel, tgt):
-                                        continue
+                                if not self._is_valid_triplet(src, rel, tgt):
+                                    logger.debug(f"LTM Triplet invalid: [{src}] --({rel})--> [{tgt}]")
+                                    continue
 
-                                    valid_inverse = None
-                                    if isinstance(inverse, dict):
-                                        inv_rel = str(inverse.get("relation", "")).strip().upper()
-                                        inv_tgt = str(inverse.get("target") or src).strip()
-                                        if self._is_valid_triplet(tgt, inv_rel, inv_tgt):
-                                            valid_inverse = {"relation": inv_rel, "target": inv_tgt}
+                                valid_inverse = None
+                                if isinstance(inverse, dict):
+                                    inv_rel = str(inverse.get("relation", "")).strip().upper()
+                                    inv_tgt = str(inverse.get("target") or src).strip()
+                                    if self._is_valid_triplet(tgt, inv_rel, inv_tgt):
+                                        valid_inverse = {"relation": inv_rel, "target": inv_tgt}
 
-                                    ltm_engine.record_triplet(
-                                        src,
-                                        rel,
-                                        tgt,
-                                        metadata=metadata,
-                                        inverse=valid_inverse,
-                                        is_singular=is_singular,
-                                    )
-                                    logger.info(f"LTM Final DB Entry: [{src}] --({rel})--> [{tgt}] (conf={conf:.2f})")
-                            except Exception as e:
-                                logger.error(f"LTM Engine Save Error: {e}")
+                                ltm_engine.record_triplet(
+                                    src, rel, tgt,
+                                    metadata=metadata,
+                                    inverse=valid_inverse,
+                                    is_singular=is_singular,
+                                )
+                                result["ltm_saved"] += 1
+                                logger.info(f"LTM Saved: [{src}] --({rel})--> [{tgt}] (conf={conf:.2f})")
+                        except Exception as e:
+                            logger.error(f"LTM Engine Save Error: {e}")
 
                     if data.get("has_behavioral_patterns") is True:
-                        patterns = data.get("behavioral_patterns", [])
-                        if patterns:
-                            try:
-                                from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
-                                for p in patterns:
-                                    if not isinstance(p, dict):
-                                        continue
-                                    if float(p.get("confidence", 0.0)) < 0.85:
-                                        continue
-                                    if not p.get("raw_statement"):
-                                        p["raw_statement"] = message.strip()
-                                    behavioral_pattern_engine._upsert_pattern(p)
-                            except Exception as e:
-                                logger.error(f"Behavioral Engine Save Error: {e}")
+                        patterns = data.get("behavioral_patterns", []) or []
+                        try:
+                            from core.brain.Memory.BehavioralEngine import behavioral_pattern_engine
+                            for p in patterns:
+                                if not isinstance(p, dict):
+                                    continue
+                                try:
+                                    p_conf = float(p.get("confidence", 0.0))
+                                except (ValueError, TypeError):
+                                    p_conf = 0.0
+                                if p_conf < confidence_gate:
+                                    continue
 
-                    break
+                                is_exp_perm = bool(p.get("is_explicit_permanent", False))
+                                if is_task and not is_exp_perm:
+                                    logger.debug(f"Skipping non-permanent behavioral from task: {p.get('meaning', '')[:60]}")
+                                    continue
+
+                                if not p.get("raw_statement"):
+                                    p["raw_statement"] = message.strip()
+
+                                behavioral_pattern_engine._upsert_pattern(p)
+                                result["behavioral_saved"] += 1
+                        except Exception as e:
+                            logger.error(f"Behavioral Engine Save Error: {e}")
+
+                    return result
+
                 except Exception as e:
-                    logger.error(f"Hybrid Memory API parsing/request error: {e}")
-                    time.sleep(1)
+                    last_error = e
+                    logger.error(f"Hybrid Memory API error (attempt {attempt + 1}/3): {e}")
+                    if attempt < 2:
+                        time.sleep(1)
+
+            result["reason"] = f"api_error: {str(last_error)[:200]}" if last_error else "api_error"
+            if is_force:
+                raise RuntimeError(result["reason"])
+            return result
 
     def _start_background_pruning(self):
         try:
@@ -1142,7 +1493,7 @@ Return STRICT JSON matching this exact schema:
             new_entry = {
                 "role": role,
                 "message": message,
-                "timestamp": now.isoformat()
+                "timestamp": now.isoformat(),
             }
             if metadata:
                 new_entry["metadata"] = metadata
@@ -1159,13 +1510,30 @@ Return STRICT JSON matching this exact schema:
                     threading.Thread(
                         target=self._generate_daily_summary,
                         args=(old_date,),
-                        daemon=True
+                        daemon=True,
                     ).start()
 
-            ignore_words = ["ok", "okay", "yes", "no", "thanks", "thank you", "clear", "done", "nice", "cool", "hmm", "acha"]
+            ignore_words = [
+                "ok", "okay", "yes", "no", "thanks", "thank you", "clear",
+                "done", "nice", "cool", "hmm", "acha",
+            ]
+
             if role == "USER" and message.lower().strip() not in ignore_words:
                 self._track_session_state(message)
-                self._async_extract_hybrid_memory(message)
+
+                try:
+                    priority = self._classify_message_priority(message)
+                except Exception as e:
+                    logger.error(f"Priority classification failed, defaulting to async: {e}")
+                    priority = "llm"
+
+                if priority == "skip":
+                    logger.debug(f"Memory extraction SKIP (hard filter): '{message[:80]}'")
+                elif priority == "force":
+                    logger.info(f"Memory extraction FORCE (sync + verify): '{message[:80]}'")
+                    self._sync_extract_and_verify(message)
+                else:
+                    self._async_extract_hybrid_memory(message)
         except Exception as e:
             logger.error(f"Error adding message to memory: {e}")
 

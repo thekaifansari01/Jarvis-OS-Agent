@@ -27,18 +27,18 @@ OPPOSITION_GROUPS = [
 
 NEGATION_TOKENS = {
     "no", "not", "never", "without", "avoid", "dislike", "hate",
-    "dont", "don't", "mat", "nahi", "na", "skip", "omit", "remove", "disable"
+    "dont", "don't", "mat", "nahi", "na", "skip", "omit", "remove", "disable",
 }
 
 AFFIRMATIVE_TOKENS = {
     "always", "prefer", "like", "love", "include", "add", "use",
-    "with", "keep", "enable", "hamesha", "pasand", "chahiye", "want"
+    "with", "keep", "enable", "hamesha", "pasand", "chahiye", "want",
 }
 
 STOPWORDS = {
     "user", "prefers", "likes", "wants", "always", "never", "when", "while",
     "the", "and", "for", "with", "without", "that", "this", "from", "into",
-    "should", "must", "applicable", "requests", "asking", "tasks", "general"
+    "should", "must", "applicable", "requests", "asking", "tasks", "general",
 }
 
 
@@ -52,10 +52,10 @@ class BehavioralPatternEngine:
         self.dedupe_threshold = 0.82
         self.conflict_sim_threshold = 0.72
         self.similarity_threshold = 0.72
-        self.min_confidence_gate = 0.85
+        self.min_confidence_gate = 0.70
         self.top_k = 2
         self.recency_decay_days = 180
-        self.candidate_ttl_days = 30
+        self.candidate_ttl_days = 60
 
         self._last_cache_key = None
         self._last_ephemeral_block = ""
@@ -254,11 +254,17 @@ class BehavioralPatternEngine:
         if not raw or len(raw.split()) < 3 or not meaning:
             return
 
+        is_explicit_perm_early = bool(
+            new_pattern.get("is_explicit_permanent", False)
+            or EXPLICIT_PERMANENT_REGEX.search(raw)
+        )
+
         if conf < self.min_confidence_gate:
-            logger.debug(
-                f"Behavioral pattern rejected by confidence gate ({conf:.2f} < {self.min_confidence_gate}): '{raw[:45]}'"
-            )
-            return
+            if not (is_explicit_perm_early and conf >= 0.60):
+                logger.debug(
+                    f"Behavioral pattern rejected by confidence gate ({conf:.2f} < {self.min_confidence_gate}): '{raw[:45]}'"
+                )
+                return
 
         domain = str(new_pattern.get("domain") or "").strip().lower()
         if domain not in VALID_BEHAVIORAL_DOMAINS:
@@ -396,8 +402,7 @@ class BehavioralPatternEngine:
             return []
 
         clean_domain = (domain or "").strip().lower()
-        if clean_domain == "general_none":
-            return []
+        is_general_none = (clean_domain == "general_none")
 
         search_text = (english_query or query_text or "").strip()
         if not search_text:
@@ -422,14 +427,15 @@ class BehavioralPatternEngine:
                     continue
 
                 p_domain = p.get("domain", "")
-                if clean_domain in VALID_BEHAVIORAL_DOMAINS and p_domain in VALID_BEHAVIORAL_DOMAINS:
-                    if p_domain != clean_domain:
-                        compatible = (
-                            {clean_domain, p_domain} == {"coding", "ui_design"}
-                            or {clean_domain, p_domain} == {"scheduling", "lifestyle"}
-                        )
-                        if not compatible:
-                            continue
+                if not is_general_none:
+                    if clean_domain in VALID_BEHAVIORAL_DOMAINS and p_domain in VALID_BEHAVIORAL_DOMAINS:
+                        if p_domain != clean_domain:
+                            compatible = (
+                                {clean_domain, p_domain} == {"coding", "ui_design"}
+                                or {clean_domain, p_domain} == {"scheduling", "lifestyle"}
+                            )
+                            if not compatible:
+                                continue
 
                 emb = p.get("_embedding")
                 if not emb:
@@ -439,7 +445,9 @@ class BehavioralPatternEngine:
                 except Exception:
                     continue
 
-                if clean_domain in VALID_BEHAVIORAL_DOMAINS and p_domain == clean_domain:
+                if is_general_none:
+                    effective_threshold = self.similarity_threshold + 0.10
+                elif clean_domain in VALID_BEHAVIORAL_DOMAINS and p_domain == clean_domain:
                     effective_threshold = self.similarity_threshold - 0.03
                 else:
                     effective_threshold = self.similarity_threshold + 0.04

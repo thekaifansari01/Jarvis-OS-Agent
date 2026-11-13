@@ -38,7 +38,7 @@ SINGULAR_RELATIONS = {
 
 RELATION_STOP_TOKENS = {
     "HAS", "IS", "THE", "FOR", "WITH", "FROM", "IN", "AT", "TO", "OF", "ON", "BY",
-    "WORKS", "LIVES", "STUDIES", "USES", "GOES", "PLAYS", "MAKES", "DOES", "HAVE"
+    "WORKS", "LIVES", "STUDIES", "USES", "GOES", "PLAYS", "MAKES", "DOES", "HAVE",
 }
 
 OPPOSITE_RELATION_PAIRS = [
@@ -55,7 +55,7 @@ PRESERVE_UPPER_ACRONYMS = {
     "AI", "ML", "DL", "LLM", "RAG", "API", "UI", "UX", "OS", "PC", "RAM",
     "SSD", "HDD", "CPU", "GPU", "BCA", "BSC", "MSC", "MBA", "BTECH", "MTECH",
     "HP", "DELL", "ASUS", "ACER", "USB", "SSH", "ADB", "CLI", "GUI", "SQL",
-    "HTML", "CSS", "JS", "TS", "PHP", "CPP", "QT", "SEO", "URL", "PDF", "JSON"
+    "HTML", "CSS", "JS", "TS", "PHP", "CPP", "QT", "SEO", "URL", "PDF", "JSON",
 }
 
 SELF_ENTITY_ALIASES = {"user", "mai", "main", "mein", "me", "myself", "i", "self"}
@@ -125,7 +125,7 @@ class LifetimeMemoryEngine:
         if nodes:
             with self._embed_lock:
                 embeddings = self.embedder.encode(
-                    nodes, normalize_embeddings=True, show_progress_bar=False
+                    nodes, normalize_embeddings=True, show_progress_bar=False,
                 )
             for node, emb in zip(nodes, embeddings):
                 self.node_embeddings[node] = emb
@@ -149,7 +149,7 @@ class LifetimeMemoryEngine:
     def _get_embedding(self, text: str):
         with self._embed_lock:
             return self.embedder.encode(
-                [str(text)], normalize_embeddings=True, show_progress_bar=False
+                [str(text)], normalize_embeddings=True, show_progress_bar=False,
             )[0]
 
     def embed(self, texts, is_query=False):
@@ -250,6 +250,40 @@ class LifetimeMemoryEngine:
                     relations.add(data["relation"])
             return list(relations)[:limit]
 
+    def get_top_relations_for_user(self, limit=5):
+        with self._lock:
+            if "User" not in self.graph.nodes:
+                return []
+
+            entries = []
+            for u, v, k, data in self.graph.out_edges("User", keys=True, data=True):
+                if data.get("archived", False):
+                    continue
+                if data.get("inverse_of"):
+                    continue
+                rel = data.get("relation", "")
+                if not rel or rel == "HAS_RELATION":
+                    continue
+                weight = float(data.get("weight", 1))
+                count = int(data.get("count", 1))
+                score = weight * min(2.0, 1.0 + (count - 1) * 0.15)
+                entries.append((score, rel, v))
+
+            entries.sort(key=lambda x: x[0], reverse=True)
+
+            seen_relations = set()
+            result = []
+            for score, rel, tgt in entries:
+                if rel in seen_relations:
+                    continue
+                seen_relations.add(rel)
+                pretty = rel.replace("_", " ").title()
+                result.append(f"{pretty}: {tgt}")
+                if len(result) >= limit:
+                    break
+
+            return result
+
     def _deduplicate_relation(self, rel, threshold=0.88):
         if not rel:
             return rel
@@ -332,7 +366,7 @@ class LifetimeMemoryEngine:
                 if last_seen:
                     try:
                         last_date = datetime.strptime(last_seen, "%Y-%m-%d")
-                        if (now - last_date).days > 180:
+                        if (now - last_date).days > 365:
                             data["archived"] = True
                             archived_any = True
                     except Exception as e:
