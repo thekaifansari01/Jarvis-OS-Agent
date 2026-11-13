@@ -236,11 +236,16 @@ class LifetimeMemoryEngine:
         s = str(raw_entity or "").strip()
         if not s:
             return ""
+        if not any(c.isascii() and c.isalnum() for c in s):
+            return ""
         low = s.lower()
         if low in SELF_ENTITY_ALIASES:
             return "User"
         if "@" in s and " " not in s:
-            return low
+            s = re.sub(r"[^\x20-\x7E]", "", s).strip()
+            if not s or "@" not in s:
+                return ""
+            return s.lower()
         if "://" in s or s.startswith("/") or "\\" in s:
             return s
         if " " not in s and ("_" in s or any(ch.isdigit() for ch in s) or (not s.islower() and not s.isupper())):

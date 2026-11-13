@@ -261,6 +261,34 @@ class ContextMemory:
         tgt_clean = str(tgt).strip()
         rel_clean = str(rel).strip().lower()
 
+        if not src_clean or not tgt_clean or not rel_clean:
+            return False
+
+        if not any(c.isascii() and c.isalnum() for c in src_clean):
+            return False
+        if not any(c.isascii() and c.isalnum() for c in tgt_clean):
+            return False
+
+        email_relations = {
+            "has_email", "email", "mail", "gmail", "email_address", "email_id",
+        }
+        phone_relations = {
+            "has_phone", "phone", "mobile", "mobile_number", "contact",
+            "whatsapp", "whatsapp_number", "contact_number", "phone_number",
+        }
+
+        if rel_clean in email_relations:
+            clean_email = re.sub(r"\s+", "", tgt_clean)
+            clean_email = re.sub(r"[^\x20-\x7E]", "", clean_email)
+            if not re.match(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$", clean_email):
+                logger.debug(f"Rejecting email triplet with invalid format: '{tgt_clean}'")
+                return False
+        elif rel_clean in phone_relations:
+            digits = sum(1 for c in tgt_clean if c.isdigit())
+            if digits < 7:
+                logger.debug(f"Rejecting phone triplet with invalid format: '{tgt_clean}'")
+                return False
+
         invalid_entities = {
             "agent", "info", "system", "jarvis", "data", "unknown",
             "yes", "no", "today", "tomorrow", "now", "thing", "stuff",
@@ -1315,6 +1343,7 @@ Return STRICT JSON:
                         response_format={"type": "json_object"},
                     )
                     raw_text = response.choices[0].message.content.strip()
+                    logger.info(f"Extraction raw LLM output (first 600 chars): {raw_text[:600]}")
                     clean_text = re.sub(r"^```json\n|```$", "", raw_text, flags=re.MULTILINE).strip()
                     data = json.loads(clean_text)
 
