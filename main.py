@@ -115,18 +115,15 @@ def lock_console_window(cols=96, rows=28, width_px=860, height_px=540, buffer_ro
         kernel32 = ctypes.windll.kernel32
         h_out = kernel32.GetStdHandle(-11)
         if h_out and h_out != -1:
-            # Step 1: window ko minimum karo
             min_rect = SMALL_RECT(0, 0, 1, 1)
             kernel32.SetConsoleWindowInfo(h_out, True, ctypes.byref(min_rect))
 
-            # Step 2: buffer bada karo (sirf legacy conhost me kaam karega)
             if not is_windows_terminal:
                 buf_size = COORD(cols, max(buffer_rows, rows))
                 ok = kernel32.SetConsoleScreenBufferSize(h_out, buf_size)
                 if not ok:
                     logger.warning("SetConsoleScreenBufferSize failed — scroll disabled")
 
-            # Step 3: window ko desired size pe lao
             win_rect = SMALL_RECT(0, 0, cols - 1, rows - 1)
             kernel32.SetConsoleWindowInfo(h_out, True, ctypes.byref(win_rect))
     except Exception as e:
@@ -255,6 +252,13 @@ def shutdown_jarvis(reason="Shutdown signal received", exit_code=0):
         except Exception:
             pass
         _executor = None
+
+    try:
+        from core.voice import stt
+        if hasattr(stt, "engine") and stt.engine is not None:
+            stt.engine.stop()
+    except Exception as e:
+        logger.error(f"Error stopping STT engine: {e}")
 
     try:
         from core.voice import tts
@@ -531,6 +535,11 @@ def run_jarvis():
                     if command.strip().lower() in ["exit", "quit", "stop", "bye"]:
                         logger.info("Exit command received.")
                         break
+                    try:
+                        hide_stt_popup()
+                    except Exception as e:
+                        logger.error(f"Error hiding STT popup: {e}")
+
                     if is_jarvis_busy() and hasattr(memory, 'add_live_feedback'):
                         try:
                             memory.add_live_feedback(command)
@@ -538,10 +547,6 @@ def run_jarvis():
                         except Exception as e:
                             logger.error(f"Failed to add live feedback: {e}")
                     else:
-                        try:
-                            hide_stt_popup()
-                        except Exception as e:
-                            logger.error(f"Error hiding STT popup: {e}")
                         if _executor is not None and _is_running:
                             _executor.submit(main_command_processor, command, _executor, memory)
                         interrupt.clear_interrupt()

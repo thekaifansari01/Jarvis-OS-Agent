@@ -18,7 +18,8 @@ class SubprocessManager:
     
     def spawn(self, args, **kwargs) -> Optional[subprocess.Popen]:
         if platform.system() == 'Windows':
-            kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+            existing_flags = kwargs.get('creationflags', 0) or 0
+            kwargs['creationflags'] = existing_flags | subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             kwargs['start_new_session'] = True
         proc = subprocess.Popen(args, **kwargs)

@@ -641,6 +641,8 @@ class UnifiedVoiceAssistant:
         self.dg_connection = None
         self.is_awake = False
         self.connection_established = False
+        self._dg_session_id = 0
+        self._vosk_silence_frames = 12
         self.RATE = 16000
         self.CHUNK = 480
 
@@ -704,6 +706,14 @@ class UnifiedVoiceAssistant:
             self.mic_available = False
             logger.warning(f"Microphone not available — voice input DISABLED. Reason: {e}")
 
+    @staticmethod
+    def _is_input_popup_active():
+        try:
+            from core.main.HotKeyManager import is_popup_active
+            return is_popup_active()
+        except Exception:
+            return False
+
     def _init_wake_engine(self):
         if os.path.exists(AZURE_KEYWORD_MODEL_PATH):
             try:
@@ -735,6 +745,8 @@ class UnifiedVoiceAssistant:
         self._hp_prev_y = 0.0
         self._pre_prev_y = 0.0
         self.frame_history.clear()
+        for _ in range(10):
+            self.frame_history.append((False, False, 0.0, 0.0, 0.0))
 
     def _condition_deepgram_audio(self, pcm_data):
         samples = array.array("h")
@@ -855,7 +867,7 @@ class UnifiedVoiceAssistant:
 
     def _verify_azure_wake(self, text, duration_ms):
         now = time.time()
-        if (now - self._last_reset_time) < 0.35:
+        if (now - self._last_reset_time) < 0.65:
             logger.debug("Azure wake rejected: post-reset cooldown active.")
             return False
 
@@ -870,7 +882,7 @@ class UnifiedVoiceAssistant:
 
         frames = list(self.frame_history)
         if len(frames) < 6:
-            return True
+            return False
 
         v2_count = 0
         v3_count = 0
@@ -947,6 +959,8 @@ class UnifiedVoiceAssistant:
             )
 
             def on_recognized(evt):
+                if self.is_awake:
+                    return
                 if evt.result.reason == self.azure_speechsdk.ResultReason.RecognizedKeyword:
                     detected_text = getattr(evt.result, "text", "") or "jarvis"
                     duration_ms = self._extract_duration_ms(evt.result)
@@ -979,14 +993,6 @@ class UnifiedVoiceAssistant:
             self.use_azure_wake = False
 
     def _stop_azure_listening(self):
-        if self.azure_push_stream is not None:
-            try:
-                self.azure_push_stream.close()
-            except Exception:
-                pass
-            finally:
-                self.azure_push_stream = None
-
         if self.azure_recognizer is not None:
             try:
                 self.azure_recognizer.recognized.disconnect_all()
@@ -996,6 +1002,17 @@ class UnifiedVoiceAssistant:
                 logger.debug(f"Azure recognizer stop error: {e}")
             finally:
                 self.azure_recognizer = None
+
+        if self.azure_push_stream is not None:
+            try:
+                self.azure_push_stream.close()
+            except Exception:
+                pass
+            finally:
+                self.azure_push_stream = None
+
+        self.azure_wake_detected.clear()
+        self.azure_needs_restart.clear()
 
     def start(self):
         if not self.mic_available:
@@ -1030,6 +1047,8 @@ class UnifiedVoiceAssistant:
         self._dg_hp_prev_x = 0.0
         self._dg_hp_prev_y = 0.0
         self.command_done.clear()
+        self._dg_session_id += 1
+        active_session_id = self._dg_session_id
         assistant = self
 
         try:
@@ -1037,6 +1056,12 @@ class UnifiedVoiceAssistant:
             self.dg_connection = deepgram.listen.websocket.v("1")
 
             def on_message(dg_self, result, **kwargs):
+                if (
+                    not assistant.is_awake
+                    or assistant.command_done.is_set()
+                    or active_session_id != assistant._dg_session_id
+                ):
+                    return
                 alternatives = getattr(result.channel, "alternatives", None)
                 if not alternatives:
                     return
@@ -1052,16 +1077,29 @@ class UnifiedVoiceAssistant:
                         assistant.live_text = assistant.vocab_manager.repair_transcript(
                             (assistant.current_transcript + " " + repaired_sentence).strip()
                         )
-                    update_stt_status("listening", assistant.live_text)
+                    if (
+                        assistant.is_awake
+                        and not assistant.command_done.is_set()
+                        and active_session_id == assistant._dg_session_id
+                    ):
+                        update_stt_status("listening", assistant.live_text)
 
                 if getattr(result, "speech_final", False) and assistant.live_text.strip():
                     assistant.command_done.set()
 
             def on_utterance_end(dg_self, utterance_end, **kwargs):
+                if (
+                    not assistant.is_awake
+                    or assistant.command_done.is_set()
+                    or active_session_id != assistant._dg_session_id
+                ):
+                    return
                 if assistant.live_text.strip():
                     assistant.command_done.set()
 
             def on_error(dg_self, error, **kwargs):
+                if active_session_id != assistant._dg_session_id or not assistant.is_awake:
+                    return
                 logger.error(f"Deepgram Error: {error}")
                 assistant.command_done.set()
 
@@ -1115,6 +1153,15 @@ class UnifiedVoiceAssistant:
                 pcm_data = self.stream.read(self.CHUNK, exception_on_overflow=False)
 
                 if not self.is_awake:
+                    if self._is_input_popup_active():
+                        if self.azure_wake_detected.is_set():
+                            self.azure_wake_detected.clear()
+                        if self.vosk_recognizer and self._vosk_silence_frames < 12:
+                            self.vosk_recognizer.Reset()
+                            self._vosk_silence_frames = 12
+                        self._last_reset_time = time.time()
+                        continue
+
                     triggered = False
                     matched_text = ""
 
@@ -1136,13 +1183,17 @@ class UnifiedVoiceAssistant:
                                 continue
 
                         if self.azure_wake_detected.is_set():
-                            self.azure_wake_detected.clear()
                             triggered = True
                             matched_text = self.azure_matched_text
+                            self.azure_wake_detected.clear()
                     else:
+                        if (time.time() - self._last_reset_time) < 0.65:
+                            continue
+
                         is_speech = self.vad.is_speech(pcm_data, self.RATE)
 
                         if is_speech:
+                            self._vosk_silence_frames = 0
                             if self.vosk_recognizer.AcceptWaveform(pcm_data):
                                 res = json.loads(self.vosk_recognizer.Result())
                                 text = res.get("text", "")
@@ -1153,6 +1204,20 @@ class UnifiedVoiceAssistant:
                             if self._check_wake_word(text):
                                 triggered = True
                                 matched_text = text
+                        elif self._vosk_silence_frames < 12:
+                            self._vosk_silence_frames += 1
+                            if self.vosk_recognizer.AcceptWaveform(pcm_data):
+                                res = json.loads(self.vosk_recognizer.Result())
+                                text = res.get("text", "")
+                            else:
+                                res = json.loads(self.vosk_recognizer.PartialResult())
+                                text = res.get("partial", "")
+
+                            if self._check_wake_word(text):
+                                triggered = True
+                                matched_text = text
+                            elif self._vosk_silence_frames == 12:
+                                self.vosk_recognizer.Reset()
 
                     if triggered:
                         logger.info(f"🎯 Wake word detected | matched_text='{matched_text}'")
@@ -1171,6 +1236,7 @@ class UnifiedVoiceAssistant:
 
                         if self.vosk_recognizer:
                             self.vosk_recognizer.Reset()
+                            self._vosk_silence_frames = 12
 
                         self.play_wake_sound()
                         update_stt_status("connecting", "Listening...")
@@ -1183,13 +1249,20 @@ class UnifiedVoiceAssistant:
                             else:
                                 logger.warning("⚠️ Deepgram connection failed. Returning to wake word mode.")
                                 self.connection_established = False
+                                self.is_awake = False
+                                self.command_done.clear()
+                                self._flush_audio_buffer()
                                 self._last_reset_time = time.time()
+                                update_stt_status("idle", "")
                                 if self.use_azure_wake:
                                     self._start_azure_listening()
                                 elif self.vosk_recognizer:
                                     self.vosk_recognizer.Reset()
+                                    self._vosk_silence_frames = 12
                                 continue
 
+                        self._flush_audio_buffer()
+                        self.command_done.clear()
                         self.wake_time = time.time()
                         self.first_speech_time = 0
                         self.last_speech_time = time.time()
@@ -1199,6 +1272,10 @@ class UnifiedVoiceAssistant:
                         update_stt_status("listening", "Listening...")
 
                 else:
+                    if self._is_input_popup_active():
+                        self._force_sleep_reset()
+                        continue
+
                     is_speech = self.vad.is_speech(pcm_data, self.RATE)
                     current_time = time.time()
 
@@ -1216,7 +1293,7 @@ class UnifiedVoiceAssistant:
                         logger.info("⏱️ Silence timeout (1.0s) reached after speech. Finalizing command.")
                         self.command_done.set()
 
-                    if self.dg_connection:
+                    if self.dg_connection and not self.command_done.is_set():
                         try:
                             clean_dg_pcm = self._condition_deepgram_audio(pcm_data)
                             self.dg_connection.send(clean_dg_pcm)
@@ -1234,52 +1311,76 @@ class UnifiedVoiceAssistant:
 
     def _force_sleep_reset(self):
         logger.warning("🔄 Force sleep reset triggered. Returning to wake word mode.")
+        self.is_awake = False
+        self.command_done.clear()
+        self._dg_session_id += 1
+        self.live_text = ""
+        self.current_transcript = ""
+
+        dg_conn = self.dg_connection
         self.dg_connection = None
         self.connection_established = False
-        self.is_awake = False
-        self._last_reset_time = time.time()
+        if dg_conn:
+            try:
+                dg_conn.finish()
+            except Exception:
+                pass
+
         self._flush_audio_buffer()
+        self._reset_dsp_state()
 
         if self.vosk_recognizer:
             self.vosk_recognizer.Reset()
+            self._vosk_silence_frames = 12
 
         if self.use_azure_wake:
             self._stop_azure_listening()
             self._start_azure_listening()
 
+        self._last_reset_time = time.time()
         update_stt_status("idle", "")
         logger.info("💤 Back to idle. Listening for wake word...")
 
     def process_final_command(self):
+        self.is_awake = False
+        self.command_done.clear()
+        self._dg_session_id += 1
+
         repaired_text = self.vocab_manager.repair_transcript(self.live_text)
         full_command = repaired_text.lower().strip()
-        ignore_words = ["", "okay", "okay.", "jarvis", "jarvis.", "thanks", "thank you",
-                        "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"]
+        self.live_text = ""
+        self.current_transcript = ""
+
+        ignore_words = [
+            "", "okay", "okay.", "jarvis", "jarvis.", "hey jarvis", "hey jarvis.",
+            "thanks", "thank you", "hmm", "haan", "ah", "uh", "theek hai", "hello", "ha"
+        ]
 
         logger.info("🛑 User command listening STOPPED. Processing transcript...")
         logger.info(f"📝 Raw transcript received: '{full_command}'")
 
-        self.is_awake = False
+        dg_conn = self.dg_connection
+        self.dg_connection = None
+        self.connection_established = False
+        if dg_conn:
+            try:
+                dg_conn.finish()
+            except Exception as e:
+                logger.error(f"❌ Error finishing Deepgram connection: {e}")
 
-        try:
-            if self.dg_connection:
-                self.dg_connection.finish()
-        except Exception as e:
-            logger.error(f"❌ Error finishing Deepgram connection: {e}")
-        finally:
-            self.dg_connection = None
-            self.connection_established = False
-
-        self._last_reset_time = time.time()
+        time.sleep(0.1)
         self._flush_audio_buffer()
+        self._reset_dsp_state()
 
         if self.vosk_recognizer:
             self.vosk_recognizer.Reset()
+            self._vosk_silence_frames = 12
 
         if self.use_azure_wake:
             self._stop_azure_listening()
             self._start_azure_listening()
 
+        self._last_reset_time = time.time()
         interrupt.clear_interrupt()
 
         if full_command and full_command not in ignore_words and len(full_command) > 3:
@@ -1287,12 +1388,11 @@ class UnifiedVoiceAssistant:
             update_stt_status("understanding", full_command)
             self.command_queue.put(full_command)
         else:
-            logger.info(f"🚫 Command rejected (empty/ignore-list/too short) -> returning to wake mode.")
+            logger.info("🚫 Command rejected (empty/ignore-list/too short) -> returning to wake mode.")
             update_stt_status("idle", "")
             self.command_queue.put("")
 
         logger.info("💤 Idle. Waiting for next wake word 'Jarvis'...")
-        time.sleep(0.1)
 
     def get_command(self, is_retry=False):
         command = None
@@ -1314,14 +1414,20 @@ class UnifiedVoiceAssistant:
     def stop(self):
         logger.info("🛑 Stopping voice engine...")
         self.running = False
+        self.is_awake = False
+        self.command_done.set()
+        self._dg_session_id += 1
 
         self._stop_azure_listening()
 
-        try:
-            if self.dg_connection:
-                self.dg_connection.finish()
-        except Exception:
-            pass
+        dg_conn = self.dg_connection
+        self.dg_connection = None
+        self.connection_established = False
+        if dg_conn:
+            try:
+                dg_conn.finish()
+            except Exception:
+                pass
         try:
             if self.stream:
                 self.stream.stop_stream()

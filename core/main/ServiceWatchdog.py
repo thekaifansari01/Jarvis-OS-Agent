@@ -4,6 +4,7 @@ import threading
 import os
 import platform
 from core.main.BackgroundServices import (
+    start_agent_panel,
     start_baileys_server,
     start_stt_popup,
     start_telegram_remote_service,
@@ -11,6 +12,7 @@ from core.main.BackgroundServices import (
     start_mobile_bridge,
     start_mcp_service,
     start_unified_portal,
+    is_agent_panel_running,
     is_baileys_running,
     is_stt_popup_running,
     is_telegram_remote_service_running,
@@ -38,6 +40,14 @@ class ServiceWatchdog:
         self._telegram_token_path = os.path.join(base_dir, "Data", "SessionCookies", "telegram_bot_token.enc")
         self._skip_log_times = {}
         self.services = {
+            "agent_panel": {
+                "is_running_check": is_agent_panel_running,
+                "start_func": start_agent_panel,
+                "retries": 0,
+                "last_restart": 0,
+                "next_retry_time": 0,
+                "has_creds": lambda: True
+            },
             "baileys": {
                 "is_running_check": is_baileys_running,
                 "start_func": start_baileys_server,

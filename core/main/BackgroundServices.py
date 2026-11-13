@@ -58,6 +58,12 @@ def stop_agent_panel():
             logging.error(f"Error stopping Agent panel: {e}")
         _panel_process = None
 
+def is_agent_panel_running() -> bool:
+    global _panel_process
+    if _panel_process is None:
+        return False
+    return _panel_process.poll() is None
+
 def start_stt_popup():
     global _stt_popup_process
 

@@ -1,5 +1,3 @@
-# core/utils/shutdown.py
-
 import threading
 
 _shutdown_event = threading.Event()

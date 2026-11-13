@@ -1,5 +1,6 @@
 import time
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from core.brain.Processor.Processor import process_command
 from core.brain.executor import execute_actions
@@ -7,22 +8,24 @@ from core.brain.Memory.Memory import ContextMemory
 from core.voice import interrupt
 from core.utils.shutdown import is_shutdown as is_shutting_down
 
-_is_busy = False
+_busy_lock = threading.Lock()
+_active_commands = 0
 
 
 def is_jarvis_busy() -> bool:
-    global _is_busy
-    return _is_busy
+    with _busy_lock:
+        return _active_commands > 0
 
 
 def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: ContextMemory, source: str = "voice") -> None:
-    global _is_busy
+    global _active_commands
 
     if is_shutting_down():
         logging.debug("Command dropped: shutdown in progress (source=%s)", source)
         return
 
-    _is_busy = True
+    with _busy_lock:
+        _active_commands += 1
 
     try:
         if command is None:
@@ -119,8 +122,10 @@ def main_command_processor(command: str, executor: ThreadPoolExecutor, memory: C
         logging.error("[%s] Command processor crash: %s", source, exc, exc_info=True)
 
     finally:
-        _is_busy = False
-        if memory and hasattr(memory, "get_and_clear_feedback"):
+        with _busy_lock:
+            _active_commands = max(0, _active_commands - 1)
+            still_busy = _active_commands > 0
+        if not still_busy and memory and hasattr(memory, "get_and_clear_feedback"):
             try:
                 memory.get_and_clear_feedback()
             except Exception as exc:
