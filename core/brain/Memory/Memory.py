@@ -1397,7 +1397,13 @@ Return STRICT JSON:
                                     is_singular=is_singular,
                                 )
                                 result["ltm_saved"] += 1
-                                logger.info(f"LTM Saved: [{src}] --({rel})--> [{tgt}] (conf={conf:.2f})")
+                                try:
+                                    src_disp = ltm_engine._normalize_entity(src) or "<empty>"
+                                    tgt_disp = ltm_engine._normalize_entity(tgt) or "<empty>"
+                                    rel_disp = ltm_engine._canonicalize_relation(rel) or "<empty>"
+                                    logger.info(f"LTM Saved: [{src_disp}] --({rel_disp})--> [{tgt_disp}] (conf={conf:.2f}) | raw_tgt_len={len(tgt)}")
+                                except Exception:
+                                    logger.info(f"LTM Saved: [{src}] --({rel})--> [{tgt}] (conf={conf:.2f})")
                         except Exception as e:
                             logger.error(f"LTM Engine Save Error: {e}")
 

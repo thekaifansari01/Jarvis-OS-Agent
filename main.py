@@ -256,7 +256,10 @@ def shutdown_jarvis(reason="Shutdown signal received", exit_code=0):
     try:
         from core.voice import stt
         if hasattr(stt, "engine") and stt.engine is not None:
-            stt.engine.stop()
+            try:
+                stt.engine.stop()
+            except (OSError, RuntimeError, AttributeError) as stt_err:
+                logger.warning(f"STT stop warning (non-fatal): {stt_err}")
     except Exception as e:
         logger.error(f"Error stopping STT engine: {e}")
 
